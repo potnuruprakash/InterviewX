@@ -1,0 +1,140 @@
+.results-page { min-height: 100vh; padding: var(--space-xl) 0; }
+.results-loading {
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: var(--space-md); color: var(--text-secondary);
+}
+
+.results-header { text-align: center; margin-bottom: var(--space-xl); }
+.results-title { font-size: clamp(26px, 4vw, 38px); font-weight: 800; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 8px; }
+.results-subtitle { color: var(--text-secondary); font-size: 15px; }
+
+/* Hero */
+.results-hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+  align-items: start;
+}
+
+.hero-scores {
+  padding: var(--space-xl);
+  display: flex;
+  gap: var(--space-xl);
+  align-items: center;
+}
+
+.hero-score-group { display: flex; align-items: center; gap: var(--space-lg); }
+
+.hero-meta { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.hero-meta-row { display: flex; justify-content: space-between; font-size: 14px; }
+.meta-label { color: var(--text-muted); }
+.meta-val { font-weight: 600; color: var(--text-primary); }
+
+/* Score Ring */
+.score-ring-wrap { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.score-ring-text { position: absolute; text-align: center; }
+.ring-score { font-size: 26px; font-weight: 800; display: block; }
+.score-ring-text small { font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px; }
+.score-ring-unavailable {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 100%; height: 100%; border-radius: 50%; background: rgba(255,255,255,0.04);
+  border: 4px solid rgba(255,255,255,0.08); color: var(--text-muted); font-size: 14px;
+}
+
+/* Job Readiness */
+.job-readiness-card {
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  min-width: 200px;
+}
+.jr-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--text-secondary); }
+.jr-breakdown { width: 100%; }
+.jr-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.jr-disclaimer { font-size: 10px; color: var(--text-muted); text-align: center; margin-top: 4px; }
+
+/* Section */
+.results-section { margin-bottom: var(--space-lg); border-radius: var(--radius-lg); overflow: hidden; }
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-lg); cursor: pointer; user-select: none;
+  background: rgba(255,255,255,0.02); transition: background 0.2s;
+}
+.section-header:hover { background: rgba(255,255,255,0.05); }
+.section-header h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; margin: 0; }
+
+/* Skill bars */
+.skill-bars { padding: 0 var(--space-lg) var(--space-lg); }
+.skill-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.skill-bar-name { font-size: 13px; min-width: 100px; color: var(--text-secondary); }
+.skill-bar-track { flex: 1; height: 8px; background: rgba(255,255,255,0.07); border-radius: 999px; overflow: hidden; }
+.skill-bar-fill { height: 100%; border-radius: 999px; transition: width 1s ease; }
+.skill-bar-score { font-size: 13px; font-weight: 700; min-width: 30px; text-align: right; }
+
+/* Strong/Weak */
+.results-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg); margin-bottom: var(--space-lg); }
+.area-card { padding: var(--space-lg); }
+.area-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+.area-card.strong h3 { color: #6ee7b7; }
+.area-card.weak h3 { color: #fbbf24; }
+.area-item { font-size: 13px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary); }
+
+/* Alignment */
+.alignment-grid { padding: 0 var(--space-lg) var(--space-lg); display: grid; gap: var(--space-lg); }
+.alignment-label { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+.alignment-label.matched { color: #6ee7b7; }
+.alignment-label.missing { color: #f87171; }
+.skill-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 500; }
+.chip-green { background: rgba(16,185,129,0.12); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.25); }
+.chip-red { background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+
+/* Roadmap */
+.roadmap-section { padding: 0 var(--space-lg) var(--space-lg); }
+.roadmap-summary { color: var(--text-secondary); font-size: 14px; margin-bottom: var(--space-lg); }
+.roadmap-item {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+.roadmap-item-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.roadmap-skill { font-size: 14px; font-weight: 700; }
+.priority-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.roadmap-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+.roadmap-topics { margin-bottom: 6px; }
+.topics-label { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+.roadmap-topics ul { margin: 4px 0 0 0; padding-left: 18px; }
+.roadmap-topics li { font-size: 12px; color: var(--text-secondary); margin-bottom: 2px; }
+.roadmap-approach { font-size: 12px; color: #93c5fd; background: rgba(59,130,246,0.08); padding: 6px 10px; border-radius: 6px; border-left: 2px solid #3b82f6; }
+.roadmap-disclaimer { font-size: 11px; color: var(--text-muted); margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.07); }
+
+/* Question breakdown */
+.question-breakdown { display: flex; flex-direction: column; gap: var(--space-md); padding: 0 var(--space-lg) var(--space-lg); }
+.qb-item { padding: var(--space-md); }
+.qb-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.qb-num { font-weight: 800; font-size: 13px; color: var(--text-muted); }
+.qb-score { margin-left: auto; font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+.sbert-tag { font-size: 10px; background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); padding: 1px 5px; border-radius: 4px; }
+.qb-context { font-size: 11px; color: #f59e0b; background: rgba(245,158,11,0.08); border-radius: 4px; padding: 4px 8px; margin-bottom: 4px; }
+.qb-question { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.qb-answer { margin-bottom: 8px; }
+.qb-answer-label { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+.qb-answer p { font-size: 13px; color: var(--text-secondary); background: rgba(255,255,255,0.03); border-radius: 6px; padding: 6px 8px; margin-top: 2px; max-height: 80px; overflow-y: auto; }
+.qb-concepts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.qb-concepts-label { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+.qb-feedback { font-size: 12px; color: var(--text-secondary); font-style: italic; margin-top: 4px; }
+.qb-media { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+/* Actions */
+.results-actions { display: flex; gap: var(--space-md); justify-content: center; margin-top: var(--space-xl); flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  .results-hero { grid-template-columns: 1fr; }
+  .hero-scores { flex-direction: column; text-align: center; }
+  .results-two-col { grid-template-columns: 1fr; }
+}

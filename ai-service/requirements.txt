@@ -1,0 +1,22 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic
+
+# Phase 4 — SBERT Text Analysis (pretrained)
+sentence-transformers
+
+# Phase 5 — Audio Analysis (MFCC feature extraction)
+# If librosa fails on Windows, install manually: pip install librosa
+librosa
+numpy
+scikit-learn
+
+# Phase 6 — Video Analysis (YOLOv8 pretrained)
+# If opencv-python-headless fails, use: pip install opencv-python
+ultralytics
+opencv-python
+
+# Phase 7 — Fusion
+python-multipart
+aiofiles

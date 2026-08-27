@@ -1,0 +1,202 @@
+.dashboard { padding: var(--space-2xl) 0 var(--space-3xl); }
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-2xl);
+  flex-wrap: wrap;
+}
+
+.dashboard-title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.dashboard-subtitle { color: var(--text-secondary); font-size: 16px; }
+
+/* Stats */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-lg);
+  margin-bottom: var(--space-2xl);
+}
+
+.stat-card {
+  padding: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-icon-purple { background: rgba(124,58,237,0.2); color: #a78bfa; }
+.stat-icon-cyan   { background: rgba(6,182,212,0.2); color: #67e8f9; }
+.stat-icon-green  { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+.stat-icon-yellow { background: rgba(245,158,11,0.2); color: #fcd34d; }
+
+.stat-value { font-family: var(--font-display); font-size: 28px; font-weight: 700; color: var(--text-primary); }
+.stat-label { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+/* Content */
+.dashboard-content {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-2xl);
+  align-items: start;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-lg);
+}
+
+.section-heading {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Interview cards */
+.interviews-list { display: flex; flex-direction: column; gap: var(--space-md); }
+
+.interview-card {
+  padding: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.interview-card-info { flex: 1; }
+.interview-role { font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-sm); font-size: 15px; }
+.interview-meta { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-bottom: var(--space-sm); }
+.interview-date { font-size: 12px; color: var(--text-muted); }
+
+/* States */
+.loading-state, .error-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  color: var(--text-secondary);
+}
+
+.dashboard-loading-screen {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-loading-card {
+  padding: var(--space-3xl) var(--space-2xl);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  max-width: 400px;
+}
+
+.loading-logo {
+  color: var(--accent-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.spin-pulse {
+  animation: pulse 1.8s infinite ease-in-out;
+}
+
+.error-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.06);
+  border-radius: var(--radius-lg);
+}
+
+.empty-state {
+  padding: var(--space-3xl) var(--space-2xl);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.empty-state-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.empty-state-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.empty-state-desc {
+  color: var(--text-secondary);
+  max-width: 360px;
+  line-height: 1.5;
+  margin-bottom: var(--space-xs);
+}
+
+/* Quick actions */
+.quick-actions { display: flex; flex-direction: column; gap: var(--space-md); }
+
+.quick-action {
+  padding: var(--space-lg);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-md);
+  row-gap: 2px;
+  align-items: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.quick-action-icon { grid-row: span 2; }
+.quick-action-icon.purple { color: #a78bfa; }
+.quick-action-icon.cyan { color: #67e8f9; }
+.quick-action-title { font-weight: 600; color: var(--text-primary); font-size: 15px; }
+.quick-action-desc { font-size: 13px; color: var(--text-secondary); }
+
+@media (max-width: 1024px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .dashboard-content { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .dashboard-header { flex-direction: column; align-items: flex-start; }
+}

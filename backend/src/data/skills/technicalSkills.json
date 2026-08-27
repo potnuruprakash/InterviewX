@@ -1,0 +1,851 @@
+{
+  "skills": {
+    "JavaScript": {
+      "category": "programming_language",
+      "aliases": [
+        "js",
+        "javascript",
+        "java script",
+        "ecmascript",
+        "es6",
+        "es2015",
+        "es7",
+        "es8",
+        "es2016",
+        "es2017",
+        "vanilla js",
+        "vanilla javascript"
+      ]
+    },
+    "TypeScript": {
+      "category": "programming_language",
+      "aliases": [
+        "ts",
+        "typescript",
+        "type script"
+      ]
+    },
+    "Python": {
+      "category": "programming_language",
+      "aliases": [
+        "python",
+        "python3",
+        "python 3",
+        "python2",
+        "python 2",
+        "py"
+      ]
+    },
+    "Java": {
+      "category": "programming_language",
+      "aliases": [
+        "java",
+        "java se",
+        "java ee",
+        "core java",
+        "advanced java"
+      ]
+    },
+    "C++": {
+      "category": "programming_language",
+      "aliases": [
+        "c++",
+        "cpp",
+        "c plus plus",
+        "cplusplus"
+      ]
+    },
+    "C": {
+      "category": "programming_language",
+      "aliases": [
+        "c language",
+        "c programming",
+        "ansi c"
+      ]
+    },
+    "C#": {
+      "category": "programming_language",
+      "aliases": [
+        "c#",
+        "csharp",
+        "c sharp",
+        "dotnet c#",
+        "c# .net"
+      ]
+    },
+    "Go": {
+      "category": "programming_language",
+      "aliases": [
+        "go",
+        "golang",
+        "go lang"
+      ]
+    },
+    "Rust": {
+      "category": "programming_language",
+      "aliases": [
+        "rust",
+        "rust lang",
+        "rust language"
+      ]
+    },
+    "Swift": {
+      "category": "programming_language",
+      "aliases": [
+        "swift",
+        "apple swift"
+      ]
+    },
+    "Kotlin": {
+      "category": "programming_language",
+      "aliases": [
+        "kotlin",
+        "kotlin lang"
+      ]
+    },
+    "Ruby": {
+      "category": "programming_language",
+      "aliases": [
+        "ruby",
+        "ruby lang"
+      ]
+    },
+    "PHP": {
+      "category": "programming_language",
+      "aliases": [
+        "php",
+        "php7",
+        "php8",
+        "php 7",
+        "php 8"
+      ]
+    },
+    "Scala": {
+      "category": "programming_language",
+      "aliases": [
+        "scala",
+        "scala lang"
+      ]
+    },
+    "R": {
+      "category": "programming_language",
+      "aliases": [
+        "r language",
+        "r programming",
+        "rlang"
+      ]
+    },
+    "MATLAB": {
+      "category": "programming_language",
+      "aliases": [
+        "matlab",
+        "mat lab"
+      ]
+    },
+    "Shell": {
+      "category": "programming_language",
+      "aliases": [
+        "shell",
+        "bash",
+        "sh",
+        "shell scripting",
+        "bash scripting",
+        "unix shell",
+        "linux shell",
+        "zsh",
+        "ksh"
+      ]
+    },
+    "SQL": {
+      "category": "programming_language",
+      "aliases": [
+        "sql",
+        "structured query language",
+        "pl/sql",
+        "plsql",
+        "t-sql",
+        "tsql"
+      ]
+    },
+    "React": {
+      "category": "framework",
+      "aliases": [
+        "react",
+        "reactjs",
+        "react.js",
+        "react js",
+        "react jsx",
+        "react native web",
+        "react library"
+      ]
+    },
+    "React Native": {
+      "category": "framework",
+      "aliases": [
+        "react native",
+        "reactnative",
+        "react-native",
+        "rn"
+      ]
+    },
+    "Angular": {
+      "category": "framework",
+      "aliases": [
+        "angular",
+        "angularjs",
+        "angular.js",
+        "angular js",
+        "angular 2",
+        "angular 4",
+        "angular 8",
+        "angular 12",
+        "angular 14",
+        "angular 15",
+        "angular 16",
+        "angular 17"
+      ]
+    },
+    "Vue.js": {
+      "category": "framework",
+      "aliases": [
+        "vue",
+        "vuejs",
+        "vue.js",
+        "vue js",
+        "vue 2",
+        "vue 3",
+        "vuex"
+      ]
+    },
+    "Next.js": {
+      "category": "framework",
+      "aliases": [
+        "next",
+        "nextjs",
+        "next.js",
+        "next js"
+      ]
+    },
+    "Nuxt.js": {
+      "category": "framework",
+      "aliases": [
+        "nuxt",
+        "nuxtjs",
+        "nuxt.js",
+        "nuxt js"
+      ]
+    },
+    "Express": {
+      "category": "framework",
+      "aliases": [
+        "express",
+        "expressjs",
+        "express.js",
+        "express js",
+        "express framework"
+      ]
+    },
+    "Fastify": {
+      "category": "framework",
+      "aliases": [
+        "fastify"
+      ]
+    },
+    "Nest.js": {
+      "category": "framework",
+      "aliases": [
+        "nest",
+        "nestjs",
+        "nest.js",
+        "nest js"
+      ]
+    },
+    "Django": {
+      "category": "framework",
+      "aliases": [
+        "django",
+        "django framework",
+        "django rest",
+        "drf",
+        "django rest framework"
+      ]
+    },
+    "Flask": {
+      "category": "framework",
+      "aliases": [
+        "flask",
+        "flask framework",
+        "flask api"
+      ]
+    },
+    "FastAPI": {
+      "category": "framework",
+      "aliases": [
+        "fastapi",
+        "fast api",
+        "fast-api"
+      ]
+    },
+    "Spring": {
+      "category": "framework",
+      "aliases": [
+        "spring",
+        "spring framework",
+        "spring boot",
+        "springboot",
+        "spring mvc",
+        "spring cloud"
+      ]
+    },
+    "Laravel": {
+      "category": "framework",
+      "aliases": [
+        "laravel",
+        "laravel framework"
+      ]
+    },
+    "Ruby on Rails": {
+      "category": "framework",
+      "aliases": [
+        "rails",
+        "ruby on rails",
+        "ruby rails",
+        "ror"
+      ]
+    },
+    "ASP.NET": {
+      "category": "framework",
+      "aliases": [
+        "asp.net",
+        "aspnet",
+        "asp net",
+        "asp.net core",
+        "asp.net mvc",
+        ".net core"
+      ]
+    },
+    "TensorFlow": {
+      "category": "ml_framework",
+      "aliases": [
+        "tensorflow",
+        "tf",
+        "tensor flow",
+        "tensorflow 2"
+      ]
+    },
+    "PyTorch": {
+      "category": "ml_framework",
+      "aliases": [
+        "pytorch",
+        "py torch",
+        "torch"
+      ]
+    },
+    "Keras": {
+      "category": "ml_framework",
+      "aliases": [
+        "keras"
+      ]
+    },
+    "Scikit-learn": {
+      "category": "ml_library",
+      "aliases": [
+        "scikit-learn",
+        "sklearn",
+        "scikit learn",
+        "scikitlearn"
+      ]
+    },
+    "Pandas": {
+      "category": "data_library",
+      "aliases": [
+        "pandas",
+        "panda"
+      ]
+    },
+    "NumPy": {
+      "category": "data_library",
+      "aliases": [
+        "numpy",
+        "num py",
+        "np"
+      ]
+    },
+    "OpenCV": {
+      "category": "ml_library",
+      "aliases": [
+        "opencv",
+        "open cv",
+        "cv2",
+        "opencv2",
+        "opencv 4"
+      ]
+    },
+    "Matplotlib": {
+      "category": "data_library",
+      "aliases": [
+        "matplotlib",
+        "pyplot",
+        "plt"
+      ]
+    },
+    "Seaborn": {
+      "category": "data_library",
+      "aliases": [
+        "seaborn"
+      ]
+    },
+    "Hugging Face": {
+      "category": "ml_library",
+      "aliases": [
+        "hugging face",
+        "huggingface",
+        "transformers",
+        "hugging face transformers"
+      ]
+    },
+    "LangChain": {
+      "category": "ml_library",
+      "aliases": [
+        "langchain",
+        "lang chain"
+      ]
+    },
+    "Node.js": {
+      "category": "runtime",
+      "aliases": [
+        "node",
+        "nodejs",
+        "node.js",
+        "node js",
+        "node runtime"
+      ]
+    },
+    "Deno": {
+      "category": "runtime",
+      "aliases": [
+        "deno"
+      ]
+    },
+    "MongoDB": {
+      "category": "database",
+      "aliases": [
+        "mongodb",
+        "mongo",
+        "mongo db",
+        "mongoDB",
+        "mongoose"
+      ]
+    },
+    "PostgreSQL": {
+      "category": "database",
+      "aliases": [
+        "postgresql",
+        "postgres",
+        "postgresdb",
+        "postgres sql",
+        "pgsql"
+      ]
+    },
+    "MySQL": {
+      "category": "database",
+      "aliases": [
+        "mysql",
+        "my sql"
+      ]
+    },
+    "SQLite": {
+      "category": "database",
+      "aliases": [
+        "sqlite",
+        "sqlite3",
+        "sql lite"
+      ]
+    },
+    "Redis": {
+      "category": "database",
+      "aliases": [
+        "redis",
+        "redis cache",
+        "redis db"
+      ]
+    },
+    "Cassandra": {
+      "category": "database",
+      "aliases": [
+        "cassandra",
+        "apache cassandra"
+      ]
+    },
+    "Elasticsearch": {
+      "category": "database",
+      "aliases": [
+        "elasticsearch",
+        "elastic search",
+        "elastic",
+        "elk"
+      ]
+    },
+    "Firebase": {
+      "category": "database",
+      "aliases": [
+        "firebase",
+        "firestore",
+        "firebase firestore",
+        "firebase realtime",
+        "firebase realtime database"
+      ]
+    },
+    "DynamoDB": {
+      "category": "database",
+      "aliases": [
+        "dynamodb",
+        "dynamo db",
+        "aws dynamodb"
+      ]
+    },
+    "Supabase": {
+      "category": "database",
+      "aliases": [
+        "supabase"
+      ]
+    },
+    "Neo4j": {
+      "category": "database",
+      "aliases": [
+        "neo4j",
+        "neo 4j",
+        "graph database"
+      ]
+    },
+    "AWS": {
+      "category": "cloud",
+      "aliases": [
+        "aws",
+        "amazon web services",
+        "amazon aws",
+        "aws cloud"
+      ]
+    },
+    "GCP": {
+      "category": "cloud",
+      "aliases": [
+        "gcp",
+        "google cloud",
+        "google cloud platform",
+        "google cloud services"
+      ]
+    },
+    "Azure": {
+      "category": "cloud",
+      "aliases": [
+        "azure",
+        "microsoft azure",
+        "azure cloud"
+      ]
+    },
+    "Docker": {
+      "category": "devops",
+      "aliases": [
+        "docker",
+        "docker container",
+        "containerization",
+        "dockerfile"
+      ]
+    },
+    "Kubernetes": {
+      "category": "devops",
+      "aliases": [
+        "kubernetes",
+        "k8s",
+        "kube",
+        "kubectl"
+      ]
+    },
+    "CI/CD": {
+      "category": "devops",
+      "aliases": [
+        "ci/cd",
+        "cicd",
+        "ci cd",
+        "continuous integration",
+        "continuous deployment",
+        "continuous delivery",
+        "github actions",
+        "gitlab ci",
+        "jenkins",
+        "travis ci",
+        "circle ci"
+      ]
+    },
+    "Git": {
+      "category": "tool",
+      "aliases": [
+        "git",
+        "git version control",
+        "version control"
+      ]
+    },
+    "GitHub": {
+      "category": "tool",
+      "aliases": [
+        "github",
+        "git hub"
+      ]
+    },
+    "GitLab": {
+      "category": "tool",
+      "aliases": [
+        "gitlab",
+        "git lab"
+      ]
+    },
+    "Linux": {
+      "category": "os",
+      "aliases": [
+        "linux",
+        "ubuntu",
+        "debian",
+        "centos",
+        "fedora",
+        "arch linux",
+        "kali linux",
+        "rhel",
+        "red hat"
+      ]
+    },
+    "REST API": {
+      "category": "concept",
+      "aliases": [
+        "rest",
+        "rest api",
+        "restful",
+        "restful api",
+        "rest web services",
+        "restful services",
+        "rest architecture"
+      ]
+    },
+    "GraphQL": {
+      "category": "concept",
+      "aliases": [
+        "graphql",
+        "graph ql",
+        "graph query language"
+      ]
+    },
+    "Microservices": {
+      "category": "concept",
+      "aliases": [
+        "microservices",
+        "microservice",
+        "microservice architecture"
+      ]
+    },
+    "Machine Learning": {
+      "category": "concept",
+      "aliases": [
+        "machine learning",
+        "ml",
+        "ml algorithms",
+        "ml models",
+        "applied ml"
+      ]
+    },
+    "Deep Learning": {
+      "category": "concept",
+      "aliases": [
+        "deep learning",
+        "dl",
+        "neural networks",
+        "deep neural networks",
+        "dnn"
+      ]
+    },
+    "Natural Language Processing": {
+      "category": "concept",
+      "aliases": [
+        "nlp",
+        "natural language processing",
+        "text processing",
+        "computational linguistics"
+      ]
+    },
+    "Computer Vision": {
+      "category": "concept",
+      "aliases": [
+        "computer vision",
+        "cv",
+        "image processing",
+        "image recognition",
+        "object detection"
+      ]
+    },
+    "Data Science": {
+      "category": "concept",
+      "aliases": [
+        "data science",
+        "data analysis",
+        "data analytics",
+        "statistical analysis"
+      ]
+    },
+    "Agile": {
+      "category": "methodology",
+      "aliases": [
+        "agile",
+        "agile methodology",
+        "agile development",
+        "scrum",
+        "kanban",
+        "sprint"
+      ]
+    },
+    "HTML": {
+      "category": "web",
+      "aliases": [
+        "html",
+        "html5",
+        "html 5",
+        "hyper text markup language"
+      ]
+    },
+    "CSS": {
+      "category": "web",
+      "aliases": [
+        "css",
+        "css3",
+        "css 3",
+        "cascading style sheets",
+        "stylesheets"
+      ]
+    },
+    "Tailwind CSS": {
+      "category": "web",
+      "aliases": [
+        "tailwind",
+        "tailwindcss",
+        "tailwind css",
+        "tailwind.css"
+      ]
+    },
+    "Bootstrap": {
+      "category": "web",
+      "aliases": [
+        "bootstrap",
+        "bootstrap 4",
+        "bootstrap 5",
+        "bootstrap css"
+      ]
+    },
+    "Sass": {
+      "category": "web",
+      "aliases": [
+        "sass",
+        "scss",
+        "sass/scss"
+      ]
+    },
+    "Redux": {
+      "category": "library",
+      "aliases": [
+        "redux",
+        "redux toolkit",
+        "react redux",
+        "redux-toolkit"
+      ]
+    },
+    "Webpack": {
+      "category": "tool",
+      "aliases": [
+        "webpack",
+        "web pack"
+      ]
+    },
+    "Vite": {
+      "category": "tool",
+      "aliases": [
+        "vite",
+        "vite.js",
+        "vitejs"
+      ]
+    },
+    "Jest": {
+      "category": "testing",
+      "aliases": [
+        "jest",
+        "jest testing"
+      ]
+    },
+    "Mocha": {
+      "category": "testing",
+      "aliases": [
+        "mocha",
+        "mocha.js"
+      ]
+    },
+    "Pytest": {
+      "category": "testing",
+      "aliases": [
+        "pytest",
+        "py.test",
+        "python pytest"
+      ]
+    },
+    "Selenium": {
+      "category": "testing",
+      "aliases": [
+        "selenium",
+        "selenium webdriver"
+      ]
+    },
+    "RabbitMQ": {
+      "category": "messaging",
+      "aliases": [
+        "rabbitmq",
+        "rabbit mq",
+        "amqp"
+      ]
+    },
+    "Kafka": {
+      "category": "messaging",
+      "aliases": [
+        "kafka",
+        "apache kafka",
+        "kafka streaming"
+      ]
+    },
+    "Nginx": {
+      "category": "infrastructure",
+      "aliases": [
+        "nginx",
+        "nginx server",
+        "nginx proxy"
+      ]
+    },
+    "Jupyter": {
+      "category": "tool",
+      "aliases": [
+        "jupyter",
+        "jupyter notebook",
+        "jupyter lab",
+        "jupyterlab"
+      ]
+    },
+    "Tableau": {
+      "category": "tool",
+      "aliases": [
+        "tableau",
+        "tableau desktop"
+      ]
+    },
+    "Power BI": {
+      "category": "tool",
+      "aliases": [
+        "power bi",
+        "powerbi",
+        "microsoft power bi"
+      ]
+    }
+  }
+}
