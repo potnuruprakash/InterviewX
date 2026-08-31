@@ -133,8 +133,13 @@ export default function ResultsPage() {
           {fe?.isDevelopmentEvaluation && (
             <div className="dev-notice animate-fade-in">
               ⚠️ {fe.sbertEvaluated > 0
-                ? `${fe.sbertEvaluated} questions evaluated with SBERT. ${fe.notice}`
-                : 'SBERT AI service was unavailable. Scores use development placeholder (word-length heuristics). Connect the AI service for real evaluation.'}
+                ? `${fe.sbertEvaluated} questions evaluated with semantic AI evaluation. ${fe.notice}`
+                : 'AI semantic evaluation service was offline. Scores use baseline evaluation heuristics. Connect the AI service for deep evaluation.'}
+            </div>
+          )}
+          {interview?.completionReason === 'time_expired' && (
+            <div className="timeout-completion-badge animate-fade-in">
+              ⏱️ Session completed automatically when timer expired (time's up). Evaluated answers are detailed below.
             </div>
           )}
         </div>
@@ -150,8 +155,10 @@ export default function ResultsPage() {
             </div>
             <div className="hero-meta">
               <div className="hero-meta-row">
-                <span className="meta-label">Questions Answered</span>
-                <span className="meta-val">{fe?.questionsAnswered || 0}</span>
+                <span className="meta-label">Questions Breakdown</span>
+                <span className="meta-val">
+                  <strong>{fe?.questionsAnswered ?? 0}</strong> answered · <strong>{fe?.questionsSkipped ?? 0}</strong> skipped · {fe?.totalQuestions ?? 0} total
+                </span>
               </div>
               <div className="hero-meta-row">
                 <span className="meta-label">Modalities Used</span>
@@ -317,58 +324,87 @@ export default function ResultsPage() {
             </div>
             {expanded.questions && (
               <div className="question-breakdown">
-                {questionBreakdown.map((q, i) => (
-                  <div key={i} className="qb-item glass-card">
-                    <div className="qb-header">
-                      <span className="qb-num">Q{q.questionNumber}</span>
-                      <span className="badge badge-purple">{q.category}</span>
-                      <span className={`badge ${q.difficulty === 'hard' ? 'badge-red' : q.difficulty === 'easy' ? 'badge-green' : 'badge-yellow'}`}>
-                        {q.difficulty}
-                      </span>
-                      {q.targetSkill && q.targetSkill !== 'general' && (
-                        <span className="badge badge-gray">{q.targetSkill}</span>
-                      )}
-                      <span className="qb-score">
-                        {q.score !== null ? `${Math.round(q.score)}/100` : '—'}
-                        {q.textEvaluation?.modelStatus === 'sbert_evaluated' && (
-                          <span className="sbert-tag">SBERT</span>
+                {questionBreakdown.map((q, i) => {
+                  const isSkipped = q.status === 'skipped'
+                  return (
+                    <div key={i} className={`qb-item glass-card ${isSkipped ? 'qb-item-skipped' : ''}`}>
+                      <div className="qb-header">
+                        <span className="qb-num">Q{q.questionNumber}</span>
+                        <span className={`badge ${q.type === 'coding' ? 'badge-purple' : 'badge-purple'}`}>
+                          {q.type === 'coding' ? '💻 Coding' : q.category}
+                        </span>
+                        <span className={`badge ${q.difficulty === 'hard' ? 'badge-red' : q.difficulty === 'easy' ? 'badge-green' : 'badge-yellow'}`}>
+                          {q.difficulty}
+                        </span>
+                        {q.targetSkill && q.targetSkill !== 'general' && (
+                          <span className="badge badge-gray">{q.targetSkill}</span>
                         )}
-                      </span>
-                    </div>
-
-                    {q.contextNote && (
-                      <p className="qb-context">{q.contextNote}</p>
-                    )}
-
-                    <p className="qb-question">{q.question}</p>
-                    <div className="qb-answer">
-                      <span className="qb-answer-label">Your answer:</span>
-                      <p>{q.answerText || '(No answer provided)'}</p>
-                    </div>
-
-                    {q.textEvaluation?.strengths?.length > 0 && (
-                      <div className="qb-concepts">
-                        <span className="qb-concepts-label">✅ Covered:</span>
-                        {q.textEvaluation.strengths.map((s, j) => (
-                          <span key={j} className="concept-tag concept-covered">{s}</span>
-                        ))}
+                        {isSkipped ? (
+                          <span className="qb-score" style={{ color: '#f59e0b', fontWeight: 600 }}>
+                            Skipped
+                          </span>
+                        ) : (
+                          <span className="qb-score">
+                            {q.score !== null ? `${Math.round(q.score)}/100` : '—'}
+                            {q.textEvaluation?.modelStatus === 'sbert_evaluated' && (
+                              <span className="sbert-tag">AI Evaluated</span>
+                            )}
+                          </span>
+                        )}
                       </div>
-                    )}
 
-                    {q.textEvaluation?.missingConcepts?.length > 0 && (
-                      <div className="qb-concepts">
-                        <span className="qb-concepts-label">⚠️ Missed:</span>
-                        {q.textEvaluation.missingConcepts.map((c, j) => (
-                          <span key={j} className="concept-tag concept-missing">{c}</span>
-                        ))}
-                      </div>
-                    )}
+                      {q.contextNote && (
+                        <p className="qb-context">{q.contextNote}</p>
+                      )}
 
-                    {(q.textEvaluation?.feedback || q.evaluation?.feedback) && (
-                      <p className="qb-feedback">
-                        {q.textEvaluation?.feedback || q.evaluation?.feedback}
-                      </p>
-                    )}
+                      <p className="qb-question">{q.question}</p>
+
+                      {isSkipped ? (
+                        <div className="qb-answer skipped-box">
+                          <span className="qb-answer-label" style={{ color: '#f59e0b' }}>Status:</span>
+                          <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                            Question skipped by candidate (excluded from overall score calculation).
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {q.code && (
+                            <div className="qb-code-solution-box">
+                              <span className="qb-answer-label">Submitted Code ({q.language || 'code'}):</span>
+                              <pre className="qb-code-block"><code>{q.code}</code></pre>
+                            </div>
+                          )}
+
+                          <div className="qb-answer">
+                            <span className="qb-answer-label">{q.code ? 'Explanation / Approach:' : 'Your answer:'}</span>
+                            <p>{q.answerText || '(No answer text provided)'}</p>
+                          </div>
+                        </>
+                      )}
+
+                      {q.textEvaluation?.strengths?.length > 0 && (
+                        <div className="qb-concepts">
+                          <span className="qb-concepts-label">✅ Covered:</span>
+                          {q.textEvaluation.strengths.map((s, j) => (
+                            <span key={j} className="concept-tag concept-covered">{s}</span>
+                          ))}
+                        </div>
+                      )}
+
+                      {q.textEvaluation?.missingConcepts?.length > 0 && (
+                        <div className="qb-concepts">
+                          <span className="qb-concepts-label">⚠️ Missed:</span>
+                          {q.textEvaluation.missingConcepts.map((c, j) => (
+                            <span key={j} className="concept-tag concept-missing">{c}</span>
+                          ))}
+                        </div>
+                      )}
+
+                      {(q.textEvaluation?.feedback || q.evaluation?.feedback) && (
+                        <p className="qb-feedback">
+                          {q.textEvaluation?.feedback || q.evaluation?.feedback}
+                        </p>
+                      )}
 
                     {/* Audio/Video indicators */}
                     {q.audioEvaluation?.audioFeaturesAvailable && (
@@ -384,7 +420,8 @@ export default function ResultsPage() {
                       </div>
                     )}
                   </div>
-                ))}
+                )
+              })}
               </div>
             )
             }

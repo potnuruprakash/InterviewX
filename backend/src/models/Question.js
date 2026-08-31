@@ -17,15 +17,15 @@ const questionSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    // Phase 3 — expanded type system
+    // Phase 3 & Coding — expanded type system
     type: {
       type: String,
-      enum: ['technical', 'project', 'experience', 'behavioral', 'job_specific', 'skill_gap', 'follow_up'],
+      enum: ['technical', 'coding', 'project', 'experience', 'behavioral', 'job_specific', 'skill_gap', 'follow_up'],
       default: 'technical',
     },
     category: {
       type: String,
-      enum: ['technical', 'behavioral', 'hr', 'project', 'conceptual', 'situational', 'skill_gap', 'experience', 'follow_up'],
+      enum: ['technical', 'coding', 'behavioral', 'hr', 'project', 'conceptual', 'situational', 'skill_gap', 'experience', 'follow_up'],
       default: 'technical',
     },
     difficulty: {
@@ -84,6 +84,29 @@ const questionSchema = new mongoose.Schema(
     },
     // Phase 3 — context note for skill gap questions
     contextNote: {
+      type: String,
+      default: null,
+    },
+    // Coding challenge properties
+    starterCode: {
+      type: String,
+      default: null,
+    },
+    language: {
+      type: String,
+      default: 'javascript',
+    },
+    // Question Status (e.g. pending, answered, skipped)
+    status: {
+      type: String,
+      enum: ['pending', 'answered', 'skipped'],
+      default: 'pending',
+    },
+    skippedAt: {
+      type: Date,
+      default: null,
+    },
+    skipReason: {
       type: String,
       default: null,
     },

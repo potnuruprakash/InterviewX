@@ -48,6 +48,9 @@ const formatQuestion = (q) => q ? {
   order: q.order,
   followUpAllowed: q.followUpAllowed,
   contextNote: q.contextNote,
+  starterCode: q.starterCode || null,
+  language: q.language || 'javascript',
+  status: q.status || 'pending',
 } : null;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,6 +65,7 @@ const createInterview = async (req, res) => {
     const {
       resumeId, jobDescriptionId,
       interviewType = 'mixed', difficulty = 'medium', totalQuestions = 10,
+      durationMinutes = 30,
     } = req.body;
     const clerkUserId = req.clerkUserId;
 
@@ -89,6 +93,7 @@ const createInterview = async (req, res) => {
       interviewType,
       difficulty,
       totalQuestions: Math.min(totalQuestions, 15),
+      durationMinutes: Math.max(5, Math.min(120, Number(durationMinutes) || 30)),
       status: 'created',
       skillAnalysis: skillAnalysis ? {
         matchedSkills: skillAnalysis.matchedRequiredSkills || [],
@@ -167,6 +172,9 @@ const createInterview = async (req, res) => {
         order: index,
         followUpAllowed: q.followUpAllowed !== false,
         contextNote: q.contextNote || null,
+        starterCode: q.starterCode || null,
+        language: q.language || 'javascript',
+        status: 'pending',
       }))
     );
 
@@ -183,6 +191,7 @@ const createInterview = async (req, res) => {
         difficulty: interview.difficulty,
         status: interview.status,
         totalQuestions: interview.totalQuestions,
+        durationMinutes: interview.durationMinutes,
         questionGenerationSource: generationSource,
         createdAt: interview.createdAt,
       },
@@ -253,7 +262,10 @@ const startInterview = async (req, res) => {
         status: interview.status,
         currentQuestionIndex: interview.currentQuestionIndex,
         totalQuestions: interview.totalQuestions,
+        durationMinutes: interview.durationMinutes || 30,
         startedAt: interview.startedAt,
+        skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+        completionReason: interview.completionReason || null,
         questionGenerationSource: interview.questionGenerationSource,
         modalityAvailability: interview.modalityAvailability,
       },
@@ -275,7 +287,19 @@ const getCurrentQuestion = async (req, res) => {
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
 
     if (interview.status === 'completed') {
-      return sendSuccess(res, { message: 'Interview completed.', isComplete: true, currentQuestion: null });
+      return sendSuccess(res, {
+        message: 'Interview completed.',
+        isComplete: true,
+        currentQuestion: null,
+        interview: {
+          id: interview._id,
+          status: interview.status,
+          completionReason: interview.completionReason,
+          durationMinutes: interview.durationMinutes || 30,
+          startedAt: interview.startedAt,
+          skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+        },
+      });
     }
 
     const question = await Question.findOne({
@@ -287,7 +311,19 @@ const getCurrentQuestion = async (req, res) => {
       currentQuestion: formatQuestion(question),
       currentQuestionIndex: interview.currentQuestionIndex,
       totalQuestions: interview.totalQuestions,
+      skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+      durationMinutes: interview.durationMinutes || 30,
+      startedAt: interview.startedAt,
       isComplete: !question,
+      interview: {
+        id: interview._id,
+        status: interview.status,
+        currentQuestionIndex: interview.currentQuestionIndex,
+        totalQuestions: interview.totalQuestions,
+        durationMinutes: interview.durationMinutes || 30,
+        startedAt: interview.startedAt,
+        skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+      },
     });
   } catch (error) {
     return sendError(res, 500, 'QUESTION_FETCH_FAILED', 'Could not retrieve question.', error.message);
@@ -303,7 +339,7 @@ const submitResponse = async (req, res) => {
     const errors = validateSubmitResponse(req.body);
     if (errors.length > 0) return sendError(res, 400, 'VALIDATION_ERROR', errors.join(' '));
 
-    const { questionId, answerText } = req.body;
+    const { questionId, answerText, code, language, responseType = 'text' } = req.body;
     const clerkUserId = req.clerkUserId;
 
     const interview = await Interview.findOne({ _id: req.params.id, clerkUserId });
@@ -318,16 +354,21 @@ const submitResponse = async (req, res) => {
     const existingResponse = await Response.findOne({ interviewId: interview._id, questionId, clerkUserId });
     if (existingResponse) return sendError(res, 409, 'RESPONSE_EXISTS', 'Answer already submitted for this question.');
 
-    // ── Phase 4: SBERT evaluation ───────────────────────────────────────────
+    // Determine evaluation text: if coding response, combine explanation and code for semantic evaluation
+    const textToEvaluate = (answerText && answerText.trim().length > 0)
+      ? (code ? `${answerText.trim()}\n\nCode Solution (${language || 'code'}):\n${code}` : answerText.trim())
+      : (code || '').trim();
+
+    // ── SBERT evaluation ────────────────────────────────────────────
     const expectedConcepts = question.expectedConcepts || question.expectedKeyPoints || [];
     const { textEvaluation, evaluation } = await evaluateResponse(
       question.text,
-      answerText,
+      textToEvaluate,
       question.difficulty,
       expectedConcepts
     );
 
-    // ── Phase 7: Build multimodal evaluation (text only for now) ────────────
+    // ── Build multimodal evaluation (text only initially) ────────────
     const multimodalEval = buildEvaluation(textEvaluation, null, null);
 
     // Save response
@@ -335,14 +376,22 @@ const submitResponse = async (req, res) => {
       clerkUserId,
       interviewId: interview._id,
       questionId,
-      answerText: answerText.trim(),
+      answerText: textToEvaluate,
+      responseType: responseType || (code ? 'coding' : 'text'),
+      code: code || null,
+      language: language || null,
+      status: 'submitted',
       textEvaluation,
       multimodalEvaluation: multimodalEval,
       evaluation, // legacy
       submittedAt: new Date(),
     });
 
-    // ── Phase 8: Adaptive engine ────────────────────────────────────────────
+    // Mark question as answered
+    question.status = 'answered';
+    await question.save();
+
+    // ── Adaptive engine ─────────────────────────────────────────────
     const responseScore = textEvaluation.textScore || evaluation.score || 0;
     const skill = question.targetSkill || question.skill || 'general';
 
@@ -372,7 +421,7 @@ const submitResponse = async (req, res) => {
     // Generate follow-up question if needed and not stopping
     let nextQuestion = null;
     if (!isComplete && shouldFollowUp && missingConcepts.length > 0) {
-      const followUpData = generateFollowUpQuestion(question, answerText, missingConcepts);
+      const followUpData = generateFollowUpQuestion(question, textToEvaluate, missingConcepts);
       const followUpOrder = interview.totalQuestions; // append after existing
       const followUp = await Question.create({
         interviewId: interview._id,
@@ -387,6 +436,7 @@ const submitResponse = async (req, res) => {
 
     if (isComplete) {
       interview.status = 'completed';
+      interview.completionReason = interview.completionReason || 'completed';
       interview.completedAt = new Date();
     }
 
@@ -413,10 +463,15 @@ const submitResponse = async (req, res) => {
         multimodalEvaluation: multimodalEval,
       },
       interview: {
+        id: interview._id,
         currentQuestionIndex: interview.currentQuestionIndex,
         totalQuestions: interview.totalQuestions,
+        skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+        durationMinutes: interview.durationMinutes || 30,
+        startedAt: interview.startedAt,
         status: interview.status,
         isComplete,
+        completionReason: interview.completionReason,
         adaptiveAction: shouldFollowUp ? 'follow_up_added' : 'next_question',
         currentDifficulty: interview.interviewState?.currentDifficulty,
       },
@@ -425,6 +480,87 @@ const submitResponse = async (req, res) => {
   } catch (error) {
     console.error('[Interview] Submit response error:', error);
     return sendError(res, 500, 'RESPONSE_SUBMIT_FAILED', 'Could not submit answer.', error.message);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SKIP QUESTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+const skipQuestion = async (req, res) => {
+  try {
+    const interviewId = req.params.id;
+    const questionId = req.params.questionId || req.body.questionId;
+    const clerkUserId = req.clerkUserId;
+    const reason = req.body.reason || 'candidate_skipped';
+
+    const interview = await Interview.findOne({ _id: interviewId, clerkUserId });
+    if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
+    if (interview.status === 'completed') {
+      return sendError(res, 400, 'INTERVIEW_COMPLETED', 'This interview is already completed.');
+    }
+
+    let question = null;
+    if (questionId) {
+      question = await Question.findOne({ _id: questionId, interviewId: interview._id });
+    } else {
+      question = await Question.findOne({ interviewId: interview._id, order: interview.currentQuestionIndex });
+    }
+    if (!question) return sendError(res, 404, 'QUESTION_NOT_FOUND', 'Question not found in this interview.');
+
+    if (question.status === 'answered') {
+      return sendError(res, 409, 'ALREADY_ANSWERED', 'This question has already been answered.');
+    }
+    if (question.status === 'skipped') {
+      return sendError(res, 409, 'ALREADY_SKIPPED', 'This question has already been skipped.');
+    }
+
+    // Mark question skipped
+    question.status = 'skipped';
+    question.skippedAt = new Date();
+    question.skipReason = reason;
+    await question.save();
+
+    // Advance question index
+    interview.currentQuestionIndex += 1;
+    interview.skippedQuestionsCount = (interview.skippedQuestionsCount || 0) + 1;
+
+    // Check completeness
+    const isComplete = interview.currentQuestionIndex >= interview.totalQuestions;
+    let nextQuestion = null;
+
+    if (isComplete) {
+      interview.status = 'completed';
+      interview.completionReason = 'final_question_skipped';
+      interview.completedAt = new Date();
+      await saveProgress(interview, clerkUserId);
+    } else {
+      nextQuestion = formatQuestion(
+        await Question.findOne({ interviewId: interview._id, order: interview.currentQuestionIndex })
+      );
+    }
+
+    await interview.save();
+
+    return sendSuccess(res, {
+      message: 'Question skipped successfully.',
+      status: 'skipped',
+      interview: {
+        id: interview._id,
+        currentQuestionIndex: interview.currentQuestionIndex,
+        totalQuestions: interview.totalQuestions,
+        skippedQuestionsCount: interview.skippedQuestionsCount,
+        durationMinutes: interview.durationMinutes || 30,
+        startedAt: interview.startedAt,
+        status: interview.status,
+        isComplete,
+        completionReason: interview.completionReason,
+      },
+      nextQuestion,
+    });
+  } catch (error) {
+    console.error('[Interview] Skip question error:', error);
+    return sendError(res, 500, 'SKIP_FAILED', 'Could not skip question.', error.message);
   }
 };
 
@@ -562,23 +698,33 @@ const completeInterview = async (req, res) => {
     const interview = await Interview.findOne({ _id: req.params.id, clerkUserId: req.clerkUserId });
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
     if (interview.status === 'completed') {
-      return sendSuccess(res, { message: 'Interview already completed.', interviewId: interview._id });
+      return sendSuccess(res, {
+        message: 'Interview already completed.',
+        interviewId: interview._id,
+        completionReason: interview.completionReason,
+      });
     }
 
+    const completionReason = req.body.completionReason || interview.completionReason || 'completed';
     interview.status = 'completed';
+    interview.completionReason = completionReason;
     interview.completedAt = new Date();
     await interview.save();
 
     await saveProgress(interview, req.clerkUserId);
 
-    return sendSuccess(res, { message: 'Interview completed.', interviewId: interview._id });
+    return sendSuccess(res, {
+      message: 'Interview completed.',
+      interviewId: interview._id,
+      completionReason,
+    });
   } catch (error) {
     return sendError(res, 500, 'COMPLETE_FAILED', 'Could not complete interview.', error.message);
   }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET RESULTS (Phase 9)
+// GET RESULTS
 // ─────────────────────────────────────────────────────────────────────────────
 
 const getResults = async (req, res) => {
@@ -586,32 +732,58 @@ const getResults = async (req, res) => {
     const interview = await Interview.findOne({ _id: req.params.id, clerkUserId: req.clerkUserId });
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
 
+    const allQuestions = await Question.find({ interviewId: interview._id }).sort({ order: 1 });
     const responses = await Response.find({
       interviewId: interview._id,
       clerkUserId: req.clerkUserId,
-    }).populate('questionId', 'text category type difficulty targetSkill skill contextNote expectedConcepts');
+    });
 
-    const aggregated = aggregateInterviewScore(responses);
-    const fusion = aggregateInterviewFusion(responses);
+    const responseByQuestionId = new Map();
+    for (const r of responses) {
+      responseByQuestionId.set(String(r.questionId), r);
+    }
 
-    // Build per-question breakdown
-    const questionBreakdown = responses.map((r, i) => ({
-      questionNumber: i + 1,
-      question: r.questionId?.text || 'Unknown question',
-      category: r.questionId?.category,
-      type: r.questionId?.type,
-      difficulty: r.questionId?.difficulty,
-      targetSkill: r.questionId?.targetSkill || r.questionId?.skill,
-      contextNote: r.questionId?.contextNote,
-      answerText: r.answerText,
-      textEvaluation: r.textEvaluation,
-      audioEvaluation: r.audioEvaluation,
-      videoEvaluation: r.videoEvaluation,
-      multimodalEvaluation: r.multimodalEvaluation,
-      // Legacy
-      evaluation: r.evaluation,
-      score: r.textEvaluation?.textScore ?? r.evaluation?.score ?? null,
-    }));
+    const answeredCount = responses.length;
+    const skippedCount = allQuestions.filter((q) => q.status === 'skipped').length;
+    const totalCount = allQuestions.length || interview.totalQuestions;
+
+    // Filter responses that have valid evaluated scores for aggregation
+    const scoredResponses = responses.filter(
+      (r) => (r.textEvaluation?.textScore !== null && r.textEvaluation?.textScore !== undefined) ||
+             (r.evaluation?.score !== null && r.evaluation?.score !== undefined)
+    );
+
+    const aggregated = aggregateInterviewScore(scoredResponses);
+    const fusion = aggregateInterviewFusion(scoredResponses);
+
+    // Build per-question breakdown for all questions (including skipped)
+    const questionBreakdown = allQuestions.map((q, i) => {
+      const resp = responseByQuestionId.get(String(q._id));
+      const isSkipped = q.status === 'skipped';
+
+      return {
+        questionNumber: i + 1,
+        questionId: q._id,
+        question: q.text || 'Unknown question',
+        category: q.category,
+        type: q.type,
+        difficulty: q.difficulty,
+        targetSkill: q.targetSkill || q.skill,
+        contextNote: q.contextNote,
+        starterCode: q.starterCode,
+        language: q.language || resp?.language,
+        status: isSkipped ? 'skipped' : (resp ? 'answered' : 'pending'),
+        answerText: isSkipped ? null : (resp?.answerText || null),
+        code: resp?.code || null,
+        responseType: resp?.responseType || (q.type === 'coding' ? 'coding' : 'text'),
+        textEvaluation: resp?.textEvaluation || null,
+        audioEvaluation: resp?.audioEvaluation || null,
+        videoEvaluation: resp?.videoEvaluation || null,
+        multimodalEvaluation: resp?.multimodalEvaluation || null,
+        evaluation: resp?.evaluation || null,
+        score: isSkipped ? null : (resp?.textEvaluation?.textScore ?? resp?.evaluation?.score ?? null),
+      };
+    });
 
     // Skill performance breakdown
     const skillPerformance = interview.interviewState?.skillPerformance || {};
@@ -626,8 +798,8 @@ const getResults = async (req, res) => {
       jobReadiness = calculateJobReadiness({
         skillCoveragePercentage: skillAnalysis?.skillCoveragePercentage || 0,
         overallScore: fusion.overallScore || 0,
-        questionsAnswered: responses.length,
-        totalQuestions: interview.totalQuestions,
+        questionsAnswered: answeredCount,
+        totalQuestions: totalCount,
       });
     } catch (e) { /* not critical */ }
 
@@ -642,7 +814,10 @@ const getResults = async (req, res) => {
       strongAreas: interview.interviewState?.strongAreas || [],
       weakAreas: interview.interviewState?.weakAreas || [],
       skillGaps: skillAnalysisData.missingSkills || [],
-      questionsAnswered: responses.length,
+      questionsAnswered: answeredCount,
+      questionsSkipped: skippedCount,
+      totalQuestions: totalCount,
+      completionReason: interview.completionReason,
       isDevelopmentEvaluation: aggregated.isDevelopmentEvaluation,
       sbertEvaluated: aggregated.sbertEvaluated || 0,
       notice: aggregated.notice,
@@ -655,8 +830,10 @@ const getResults = async (req, res) => {
         interviewType: interview.interviewType,
         difficulty: interview.difficulty,
         status: interview.status,
+        durationMinutes: interview.durationMinutes || 30,
         startedAt: interview.startedAt,
         completedAt: interview.completedAt,
+        completionReason: interview.completionReason,
         questionGenerationSource: interview.questionGenerationSource,
         modalityAvailability: interview.modalityAvailability,
       },
@@ -750,6 +927,7 @@ module.exports = {
   startInterview,
   getCurrentQuestion,
   submitResponse,
+  skipQuestion,
   submitAudioResponse,
   submitVideoResponse,
   completeInterview,

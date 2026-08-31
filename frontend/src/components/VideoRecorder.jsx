@@ -1,200 +1,233 @@
 /**
  * VideoRecorder Component
  *
- * Records video using MediaRecorder with camera stream.
- * Handles permission denial gracefully.
- *
- * Props:
- *   onRecordingComplete(blob, url)
- *   disabled
+ * Professional candidate camera panel with live preview and background recording for YOLO video analysis.
+ * Handles permission denial gracefully: "Camera access is unavailable. You can continue with audio or text."
  */
 
-import { useState, useRef, useEffect } from 'react'
-import { Video, VideoOff, Square, Play, Pause, Trash2, CheckCircle, AlertCircle, Camera } from 'lucide-react'
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { Video, VideoOff, Camera, AlertCircle } from 'lucide-react'
 import './VideoRecorder.css'
 
-const STATES = {
-  IDLE: 'idle',
-  REQUESTING: 'requesting',
-  PREVIEW: 'preview',
-  RECORDING: 'recording',
-  RECORDED: 'recorded',
-  DENIED: 'denied',
-  UNAVAILABLE: 'unavailable',
-}
-
-export default function VideoRecorder({ onRecordingComplete, disabled = false }) {
-  const [state, setState] = useState(STATES.IDLE)
-  const [recordingTime, setRecordingTime] = useState(0)
-  const [videoUrl, setVideoUrl] = useState(null)
-  const [isPlaying, setIsPlaying] = useState(false)
+const VideoRecorder = forwardRef(function VideoRecorder(
+  {
+    onRecordingComplete,
+    onStreamReady,
+    isRecording = false,
+    disabled = false,
+    autoStartStream = true,
+  },
+  ref
+) {
+  const [streamActive, setStreamActive] = useState(false)
+  const [requesting, setRequesting] = useState(false)
   const [error, setError] = useState(null)
+  const [permissionDenied, setPermissionDenied] = useState(false)
 
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
-  const timerRef = useRef(null)
   const liveVideoRef = useRef(null)
-  const playbackVideoRef = useRef(null)
   const streamRef = useRef(null)
+  const isRecordingRef = useRef(isRecording)
 
   useEffect(() => {
-    if (!window.MediaRecorder) setState(STATES.UNAVAILABLE)
-    return cleanup
-  }, [])
+    isRecordingRef.current = isRecording
+  }, [isRecording])
 
   const cleanup = () => {
-    clearInterval(timerRef.current)
-    if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop())
-    if (videoUrl) URL.revokeObjectURL(videoUrl)
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+    setStreamActive(false)
   }
 
   const requestCamera = async () => {
-    setState(STATES.REQUESTING)
+    setRequesting(true)
     setError(null)
+    setPermissionDenied(false)
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: true,
       })
+
       streamRef.current = stream
-      setState(STATES.PREVIEW)
-      // Attach to live preview
-      setTimeout(() => {
-        if (liveVideoRef.current) {
-          liveVideoRef.current.srcObject = stream
-          liveVideoRef.current.play().catch(() => {})
-        }
-      }, 100)
+      setStreamActive(true)
+      setRequesting(false)
+      onStreamReady?.(stream)
+
+      if (liveVideoRef.current) {
+        liveVideoRef.current.srcObject = stream
+        liveVideoRef.current.play().catch(() => {})
+      }
     } catch (err) {
-      if (err.name === 'NotAllowedError') {
-        setState(STATES.DENIED)
-        setError('Camera permission denied.')
+      setRequesting(false)
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setPermissionDenied(true)
+        setError('Camera access is unavailable. You can continue with audio or text.')
       } else {
-        setState(STATES.UNAVAILABLE)
-        setError(`Camera unavailable: ${err.message}`)
+        setError(`Camera unavailable: ${err.message}. You can continue with audio or text.`)
       }
     }
   }
 
-  const startRecording = () => {
+  // Auto request camera stream when component mounts if requested
+  useEffect(() => {
+    if (autoStartStream && !streamRef.current && !permissionDenied) {
+      requestCamera()
+    }
+    return () => {
+      cleanup()
+    }
+  }, [autoStartStream])
+
+  // Attach stream when video element becomes available
+  useEffect(() => {
+    if (streamActive && streamRef.current && liveVideoRef.current) {
+      liveVideoRef.current.srcObject = streamRef.current
+      liveVideoRef.current.play().catch(() => {})
+    }
+  }, [streamActive])
+
+  // Start / Stop MediaRecorder when isRecording changes
+  useEffect(() => {
+    if (isRecording) {
+      startMediaRecording()
+    } else if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      stopMediaRecording()
+    }
+  }, [isRecording])
+
+  const startMediaRecording = () => {
     if (!streamRef.current) return
     chunksRef.current = []
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-      ? 'video/webm;codecs=vp8,opus'
-      : 'video/webm'
 
-    const mr = new MediaRecorder(streamRef.current, { mimeType })
-    mediaRecorderRef.current = mr
+    try {
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+        ? 'video/webm;codecs=vp8,opus'
+        : 'video/webm'
 
-    mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-    mr.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: mimeType })
-      const url = URL.createObjectURL(blob)
-      setVideoUrl(url)
-      setState(STATES.RECORDED)
-      onRecordingComplete?.(blob, url)
-      // Stop live stream
-      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop())
+      const mr = new MediaRecorder(streamRef.current, { mimeType })
+      mediaRecorderRef.current = mr
+
+      mr.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunksRef.current.push(e.data)
+        }
+      }
+
+      mr.onstop = () => {
+        if (chunksRef.current.length > 0) {
+          const blob = new Blob(chunksRef.current, { type: mimeType })
+          onRecordingComplete?.(blob)
+        }
+      }
+
+      mr.start(500)
+    } catch (err) {
+      console.warn('[VideoRecorder] Failed to start media recorder:', err.message)
     }
-
-    mr.start(500)
-    setState(STATES.RECORDING)
-    setRecordingTime(0)
-    timerRef.current = setInterval(() => setRecordingTime((t) => t + 1), 1000)
   }
 
-  const stopRecording = () => {
-    clearInterval(timerRef.current)
-    mediaRecorderRef.current?.stop()
+  const stopMediaRecording = () => {
+    try {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop()
+      }
+    } catch (err) {
+      console.warn('[VideoRecorder] Error stopping media recorder:', err.message)
+    }
   }
 
-  const discardRecording = () => {
-    if (videoUrl) URL.revokeObjectURL(videoUrl)
-    setVideoUrl(null)
-    setState(STATES.IDLE)
-    setRecordingTime(0)
-    onRecordingComplete?.(null, null)
-  }
-
-  const formatTime = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`
-
-  if (state === STATES.UNAVAILABLE) {
-    return (
-      <div className="video-recorder unavailable">
-        <VideoOff size={16} />
-        <span>Video recording unavailable in this browser.</span>
-      </div>
-    )
-  }
-
-  if (state === STATES.DENIED) {
-    return (
-      <div className="video-recorder denied">
-        <AlertCircle size={16} />
-        <span>Camera access denied. Interview continues with text{error?.includes('audio') ? '' : '/audio'} only.</span>
-      </div>
-    )
-  }
+  useImperativeHandle(ref, () => ({
+    getStream: () => streamRef.current,
+    stopRecording: stopMediaRecording,
+    startRecording: startMediaRecording,
+    stopCamera: cleanup,
+    startCamera: requestCamera,
+  }))
 
   return (
-    <div className={`video-recorder ${state} ${disabled ? 'disabled' : ''}`}>
-      <div className="video-recorder-header">
-        <Video size={14} />
-        <span className="video-label">Video Recording</span>
-        {state === STATES.RECORDING && (
-          <span className="recording-badge">
-            <span className="rec-dot" /> REC {formatTime(recordingTime)}
-          </span>
+    <div className="camera-panel-card glass-card">
+      <div className="camera-card-header">
+        <div className="camera-title">
+          <Video size={14} className="camera-header-icon" />
+          <span>Candidate Camera</span>
+        </div>
+
+        {streamActive && (
+          <div className="camera-status-tag active">
+            <span className="camera-dot live" />
+            <span>Camera active</span>
+          </div>
         )}
       </div>
 
-      {/* Live preview */}
-      {(state === STATES.PREVIEW || state === STATES.RECORDING) && (
-        <div className="video-preview-wrap">
-          <video ref={liveVideoRef} className="video-preview" muted playsInline autoPlay />
-          {state === STATES.RECORDING && <div className="recording-overlay">● REC {formatTime(recordingTime)}</div>}
-        </div>
-      )}
-
-      {/* Playback */}
-      {state === STATES.RECORDED && videoUrl && (
-        <div className="video-preview-wrap">
-          <video ref={playbackVideoRef} className="video-preview" src={videoUrl} controls />
-          <div className="recorded-badge"><CheckCircle size={12} /> Recorded ({formatTime(recordingTime)})</div>
-        </div>
-      )}
-
-      {error && <div className="video-error"><AlertCircle size={12} /> {error}</div>}
-
-      <div className="video-controls">
-        {state === STATES.IDLE && (
-          <button className="vid-btn btn-enable" onClick={requestCamera} disabled={disabled}>
-            <Camera size={14} /> Enable Camera
-          </button>
+      <div className="camera-viewport">
+        {streamActive ? (
+          <video
+            ref={liveVideoRef}
+            className="camera-video"
+            playsInline
+            muted
+            autoPlay
+          />
+        ) : requesting ? (
+          <div className="camera-placeholder">
+            <div className="camera-loader" />
+            <p>Initializing camera...</p>
+          </div>
+        ) : permissionDenied ? (
+          <div className="camera-denied-state">
+            <VideoOff size={24} className="camera-off-icon" />
+            <p className="camera-denied-msg">
+              Camera access is unavailable.
+              <br />
+              You can continue with audio or text.
+            </p>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={requestCamera}
+              disabled={disabled}
+            >
+              Retry Camera
+            </button>
+          </div>
+        ) : (
+          <div className="camera-placeholder">
+            <Camera size={28} className="camera-off-icon" />
+            <p>Camera is currently off</p>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={requestCamera}
+              disabled={disabled}
+            >
+              Enable Camera
+            </button>
+          </div>
         )}
 
-        {state === STATES.REQUESTING && (
-          <span className="vid-status">Requesting camera...</span>
-        )}
-
-        {state === STATES.PREVIEW && (
-          <button className="vid-btn btn-record" onClick={startRecording} disabled={disabled}>
-            <span className="rec-dot" /> Start Recording
-          </button>
-        )}
-
-        {state === STATES.RECORDING && (
-          <button className="vid-btn btn-stop" onClick={stopRecording}>
-            <Square size={14} /> Stop Recording
-          </button>
-        )}
-
-        {state === STATES.RECORDED && (
-          <button className="vid-btn btn-discard" onClick={discardRecording}>
-            <Trash2 size={14} /> Discard & Re-record
-          </button>
+        {/* Live Recording Badge Overlay */}
+        {streamActive && isRecording && (
+          <div className="camera-rec-overlay">
+            <span className="camera-rec-dot" />
+            <span>REC</span>
+          </div>
         )}
       </div>
+
+      {error && !permissionDenied && (
+        <div className="camera-error-banner">
+          <AlertCircle size={13} />
+          <span>{error}</span>
+        </div>
+      )}
     </div>
   )
-}
+})
+
+export default VideoRecorder

@@ -49,6 +49,19 @@ const interviewSchema = new mongoose.Schema(
       type: Number,
       default: 10,
     },
+    durationMinutes: {
+      type: Number,
+      default: 30,
+    },
+    completionReason: {
+      type: String,
+      enum: ['completed', 'time_expired', 'user_ended', 'final_question_skipped'],
+      default: null,
+    },
+    skippedQuestionsCount: {
+      type: Number,
+      default: 0,
+    },
 
     // Phase 3 — Personalized question generation
     questionGenerationSource: {

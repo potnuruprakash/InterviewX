@@ -50,8 +50,12 @@ const validateSubmitResponse = (body) => {
   const errors = [];
 
   if (!body.questionId) errors.push('questionId is required.');
-  if (!body.answerText || body.answerText.trim().length === 0) {
-    errors.push('answerText is required.');
+  const text = (body.answerText && body.answerText.trim().length > 0)
+    ? body.answerText
+    : (body.code && body.code.trim().length > 0 ? body.code : '');
+
+  if (!text) {
+    errors.push('answerText or code is required.');
   }
 
   return errors;

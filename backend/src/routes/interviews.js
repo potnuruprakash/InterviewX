@@ -9,6 +9,7 @@ const {
   startInterview,
   getCurrentQuestion,
   submitResponse,
+  skipQuestion,
   submitAudioResponse,
   submitVideoResponse,
   completeInterview,
@@ -27,10 +28,14 @@ router.get('/:id', getInterview);
 router.post('/:id/start', startInterview);
 router.get('/:id/questions/current', getCurrentQuestion);
 
-// Response submission — text (Phase 4 SBERT), audio (Phase 5), video (Phase 6)
+// Response submission — text, audio, video
 router.post('/:id/responses', submitResponse);
 router.post('/:id/audio-response', audioUpload.single('audio'), handleUploadError, submitAudioResponse);
 router.post('/:id/video-response', videoUpload.single('video'), handleUploadError, submitVideoResponse);
+
+// Skip question
+router.post('/:id/questions/:questionId/skip', skipQuestion);
+router.post('/:id/skip', skipQuestion);
 
 // Interview lifecycle
 router.post('/:id/complete', completeInterview);

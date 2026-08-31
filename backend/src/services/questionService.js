@@ -294,6 +294,209 @@ const EXPERIENCE_TEMPLATES = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CODING CHALLENGE TEMPLATES
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CODING_TEMPLATES = {
+  javascript: [
+    {
+      difficulty: 'easy',
+      targetSkill: 'JavaScript',
+      text: 'Implement a function `twoSum(nums, target)` that returns indices of the two numbers such that they add up to target. Each input has exactly one solution and you may not use the same element twice. Aim for O(n) time complexity.',
+      starterCode: `function twoSum(nums, target) {
+  // Your code here
+}
+
+// Example: twoSum([2, 7, 11, 15], 9) -> [0, 1]`,
+      language: 'javascript',
+      expectedConcepts: ['hash map', 'linear time O(n)', 'complement lookup', 'array indexing'],
+    },
+    {
+      difficulty: 'medium',
+      targetSkill: 'JavaScript',
+      text: 'Implement a custom `promiseAll(promises)` function in JavaScript that replicates `Promise.all`. It should resolve with an array of values when all input promises have resolved, or reject immediately if any promise rejects.',
+      starterCode: `function promiseAll(promises) {
+  return new Promise((resolve, reject) => {
+    // Your code here
+  });
+}`,
+      language: 'javascript',
+      expectedConcepts: ['Promise constructor', 'counter tracking', 'rejection short-circuit', 'order preservation'],
+    },
+    {
+      difficulty: 'hard',
+      targetSkill: 'JavaScript',
+      text: 'Design and implement an LRU (Least Recently Used) Cache with `get(key)` and `put(key, value)` methods. Both operations must run in O(1) average time complexity.',
+      starterCode: `class LRUCache {
+  constructor(capacity) {
+    this.capacity = capacity;
+    // Initialize data structures
+  }
+
+  get(key) {
+    // Return value or -1
+  }
+
+  put(key, value) {
+    // Update or insert key-value pair and evict least recently used if needed
+  }
+}`,
+      language: 'javascript',
+      expectedConcepts: ['hash map', 'doubly linked list', 'O(1) operations', 'eviction policy'],
+    },
+  ],
+  react: [
+    {
+      difficulty: 'easy',
+      targetSkill: 'React',
+      text: 'Implement a custom React hook `useToggle(initialValue = false)` that returns a boolean state and a toggle function that flips the state. It should also accept an optional boolean to force a specific state.',
+      starterCode: `import { useState, useCallback } from 'react';
+
+export function useToggle(initialValue = false) {
+  // Your code here
+}`,
+      language: 'javascript',
+      expectedConcepts: ['useState', 'useCallback', 'boolean toggle', 'custom hook'],
+    },
+    {
+      difficulty: 'medium',
+      targetSkill: 'React',
+      text: 'Implement a custom React hook `useDebounce(value, delay)` that delays updating the returned value until after the specified delay in milliseconds has elapsed since the last change.',
+      starterCode: `import { useState, useEffect } from 'react';
+
+export function useDebounce(value, delay) {
+  // Your code here
+}`,
+      language: 'javascript',
+      expectedConcepts: ['useEffect cleanup', 'setTimeout', 'debouncing', 'state synchronization'],
+    },
+    {
+      difficulty: 'hard',
+      targetSkill: 'React',
+      text: 'Implement a lightweight state management store `createStore(initialState)` that provides a `useStore()` hook and `setState()` method, ensuring components only re-render when their subscribed state slice changes.',
+      starterCode: `export function createStore(initialState) {
+  // Your code here
+}`,
+      language: 'javascript',
+      expectedConcepts: ['pub-sub listener pattern', 'shallow equality check', 'subscription cleanup', 're-render optimization'],
+    },
+  ],
+  python: [
+    {
+      difficulty: 'easy',
+      targetSkill: 'Python',
+      text: 'Write a Python function `is_valid_palindrome(s: str) -> bool` that checks if a string is a palindrome, considering only alphanumeric characters and ignoring cases. Aim for O(n) time and O(1) auxiliary space.',
+      starterCode: `def is_valid_palindrome(s: str) -> bool:
+    # Your code here
+    pass`,
+      language: 'python',
+      expectedConcepts: ['two pointers', 'in-place check', 'character filtering', 'O(1) space'],
+    },
+    {
+      difficulty: 'medium',
+      targetSkill: 'Python',
+      text: 'Write a Python function `length_of_longest_substring(s: str) -> int` to find the length of the longest substring without repeating characters in O(n) time.',
+      starterCode: `def length_of_longest_substring(s: str) -> int:
+    # Your code here
+    pass`,
+      language: 'python',
+      expectedConcepts: ['sliding window', 'hash set or map', 'O(n) time', 'window boundaries'],
+    },
+    {
+      difficulty: 'hard',
+      targetSkill: 'Python',
+      text: 'Design a serialize and deserialize algorithm for a binary tree into a string format and reconstruct the tree from the string format.',
+      starterCode: `class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+class Codec:
+    def serialize(self, root):
+        # Return string representation
+        pass
+
+    def deserialize(self, data):
+        # Reconstruct and return root node
+        pass`,
+      language: 'python',
+      expectedConcepts: ['pre-order traversal or BFS', 'null node markers', 'tree reconstruction', 'recursion'],
+    },
+  ],
+  sql: [
+    {
+      difficulty: 'easy',
+      targetSkill: 'SQL',
+      text: 'Write an SQL query to find the second highest salary from the Employee table. If there is no second highest salary, return NULL.',
+      starterCode: `-- Table: Employee (id INT, salary INT)
+SELECT 
+    -- Your query here
+;`,
+      language: 'sql',
+      expectedConcepts: ['DISTINCT', 'OFFSET', 'LIMIT or MAX subquery', 'NULL handling'],
+    },
+    {
+      difficulty: 'medium',
+      targetSkill: 'SQL',
+      text: 'Write an SQL query to find employees who earn more than the average salary of their department. Return department_name, employee_name, and salary.',
+      starterCode: `-- Tables: Employee (id, name, salary, department_id), Department (id, name)
+SELECT 
+    -- Your query here
+;`,
+      language: 'sql',
+      expectedConcepts: ['JOIN', 'correlated subquery or window function', 'AVG() OVER()', 'GROUP BY'],
+    },
+    {
+      difficulty: 'hard',
+      targetSkill: 'SQL',
+      text: 'Write an SQL query to find the top 3 highest-earning employees in each department using window functions without gaps in ranking.',
+      starterCode: `-- Tables: Employee (id, name, salary, department_id), Department (id, name)
+WITH RankedEmployees AS (
+    -- Your CTE here
+)
+SELECT 
+    -- Your final select here
+;`,
+      language: 'sql',
+      expectedConcepts: ['DENSE_RANK()', 'PARTITION BY', 'Common Table Expression (CTE)', 'ranking filter'],
+    },
+  ],
+  algorithms: [
+    {
+      difficulty: 'easy',
+      targetSkill: 'Algorithms',
+      text: 'Given an array of integers `nums` and an integer `k`, return true if any value appears at least twice within distance `k` of each other.',
+      starterCode: `function containsNearbyDuplicate(nums, k) {
+  // Your code here
+}`,
+      language: 'javascript',
+      expectedConcepts: ['sliding window', 'Set or Map lookup', 'index difference <= k', 'O(n) time'],
+    },
+    {
+      difficulty: 'medium',
+      targetSkill: 'Algorithms',
+      text: 'Given an m x n 2D binary grid representing a map of 1s (land) and 0s (water), return the number of connected islands. An island is surrounded by water and is formed by connecting adjacent lands horizontally or vertically.',
+      starterCode: `function numIslands(grid) {
+  // Your code here
+}`,
+      language: 'javascript',
+      expectedConcepts: ['Breadth-First Search (BFS) or DFS', 'visited tracking / grid traversal', 'boundary conditions', 'connected components'],
+    },
+    {
+      difficulty: 'hard',
+      targetSkill: 'Algorithms',
+      text: 'Given a non-empty string `s` and a dictionary `wordDict` containing a list of non-empty words, determine if `s` can be segmented into a space-separated sequence of one or more dictionary words.',
+      starterCode: `function wordBreak(s, wordDict) {
+  // Your code here
+}`,
+      language: 'javascript',
+      expectedConcepts: ['dynamic programming', 'memoization or tabulation', 'substring matching', 'time complexity'],
+    },
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -339,6 +542,50 @@ const findTemplatesForSkill = (skill) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // QUESTION GENERATORS
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate coding questions from candidate skills / matched skills.
+ */
+const generateCodingQuestions = (matchedSkills = [], difficulty = 'medium', count = 1) => {
+  const questions = [];
+  const candidateKeys = matchedSkills.map((s) => normalizeSkillKey(s)).filter(Boolean);
+
+  let candidatesPool = [];
+  for (const key of candidateKeys) {
+    if (CODING_TEMPLATES[key]) {
+      candidatesPool.push(...CODING_TEMPLATES[key]);
+    }
+  }
+
+  if (candidatesPool.length === 0) {
+    candidatesPool = [...(CODING_TEMPLATES.javascript || []), ...(CODING_TEMPLATES.algorithms || [])];
+  }
+
+  const diffFiltered = candidatesPool.filter((t) => t.difficulty === difficulty);
+  const pool = diffFiltered.length > 0 ? diffFiltered : candidatesPool;
+  const selected = shuffle(pool).slice(0, count);
+
+  for (const t of selected) {
+    questions.push({
+      text: t.text,
+      type: 'coding',
+      category: 'coding',
+      difficulty: t.difficulty || difficulty,
+      targetSkill: t.targetSkill || 'Programming',
+      skill: t.targetSkill || 'Programming',
+      source: 'job_description',
+      sourceProject: null,
+      starterCode: t.starterCode || null,
+      language: t.language || 'javascript',
+      expectedConcepts: t.expectedConcepts || [],
+      expectedKeyPoints: t.expectedConcepts || [],
+      followUpAllowed: true,
+      contextNote: 'Coding Challenge',
+    });
+  }
+
+  return questions;
+};
 
 /**
  * Generate technical questions for matched/required skills.
@@ -682,6 +929,18 @@ const generateInterviewQuestions = ({
   // Behavioral
   const behQuestions = generateBehavioralQuestions(behCount, difficulty);
   questions.push(...behQuestions.slice(0, behCount));
+
+  // Coding challenges — for technical / developer roles
+  const roleText = `${jobProfile.targetRole || ''} ${jobProfile.title || ''} ${candidateProfile.targetRole || ''}`;
+  const isDevRole = /developer|engineer|full\s*stack|frontend|backend|web|software|programmer|coder|sde/i.test(roleText) ||
+    candidateSkills.some((s) => /javascript|react|python|node|sql|typescript|java|c\+\+|golang/i.test(String(s)));
+  const includeCoding = (interviewType === 'technical' || (interviewType === 'mixed' && isDevRole)) && interviewType !== 'behavioral' && interviewType !== 'hr';
+  const codingCount = includeCoding ? Math.min(2, Math.max(1, Math.round(max * 0.2))) : 0;
+
+  if (codingCount > 0) {
+    const codingQuestions = generateCodingQuestions([...matchedSkills, ...candidateSkills], difficulty, codingCount);
+    questions.push(...codingQuestions);
+  }
 
   // Skill gap — from missing required skills
   if (gapCount > 0 && missingSkills.length > 0) {

@@ -1,0 +1,227 @@
+.coding-editor-container {
+  display: flex;
+  flex-direction: column;
+  background: #0f1422;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  margin-top: 1rem;
+}
+
+.coding-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 1rem;
+  background: #131b2e;
+  border-bottom: 1px solid #1e293b;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ce-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.ce-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+}
+
+.ce-tabs {
+  display: flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 7px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ce-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ce-tab-btn:hover {
+  color: #e2e8f0;
+}
+
+.ce-tab-btn.active {
+  background: #1e293b;
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.ce-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ce-lang-select-wrapper {
+  position: relative;
+}
+
+.ce-lang-select {
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.ce-lang-select:focus {
+  border-color: #38bdf8;
+}
+
+.ce-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ce-action-btn:hover:not(:disabled) {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+.ce-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ce-editor-wrapper {
+  display: flex;
+  min-height: 280px;
+  max-height: 480px;
+  background: #090d16;
+  position: relative;
+  overflow: hidden;
+}
+
+.ce-gutter {
+  user-select: none;
+  width: 44px;
+  padding: 0.85rem 0.5rem;
+  background: #0d1322;
+  border-right: 1px solid #1a2333;
+  text-align: right;
+  font-family: 'Fira Code', 'Cascadia Code', 'Source Code Pro', monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #475569;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.ce-line-num {
+  height: 1.5rem;
+  line-height: 1.5rem;
+}
+
+.ce-textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #e2e8f0;
+  font-family: 'Fira Code', 'Cascadia Code', 'Source Code Pro', Consolas, monospace;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  padding: 0.85rem 1rem;
+  outline: none;
+  resize: vertical;
+  min-height: 280px;
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.ce-textarea::placeholder {
+  color: #475569;
+  font-style: italic;
+}
+
+.ce-explanation-wrapper {
+  padding: 1rem;
+  background: #090d16;
+}
+
+.ce-explanation-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(124, 58, 237, 0.12);
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  border-radius: 7px;
+  font-size: 0.78rem;
+  color: #c4b5fd;
+  margin-bottom: 0.85rem;
+}
+
+.ce-explanation-textarea {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  color: #f1f5f9;
+  padding: 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+}
+
+.ce-explanation-textarea:focus {
+  border-color: #7c3aed;
+}
+
+.ce-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 1rem;
+  background: #0c111e;
+  border-top: 1px solid #1e293b;
+}
+
+.ce-info-chip {
+  font-size: 0.72rem;
+  color: #64748b;
+}

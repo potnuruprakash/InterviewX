@@ -138,3 +138,51 @@
   .hero-scores { flex-direction: column; text-align: center; }
   .results-two-col { grid-template-columns: 1fr; }
 }
+
+/* Timeout completion badge */
+.timeout-completion-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 10px;
+}
+
+/* Skipped question styling */
+.qb-item-skipped {
+  opacity: 0.88;
+  border-left: 3px solid #f59e0b;
+}
+
+.skipped-box {
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px dashed rgba(245, 158, 11, 0.25);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+/* Code solution block */
+.qb-code-solution-box {
+  margin-bottom: 8px;
+}
+
+.qb-code-block {
+  background: #090d16;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 12px;
+  color: #38bdf8;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
+

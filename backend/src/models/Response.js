@@ -22,6 +22,24 @@ const responseSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    responseType: {
+      type: String,
+      enum: ['text', 'coding'],
+      default: 'text',
+    },
+    code: {
+      type: String,
+      default: null,
+    },
+    language: {
+      type: String,
+      default: null,
+    },
+    status: {
+      type: String,
+      enum: ['submitted', 'skipped'],
+      default: 'submitted',
+    },
     // Phase 5 — Audio
     audioFilePath: {
       type: String,

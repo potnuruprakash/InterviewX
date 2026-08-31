@@ -26,6 +26,15 @@ const DIFFICULTIES = [
   { value: 'hard', label: 'Hard', desc: 'Senior level' },
 ]
 
+const DURATIONS = [
+  { value: 10, label: '10 min', desc: 'Quick check' },
+  { value: 15, label: '15 min', desc: 'Express interview' },
+  { value: 20, label: '20 min', desc: 'Short session' },
+  { value: 30, label: '30 min', desc: 'Standard interview' },
+  { value: 45, label: '45 min', desc: 'In-depth session' },
+  { value: 60, label: '60 min', desc: 'Comprehensive' },
+]
+
 const STEPS = [
   { n: 1, label: 'Resume' },
   { n: 2, label: 'Resume Analysis' },
@@ -73,6 +82,7 @@ export default function CreateInterview() {
   const [interviewType, setInterviewType] = useState('mixed')
   const [difficulty, setDifficulty] = useState('medium')
   const [totalQuestions, setTotalQuestions] = useState(10)
+  const [durationMinutes, setDurationMinutes] = useState(30)
 
   // ─── File Handling ───────────────────────────────────────────────────────────
 
@@ -191,6 +201,7 @@ export default function CreateInterview() {
         interviewType,
         difficulty,
         totalQuestions,
+        durationMinutes,
       })
       navigate(`/interview/${res.data.interview.id}`)
     } catch (err) {
@@ -515,6 +526,22 @@ export default function CreateInterview() {
                 </div>
               </div>
 
+              <div className="settings-group">
+                <label className="form-label">Interview Duration</label>
+                <div className="option-grid option-grid-3">
+                  {DURATIONS.map(({ value, label, desc }) => (
+                    <button
+                      key={value}
+                      className={`option-btn ${durationMinutes === value ? 'selected' : ''}`}
+                      onClick={() => setDurationMinutes(value)}
+                    >
+                      <span className="option-label">{label}</span>
+                      <span className="option-desc">{desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="form-group">
                 <label className="form-label">Number of Questions: <strong>{totalQuestions}</strong></label>
                 <input
@@ -566,6 +593,10 @@ export default function CreateInterview() {
                 <div className="review-item">
                   <span className="review-label">Difficulty</span>
                   <span className="review-value">{difficulty}</span>
+                </div>
+                <div className="review-item">
+                  <span className="review-label">Duration</span>
+                  <span className="review-value">{durationMinutes} minutes</span>
                 </div>
                 <div className="review-item">
                   <span className="review-label">Questions</span>

@@ -150,7 +150,7 @@ export default function ProgressPage() {
               <h2 className="chart-title"><TrendingUp size={18} /> Score Trend</h2>
               {progress.some(p => p.isDevelopmentEvaluation) && (
                 <div className="dev-notice">
-                  ⚠️ Some sessions used development placeholder scores (SBERT AI not connected).
+                  ⚠️ Some sessions used baseline evaluation heuristics (AI service not connected).
                 </div>
               )}
               <ResponsiveContainer width="100%" height={240}>
