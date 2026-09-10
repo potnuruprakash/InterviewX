@@ -19,8 +19,9 @@ export const authApi = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Global active token getter callback (set by useAuthApi)
+// Global active token and user ID getters (set by useAuthApi)
 let currentTokenGetter = null
+let currentUserId = null
 
 // Attach request interceptor ONCE to the singleton authApi
 authApi.interceptors.request.use(async (config) => {
@@ -29,11 +30,23 @@ authApi.interceptors.request.use(async (config) => {
     if (currentTokenGetter) {
       token = await currentTokenGetter()
     }
-    if (!token && typeof window !== 'undefined' && window.Clerk?.session) {
-      token = await window.Clerk.session.getToken()
+    if (!token && typeof window !== 'undefined') {
+      if (window.Clerk?.session) {
+        token = await window.Clerk.session.getToken()
+      } else if (window.Clerk && !window.Clerk.loaded) {
+        // Wait briefly for Clerk to finish hydration
+        await new Promise((resolve) => setTimeout(resolve, 150))
+        if (window.Clerk?.session) {
+          token = await window.Clerk.session.getToken()
+        }
+      }
     }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+    const resolvedUserId = currentUserId || (typeof window !== 'undefined' ? window.Clerk?.user?.id : null)
+    if (resolvedUserId) {
+      config.headers['x-dev-clerk-user-id'] = resolvedUserId
     }
   } catch (err) {
     console.warn('[API] Could not retrieve Clerk token:', err.message)
@@ -41,10 +54,33 @@ authApi.interceptors.request.use(async (config) => {
   return config
 })
 
-// Attach response interceptor ONCE to the singleton authApi
+// Attach response interceptor ONCE to the singleton authApi with single retry on 401
 authApi.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+      originalRequest._retry = true
+      try {
+        let freshToken = null
+        if (currentTokenGetter) {
+          freshToken = await currentTokenGetter({ skipCache: true }).catch(() => null)
+        }
+        if (!freshToken && typeof window !== 'undefined' && window.Clerk?.session) {
+          freshToken = await window.Clerk.session.getToken({ skipCache: true }).catch(() => null)
+        }
+        if (freshToken) {
+          originalRequest.headers.Authorization = `Bearer ${freshToken}`
+          const resolvedUserId = currentUserId || (typeof window !== 'undefined' ? window.Clerk?.user?.id : null)
+          if (resolvedUserId) {
+            originalRequest.headers['x-dev-clerk-user-id'] = resolvedUserId
+          }
+          return authApi(originalRequest)
+        }
+      } catch (retryErr) {
+        console.warn('[API] Token refresh retry failed:', retryErr.message)
+      }
+    }
     const message = error.response?.data?.message || error.message || 'An error occurred'
     return Promise.reject(new Error(message))
   }
@@ -92,6 +128,9 @@ export const useAuthApi = () => {
       isLoaded = clerkAuth.isLoaded
       isSignedIn = clerkAuth.isSignedIn
       userId = clerkAuth.userId
+      if (userId) {
+        currentUserId = userId
+      }
       getToken = clerkAuth.getToken
       if (getToken) {
         currentTokenGetter = getToken

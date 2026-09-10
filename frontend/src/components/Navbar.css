@@ -15,7 +15,7 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 var(--space-lg);
-  height: 64px;
+  height: 52px;
 }
 
 .navbar-logo {
@@ -27,8 +27,8 @@
 }
 
 .navbar-logo-icon {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -85,6 +85,62 @@
   margin-left: auto;
 }
 
+.navbar-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.navbar-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* Light Mode Navigation */
+[data-theme='light'] .navbar {
+  background: #FAFAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+[data-theme='light'] .navbar-link {
+  color: #667085;
+}
+
+[data-theme='light'] .navbar-link:hover {
+  color: #1F2430;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme='light'] .navbar-link.active {
+  background: rgba(109, 74, 255, 0.08);
+  color: #5B3FD4;
+}
+
+[data-theme='light'] .navbar-username {
+  color: #667085;
+}
+
+[data-theme='light'] .navbar-theme-toggle {
+  background: #FFFFFF;
+  border: 1px solid #E2E5EA;
+  color: #667085;
+}
+
+[data-theme='light'] .navbar-theme-toggle:hover {
+  background: #F0F2F5;
+  color: #1F2430;
+  border-color: #D5D9E0;
+}
+
 .navbar-username {
   font-size: 14px;
   color: var(--text-secondary);
@@ -108,12 +164,139 @@
   transform: scale(1.04);
 }
 
+.navbar-mobile-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.navbar-mobile-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+[data-theme='light'] .navbar-mobile-toggle {
+  background: #FFFFFF;
+  border: 1px solid #E2E5EA;
+  color: #667085;
+}
+
+[data-theme='light'] .navbar-mobile-toggle:hover {
+  background: #F0F2F5;
+  color: #1F2430;
+  border-color: #D5D9E0;
+}
+
+/* Mobile Drawer */
+.navbar-mobile-drawer {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(13, 15, 23, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+  padding: 12px 16px 16px;
+  z-index: 99;
+}
+
+[data-theme='light'] .navbar-mobile-drawer {
+  background: #FFFFFF;
+  border-bottom: 1px solid #E2E5EA;
+  box-shadow: 0 12px 28px rgba(16, 24, 40, 0.08);
+}
+
+.navbar-mobile-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.navbar-mobile-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.navbar-mobile-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
+.navbar-mobile-link.active {
+  background: rgba(124, 58, 237, 0.15);
+  color: #c4b5fd;
+  font-weight: 600;
+}
+
+[data-theme='light'] .navbar-mobile-link {
+  color: #667085;
+}
+
+[data-theme='light'] .navbar-mobile-link:hover {
+  background: #F8F9FC;
+  color: #1F2430;
+}
+
+[data-theme='light'] .navbar-mobile-link.active {
+  background: rgba(109, 74, 255, 0.08);
+  color: #5B3FD4;
+}
+
+@keyframes slideDownDrawer {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-down {
+  animation: slideDownDrawer 0.18s ease-out;
+}
+
+/* Responsive Media Queries */
 @media (max-width: 768px) {
   .navbar-inner {
-    padding: 0 var(--space-md);
-    gap: var(--space-md);
+    padding: 0 16px;
+    gap: 12px;
   }
-  .navbar-username { display: none; }
-  .navbar-link span { display: none; }
-  .navbar-link { padding: 8px 10px; }
+
+  .navbar-links {
+    display: none;
+  }
+
+  .navbar-username {
+    display: none;
+  }
+
+  .navbar-mobile-toggle {
+    display: inline-flex;
+  }
+
+  .navbar-user {
+    gap: 8px;
+  }
 }
+

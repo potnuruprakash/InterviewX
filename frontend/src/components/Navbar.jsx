@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { UserButton, useUser } from '@clerk/clerk-react'
-import { Brain, LayoutDashboard, PlusCircle, TrendingUp, BarChart3 } from 'lucide-react'
+import { Brain, LayoutDashboard, PlusCircle, TrendingUp, BarChart3, Sun, Moon, Menu, X } from 'lucide-react'
+import { useTheme } from '../context/ThemeContext'
 import './Navbar.css'
 
 const navLinks = [
@@ -13,6 +15,13 @@ const navLinks = [
 export default function Navbar() {
   const location = useLocation()
   const { user } = useUser()
+  const { theme, toggleTheme } = useTheme()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Close mobile drawer whenever user navigates
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [location.pathname])
 
   return (
     <nav className="navbar">
@@ -41,6 +50,16 @@ export default function Navbar() {
 
         {/* User & Clerk UserButton */}
         <div className="navbar-user">
+          <button
+            type="button"
+            className="navbar-theme-toggle"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+
           {user && (
             <span className="navbar-username">
               {user.firstName || user.emailAddresses?.[0]?.emailAddress?.split('@')[0]}
@@ -62,8 +81,37 @@ export default function Navbar() {
               }}
             />
           </div>
+          {/* Mobile Menu Hamburger */}
+          <button
+            type="button"
+            className="navbar-mobile-toggle"
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
       </div>
+
+      {/* Mobile Drawer */}
+      {mobileMenuOpen && (
+        <div className="navbar-mobile-drawer animate-slide-down" id="navbar-mobile-drawer">
+          <div className="navbar-mobile-links">
+            {navLinks.map(({ to, label, icon: Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                className={`navbar-mobile-link ${location.pathname === to ? 'active' : ''}`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Icon size={18} />
+                <span>{label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </nav>
   )
 }

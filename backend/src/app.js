@@ -7,6 +7,8 @@ const rateLimit = require('express-rate-limit');
 const { clerkAuth } = require('./middleware/auth');
 const { globalErrorHandler } = require('./utils/errorHandler');
 
+const mongoose = require('mongoose');
+
 // Routes
 const resumeRoutes = require('./routes/resume');
 const jobRoutes = require('./routes/jobs');
@@ -68,11 +70,13 @@ app.use('/api/resumes/upload', uploadLimiter);
 
 // Health check — no auth required
 app.get('/health', (req, res) => {
+  const isDbConnected = mongoose.connection.readyState === 1;
   res.json({
     success: true,
     service: 'Adaptive AI Interviewer Backend',
     phase: 2,
-    status: 'ok',
+    status: isDbConnected ? 'ok' : 'degraded',
+    database: isDbConnected ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString(),
   });
 });

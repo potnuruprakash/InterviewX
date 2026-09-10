@@ -1,13 +1,161 @@
 /**
  * Skill Matching Service — Phase 2
  *
- * Deterministic, explainable skill matching.
- * No SBERT. No embeddings. No LLM.
+ * Deterministic, explainable skill matching with transferable skill detection.
  *
  * Compares candidate canonical skill names against JD required/preferred skills.
  * Coverage is based ONLY on required skills.
  * Preferred skills are reported separately.
+ *
+ * Transferable skills: skills the candidate has that belong to the same category
+ * as a missing required skill (e.g., Python → Backend even if Node.js is required).
  */
+
+// ─── Skill Category Taxonomy ─────────────────────────────────────────────────
+// Maps canonical skill names (lowercase) to their domain category.
+// Used to detect "transferable" skills (same category, different tool).
+
+const SKILL_CATEGORIES = {
+  // Frontend
+  'html': 'frontend',
+  'css': 'frontend',
+  'javascript': 'frontend',
+  'typescript': 'frontend',
+  'react': 'frontend_framework',
+  'vue.js': 'frontend_framework',
+  'angular': 'frontend_framework',
+  'next.js': 'frontend_framework',
+  'svelte': 'frontend_framework',
+  'jquery': 'frontend',
+  'sass': 'frontend',
+  'tailwind css': 'frontend',
+  'bootstrap': 'frontend',
+  'webpack': 'frontend_tooling',
+  'vite': 'frontend_tooling',
+
+  // Backend
+  'node.js': 'backend',
+  'express.js': 'backend',
+  'python': 'backend',
+  'django': 'backend_framework',
+  'flask': 'backend_framework',
+  'fastapi': 'backend_framework',
+  'java': 'backend',
+  'spring boot': 'backend_framework',
+  'c#': 'backend',
+  '.net': 'backend_framework',
+  'ruby': 'backend',
+  'ruby on rails': 'backend_framework',
+  'go': 'backend',
+  'rust': 'backend',
+  'php': 'backend',
+  'laravel': 'backend_framework',
+
+  // Database
+  'sql': 'database',
+  'mysql': 'database',
+  'postgresql': 'database',
+  'sqlite': 'database',
+  'mongodb': 'database_nosql',
+  'redis': 'database_nosql',
+  'dynamodb': 'database_nosql',
+  'cassandra': 'database_nosql',
+  'firebase': 'database_nosql',
+
+  // Cloud / DevOps
+  'aws': 'cloud',
+  'azure': 'cloud',
+  'gcp': 'cloud',
+  'google cloud': 'cloud',
+  'docker': 'devops',
+  'kubernetes': 'devops',
+  'terraform': 'devops',
+  'ansible': 'devops',
+  'jenkins': 'devops',
+  'github actions': 'devops',
+  'ci/cd': 'devops',
+
+  // API / Integration
+  'rest api': 'api',
+  'graphql': 'api',
+  'grpc': 'api',
+  'websocket': 'api',
+
+  // Version Control
+  'git': 'version_control',
+  'github': 'version_control',
+  'gitlab': 'version_control',
+  'bitbucket': 'version_control',
+
+  // Testing
+  'jest': 'testing',
+  'pytest': 'testing',
+  'mocha': 'testing',
+  'cypress': 'testing',
+  'selenium': 'testing',
+  'unit testing': 'testing',
+
+  // Data Science / ML
+  'machine learning': 'ml',
+  'deep learning': 'ml',
+  'tensorflow': 'ml_framework',
+  'pytorch': 'ml_framework',
+  'scikit-learn': 'ml_framework',
+  'pandas': 'data_science',
+  'numpy': 'data_science',
+  'data analysis': 'data_science',
+
+  // Soft Skills
+  'communication': 'soft_skill',
+  'teamwork': 'soft_skill',
+  'problem solving': 'soft_skill',
+  'leadership': 'soft_skill',
+};
+
+// Map category → its parent super-category (for broader transferability)
+const CATEGORY_SUPER_MAP = {
+  'frontend': 'web',
+  'frontend_framework': 'web',
+  'frontend_tooling': 'web',
+  'backend': 'web',
+  'backend_framework': 'web',
+  'database': 'data_storage',
+  'database_nosql': 'data_storage',
+  'cloud': 'infrastructure',
+  'devops': 'infrastructure',
+  'api': 'web',
+  'version_control': 'engineering',
+  'testing': 'engineering',
+  'ml': 'data_science',
+  'ml_framework': 'data_science',
+  'data_science': 'data_science',
+};
+
+/**
+ * Get the category for a skill (checks lowercase canonical name).
+ * @param {string} skillName
+ * @returns {string|null}
+ */
+const getSkillCategory = (skillName) => {
+  if (!skillName) return null;
+  return SKILL_CATEGORIES[skillName.toLowerCase().trim()] || null;
+};
+
+/**
+ * Check if two skills are in the same category or super-category.
+ * @param {string} skillA
+ * @param {string} skillB
+ * @returns {boolean}
+ */
+const areSkillsRelated = (skillA, skillB) => {
+  const catA = getSkillCategory(skillA);
+  const catB = getSkillCategory(skillB);
+  if (!catA || !catB) return false;
+  if (catA === catB) return true;
+  const superA = CATEGORY_SUPER_MAP[catA];
+  const superB = CATEGORY_SUPER_MAP[catB];
+  return Boolean(superA && superB && superA === superB);
+};
 
 /**
  * Match candidate skills against required and preferred JD skills.
@@ -24,6 +172,8 @@ const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
       .filter((s) => s && s.canonicalName)
       .map((s) => s.canonicalName.toLowerCase().trim())
   );
+
+  const candidateNames = Array.from(candidateSet);
 
   // Build sets for required and preferred
   const requiredCanonicals = (requiredSkills || [])
@@ -43,12 +193,26 @@ const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
   // ── Required skill matching ──────────────────────────────────────
   const matchedRequiredSkills = [];
   const notIdentifiedRequiredSkills = [];
+  const transferableSkills = []; // candidate has a related skill but not exact match
 
   for (const skill of requiredCanonicals) {
-    if (candidateSet.has(skill.toLowerCase().trim())) {
+    const lower = skill.toLowerCase().trim();
+    if (candidateSet.has(lower)) {
       matchedRequiredSkills.push(skill);
     } else {
-      notIdentifiedRequiredSkills.push(skill);
+      // Check if any candidate skill is in the same domain (transferable)
+      const isTransferable = candidateNames.some((candidateName) =>
+        areSkillsRelated(candidateName, lower)
+      );
+
+      if (isTransferable) {
+        // The candidate doesn't have the exact skill but has a related one
+        // Count as "not identified" for coverage, but flag as transferable
+        transferableSkills.push(skill);
+        notIdentifiedRequiredSkills.push(skill);
+      } else {
+        notIdentifiedRequiredSkills.push(skill);
+      }
     }
   }
 
@@ -78,6 +242,7 @@ const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
   return {
     matchedRequiredSkills,
     notIdentifiedRequiredSkills,
+    transferableSkills,       // skills candidate has in the same domain as missing required
     matchedPreferredSkills,
     notIdentifiedPreferredSkills,
     additionalSkills,
@@ -135,4 +300,4 @@ const analyzeSkillGap = (candidateSkills, requiredSkills, preferredSkills) => {
   };
 };
 
-module.exports = { matchSkills, calculateCoverage, analyzeSkillGap };
+module.exports = { matchSkills, calculateCoverage, analyzeSkillGap, getSkillCategory, areSkillsRelated };

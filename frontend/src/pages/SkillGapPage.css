@@ -181,3 +181,90 @@
 }
 
 .sgp-tab:hover:not(.active) { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.8); }
+
+/* ============================================================
+   InterviewX Light Mode — Skill Gap Page
+   ============================================================ */
+
+[data-theme='light'] .skill-gap-page {
+  background: #F5F6F8;
+  color: #1F2430;
+}
+
+[data-theme='light'] .sgp-title {
+  background: linear-gradient(135deg, #1F2430, #6D4AFF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+[data-theme='light'] .sgp-subtitle {
+  color: #667085;
+}
+
+[data-theme='light'] .sgp-notice {
+  background: #F0F2F5;
+  border-color: #E2E5EA;
+  color: #667085;
+}
+
+[data-theme='light'] .sgp-selector,
+[data-theme='light'] .sgp-section {
+  background: #FFFFFF;
+  border: 1px solid #E2E5EA;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+[data-theme='light'] .sgp-selector-title,
+[data-theme='light'] .sgp-section-title {
+  color: #1F2430;
+}
+
+[data-theme='light'] .sgp-select-label {
+  color: #667085;
+}
+
+[data-theme='light'] .sgp-select {
+  background: #FFFFFF;
+  border: 1px solid #D5D9E0;
+  color: #1F2430;
+}
+
+[data-theme='light'] .sgp-select:focus {
+  border-color: #6D4AFF;
+  box-shadow: 0 0 0 3px rgba(109, 74, 255, 0.10);
+}
+
+[data-theme='light'] .sgp-select option {
+  background: #FFFFFF;
+  color: #1F2430;
+}
+
+[data-theme='light'] .sgp-state h3 {
+  color: #1F2430;
+}
+
+[data-theme='light'] .sgp-state p {
+  color: #667085;
+}
+
+[data-theme='light'] .sgp-tab {
+  background: #FFFFFF;
+  border: 1px solid #D5D9E0;
+  color: #667085;
+}
+
+[data-theme='light'] .sgp-tab.active {
+  background: rgba(109, 74, 255, 0.08);
+  border-color: rgba(109, 74, 255, 0.25);
+  color: #5B3FD4;
+}
+
+[data-theme='light'] .sgp-run-btn {
+  background: #6D4AFF;
+  color: #FFFFFF;
+}
+
+[data-theme='light'] .sgp-run-btn:hover:not(:disabled) {
+  background: #5B3FD4;
+}
+

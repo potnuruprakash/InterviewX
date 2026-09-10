@@ -1,22 +1,27 @@
 import { useRef } from 'react'
 import {
-  Mic, Video, Type, Send, Trash2, Square,
-  CheckCircle, AlertCircle, Loader2, Sparkles, SkipForward
+  Send, Trash2, Loader2, Sparkles, SkipForward,
+  Mic, MicOff, AlertCircle, CheckCircle
 } from 'lucide-react'
 import './AnswerComposer.css'
 
+/**
+ * AnswerComposer — Redesigned for automatic speech recognition.
+ *
+ * - No more Voice/Video/Text mode selector
+ * - No more "Start speaking" / "Stop speaking" buttons
+ * - Shows a subtle speech status indicator
+ * - Appends speech automatically via parent's useSpeechRecognition hook
+ * - Candidate can freely edit the transcribed text
+ */
 export default function AnswerComposer({
   answer,
   onAnswerChange,
-  mode = 'text',
-  onModeChange,
   isListening,
   interimTranscript,
   speechStatus,
   speechError,
   isSpeechSupported,
-  onStartSpeaking,
-  onStopSpeaking,
   onSubmit,
   onSkip,
   onClear,
@@ -35,143 +40,80 @@ export default function AnswerComposer({
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
-      if (answer.trim() && !submitting && !disabled) {
+      if ((answer.trim() || interimTranscript?.trim()) && !submitting && !disabled) {
         onSubmit()
       }
     }
   }
 
-  // Determine speech status text and style
-  let statusText = 'Microphone off'
-  let statusIcon = null
-  let statusBadgeClass = 'status-idle'
+  // Determine speech status for indicator
+  let micStatusClass = 'mic-status-idle'
+  let micStatusText = 'Microphone ready'
+  let MicIcon = Mic
 
-  if (speechStatus === 'unsupported' || !isSpeechSupported) {
-    statusText = "Speech-to-text isn't available in this browser. You can type your answer."
-    statusBadgeClass = 'status-warning'
+  if (!isSpeechSupported) {
+    micStatusClass = 'mic-status-warn'
+    micStatusText = 'Speech not supported — type your answer'
+    MicIcon = MicOff
   } else if (speechError) {
-    statusText = speechError
-    statusBadgeClass = 'status-error'
+    micStatusClass = 'mic-status-error'
+    micStatusText = 'Mic unavailable — type your answer'
+    MicIcon = MicOff
+  } else if (speechStatus === 'restarting') {
+    micStatusClass = 'mic-status-restarting'
+    micStatusText = 'Reconnecting microphone...'
+    MicIcon = Mic
   } else if (isListening) {
-    statusText = 'Listening...'
-    statusBadgeClass = 'status-listening'
+    micStatusClass = 'mic-status-active'
+    micStatusText = 'Listening automatically...'
+    MicIcon = Mic
   } else if (speechStatus === 'processing') {
-    statusText = 'Transcribing...'
-    statusBadgeClass = 'status-processing'
-  } else if (speechStatus === 'ready' || (answer.trim() && (mode === 'audio' || mode === 'video'))) {
-    statusText = 'Transcript ready'
-    statusBadgeClass = 'status-ready'
+    micStatusClass = 'mic-status-processing'
+    micStatusText = 'Transcribing...'
+    MicIcon = Mic
+  } else if (speechStatus === 'ready' || answer.trim()) {
+    micStatusClass = 'mic-status-ready'
+    micStatusText = 'Transcript ready — edit freely'
+    MicIcon = CheckCircle
   }
 
   return (
     <div className="answer-composer glass-card animate-fade-in">
-      {/* Header with Mode Switcher */}
+      {/* Header */}
       <div className="composer-header">
         <div className="composer-title-group">
           <span className="composer-title">Your Answer</span>
-          <span className="composer-subtitle">Speak or type your structured response</span>
+          <span className="composer-subtitle">Speak naturally or type — your answer appears here automatically</span>
         </div>
 
-        <div className="composer-modes" role="tablist" aria-label="Input mode selector">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'audio'}
-            className={`mode-btn ${mode === 'audio' ? 'active' : ''}`}
-            onClick={() => onModeChange('audio')}
-            disabled={submitting || disabled}
-            title="Answer with voice transcription"
-          >
-            <Mic size={15} />
-            <span>Voice</span>
-            {hasAudioAttached && <span className="media-attached-dot" title="Voice audio attached" />}
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'video'}
-            className={`mode-btn ${mode === 'video' ? 'active' : ''}`}
-            onClick={() => onModeChange('video')}
-            disabled={submitting || disabled}
-            title="Answer with video interview & voice transcription"
-          >
-            <Video size={15} />
-            <span>Video</span>
-            {hasVideoAttached && <span className="media-attached-dot" title="Video recording attached" />}
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'text'}
-            className={`mode-btn ${mode === 'text' ? 'active' : ''}`}
-            onClick={() => onModeChange('text')}
-            disabled={submitting || disabled}
-            title="Type answer manually"
-          >
-            <Type size={15} />
-            <span>Text</span>
-          </button>
+        {/* Subtle mic status indicator */}
+        <div className={`mic-status-pill ${micStatusClass}`}>
+          {isListening ? (
+            <span className="mic-pulse-wrapper">
+              <span className="mic-pulse-ring" />
+              <Mic size={12} className="mic-icon-active" />
+            </span>
+          ) : (
+            <MicIcon size={12} />
+          )}
+          <span>{micStatusText}</span>
         </div>
       </div>
 
-      {/* Speech Status & Primary Dictation Controls (when voice or video mode active) */}
-      {(mode === 'audio' || mode === 'video') && (
-        <div className="speech-control-bar">
-          <div className={`speech-status-indicator ${statusBadgeClass}`}>
-            {isListening ? (
-              <span className="listening-pulse">
-                <span className="pulse-wave" />
-                <Mic size={14} className="mic-active-icon" />
-              </span>
-            ) : speechError ? (
-              <AlertCircle size={14} />
-            ) : speechStatus === 'processing' ? (
-              <Loader2 size={14} className="spin" />
-            ) : speechStatus === 'ready' || answer.trim() ? (
-              <CheckCircle size={14} />
-            ) : (
-              <Mic size={14} />
-            )}
-            <span className="speech-status-text">{statusText}</span>
-          </div>
-
-          <div className="speech-actions">
-            {!isListening ? (
-              <button
-                type="button"
-                className="btn btn-voice-start"
-                onClick={onStartSpeaking}
-                disabled={submitting || disabled || !isSpeechSupported}
-                title="Start speaking your answer"
-                id="start-speaking-btn"
-              >
-                <Mic size={15} />
-                <span>Start speaking</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-voice-stop"
-                onClick={onStopSpeaking}
-                title="Stop speaking"
-                id="stop-speaking-btn"
-              >
-                <Square size={13} fill="currentColor" />
-                <span>Stop speaking</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Live Interim Transcript Ribbon (shows current phrase in-flight) */}
+      {/* Live Interim Transcript Ribbon */}
       {isListening && interimTranscript && (
-        <div className="live-interim-box">
+        <div className="live-interim-box animate-fade-in">
           <Sparkles size={13} className="sparkle-icon" />
           <span className="interim-label">Transcribing:</span>
           <span className="interim-text">"{interimTranscript}"</span>
+        </div>
+      )}
+
+      {/* Speech error notice */}
+      {speechError && (
+        <div className="speech-error-notice animate-fade-in">
+          <AlertCircle size={13} />
+          <span>{speechError}</span>
         </div>
       )}
 
@@ -184,24 +126,29 @@ export default function AnswerComposer({
           onChange={(e) => onAnswerChange(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={submitting || disabled}
-          rows={9}
+          rows={10}
           placeholder={
-            mode === 'audio' || mode === 'video'
-              ? 'Your spoken answer will appear here automatically. You can also edit, correct, or add to the text at any time...'
+            isSpeechSupported && !speechError
+              ? 'Your spoken answer will appear here automatically. You can also type, edit, or correct the text at any time...'
               : 'Type your answer here... Be specific, provide technical examples, and structure your explanation clearly.'
           }
           aria-label="Interview answer text"
         />
 
-        {/* Floating character & word counter */}
+        {/* Word & character counter */}
         <div className="textarea-meta">
+          {(hasAudioAttached || hasVideoAttached) && (
+            <span className="media-attached-badge">
+              {hasVideoAttached ? '🎥' : '🎤'} Media attached
+            </span>
+          )}
           <span className="meta-item">{words} {words === 1 ? 'word' : 'words'}</span>
           <span className="meta-separator">·</span>
           <span className="meta-item">{characters} chars</span>
         </div>
       </div>
 
-      {/* Composer Footer Actions */}
+      {/* Footer Actions */}
       <div className="composer-footer">
         <div className="footer-left">
           {answer.trim().length > 0 && (
@@ -209,7 +156,7 @@ export default function AnswerComposer({
               type="button"
               className="btn btn-ghost btn-clear"
               onClick={onClear}
-              disabled={submitting || disabled || isListening}
+              disabled={submitting || disabled}
               title="Clear current answer text"
             >
               <Trash2 size={14} />
@@ -236,7 +183,7 @@ export default function AnswerComposer({
               onClick={onSkip}
               disabled={submitting || skipping || disabled}
               title="Skip this question without submitting an answer"
-              id="skip-question-btn"
+              id="skip-question-composer-btn"
             >
               {skipping ? (
                 <>
@@ -246,7 +193,7 @@ export default function AnswerComposer({
               ) : (
                 <>
                   <SkipForward size={15} />
-                  <span>Skip Question</span>
+                  <span>Skip</span>
                 </>
               )}
             </button>
@@ -256,13 +203,13 @@ export default function AnswerComposer({
             type="button"
             className="btn btn-primary btn-submit-answer"
             onClick={onSubmit}
-            disabled={!answer.trim() || submitting || skipping || disabled}
+            disabled={(!answer.trim() && !interimTranscript?.trim()) || submitting || skipping || disabled}
             id="submit-answer-btn"
           >
             {submitting ? (
               <>
                 <Loader2 size={16} className="spin" />
-                <span>Evaluating answer...</span>
+                <span>Evaluating...</span>
               </>
             ) : (
               <>

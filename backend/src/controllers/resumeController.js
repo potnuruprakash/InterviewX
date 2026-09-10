@@ -104,10 +104,12 @@ const analyzeResumeController = async (req, res) => {
       return sendError(res, 404, 'RESUME_NOT_FOUND', 'Resume not found.');
     }
 
-    // If already completed and not forcing re-analysis, return cached result
+    // If already completed with skills and not forcing re-analysis, return cached result
+    const hasSkills = Array.isArray(resume.parsedData?.skills) && resume.parsedData.skills.length > 0;
     if (
       resume.processingStatus === 'completed' &&
       resume.parsedData &&
+      hasSkills &&
       !req.query.force
     ) {
       return sendSuccess(res, {

@@ -86,8 +86,14 @@ const normalizeList = (skills, source = 'unknown') => {
 };
 
 /**
- * Given raw text (e.g. a comma/newline separated list), split into
+ * Given raw text (e.g. a comma/newline/space separated list), split into
  * individual skill tokens and normalize each.
+ *
+ * Handles common resume formats:
+ *   - Comma-separated:  "JavaScript, React, Node.js"
+ *   - Newline-separated: "JavaScript\nReact\nNode.js"
+ *   - Bullet-separated: "• JavaScript • React • Node.js"
+ *   - Space-separated (PDF multi-col): "JavaScript  React  Node.js"
  *
  * @param {string} text
  * @param {string} source
@@ -96,13 +102,24 @@ const normalizeList = (skills, source = 'unknown') => {
 const normalizeFromText = (text, source = 'unknown') => {
   if (!text) return [];
 
-  // Split on common delimiters: comma, pipe, semicolon, newline, bullet, dash at line start
-  const tokens = text
-    .split(/[,|\n;•\r]+/)
+  // Step 1: Split on common explicit delimiters: comma, pipe, semicolon, newline, bullet, dash at line start
+  const afterDelimiters = text.split(/[,|\n;•\r]+/);
+
+  // Step 2: Within each token from step 1, also split on 2+ consecutive spaces/tabs
+  // This handles PDF-extracted multi-column skill lists where columns are spaced out
+  const tokens = [];
+  for (const chunk of afterDelimiters) {
+    const subTokens = chunk.split(/[ \t]{2,}/);
+    for (const sub of subTokens) {
+      tokens.push(sub);
+    }
+  }
+
+  const cleaned = tokens
     .map((t) => t.replace(/^[-–•*▪►]\s*/, '').trim())
     .filter((t) => t.length > 0 && t.length < 60); // Ignore very long tokens (likely sentences)
 
-  return normalizeList(tokens, source);
+  return normalizeList(cleaned, source);
 };
 
 /**

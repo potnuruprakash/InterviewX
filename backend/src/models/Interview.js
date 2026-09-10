@@ -45,17 +45,45 @@ const interviewSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    configuredQuestionCount: {
+      type: Number,
+      default: 5,
+    },
     totalQuestions: {
       type: Number,
-      default: 10,
+      default: 5,
     },
     durationMinutes: {
       type: Number,
       default: 30,
     },
+    videoModeEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    videoRecorded: {
+      type: Boolean,
+      default: false,
+    },
+    videoUploaded: {
+      type: Boolean,
+      default: false,
+    },
+    practiceFromInterviewId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Interview',
+      default: null,
+    },
     completionReason: {
       type: String,
-      enum: ['completed', 'time_expired', 'user_ended', 'final_question_skipped'],
+      enum: [
+        'completed',
+        'time_expired',
+        'user_ended',
+        'final_question_skipped',
+        'all_questions_skipped',
+        'all_questions_completed',
+      ],
       default: null,
     },
     skippedQuestionsCount: {

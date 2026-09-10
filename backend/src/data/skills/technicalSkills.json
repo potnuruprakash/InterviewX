@@ -6,6 +6,8 @@
         "js",
         "javascript",
         "java script",
+        "java script",
+        "java-script",
         "ecmascript",
         "es6",
         "es2015",
@@ -13,8 +15,16 @@
         "es8",
         "es2016",
         "es2017",
+        "es2018",
+        "es2019",
+        "es2020",
+        "es2021",
+        "es2022",
+        "es2023",
         "vanilla js",
-        "vanilla javascript"
+        "vanilla javascript",
+        "js (javascript)",
+        "javascript (js)"
       ]
     },
     "TypeScript": {
@@ -242,7 +252,11 @@
         "expressjs",
         "express.js",
         "express js",
-        "express framework"
+        "express framework",
+        "expressjs framework",
+        "express.js framework",
+        "express node",
+        "node express"
       ]
     },
     "Fastify": {
@@ -418,7 +432,11 @@
         "nodejs",
         "node.js",
         "node js",
-        "node runtime"
+        "node js runtime",
+        "node runtime",
+        "node.js runtime",
+        "node.js server",
+        "node server"
       ]
     },
     "Deno": {
@@ -433,8 +451,12 @@
         "mongodb",
         "mongo",
         "mongo db",
+        "mongodb database",
+        "mongodb atlas",
+        "atlas mongodb",
+        "mongoose",
         "mongoDB",
-        "mongoose"
+        "mongo database"
       ]
     },
     "PostgreSQL": {
@@ -583,7 +605,12 @@
       "aliases": [
         "git",
         "git version control",
-        "version control"
+        "version control",
+        "git scm",
+        "git source control",
+        "git vcs",
+        "git & github",
+        "git/github"
       ]
     },
     "GitHub": {
@@ -619,11 +646,21 @@
       "aliases": [
         "rest",
         "rest api",
+        "rest apis",
         "restful",
         "restful api",
+        "restful apis",
+        "rest api's",
         "rest web services",
         "restful services",
-        "rest architecture"
+        "rest architecture",
+        "rest services",
+        "rest endpoints",
+        "restful web services",
+        "rest-api",
+        "rest-apis",
+        "api rest",
+        "http rest"
       ]
     },
     "GraphQL": {

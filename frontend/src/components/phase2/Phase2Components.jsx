@@ -349,3 +349,128 @@ export const JobRequirementsCard = ({ parsedData, targetRole }) => {
     </div>
   )
 }
+
+// ── NEW: CompetencyCard ───────────────────────────────────────────────────────
+
+/**
+ * CompetencyCard — Displays a single competency area's skill match result.
+ * Used in Step 2 of the new 4-step Create Interview flow.
+ *
+ * Props: comp — a competency match object from computeCompetencyMatch()
+ *   { area, label, icon, weight, matched[], partial[], missing[], matchPercent }
+ */
+export const CompetencyCard = ({ comp }) => {
+  const { label, icon, weight, matched, partial, missing, matchPercent } = comp
+
+  const colorClass = matchPercent >= 70 ? 'comp-good' : matchPercent >= 35 ? 'comp-medium' : 'comp-low'
+
+  return (
+    <div className={`competency-card ${weight === 'primary' ? 'comp-primary' : 'comp-secondary'}`}>
+      <div className="comp-card-header">
+        <div className="comp-card-label-row">
+          <span className="comp-icon">{icon}</span>
+          <span className="comp-label">{label}</span>
+          {weight === 'primary' && (
+            <span className="comp-primary-badge">Core</span>
+          )}
+        </div>
+        <span className={`comp-percent ${colorClass}`}>{matchPercent}%</span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="comp-progress-track">
+        <div
+          className={`comp-progress-fill ${colorClass}`}
+          style={{ width: `${matchPercent}%` }}
+        />
+      </div>
+
+      {/* Skill pills */}
+      <div className="comp-skills">
+        {matched.map((s) => (
+          <span key={s} className="comp-skill comp-skill-matched" title="Identified in your resume">
+            <span className="comp-skill-dot comp-dot-matched" />
+            {s}
+          </span>
+        ))}
+        {partial.map((s) => (
+          <span key={s} className="comp-skill comp-skill-partial" title="Related skills found, but not this specific skill">
+            <span className="comp-skill-dot comp-dot-partial" />
+            {s}
+          </span>
+        ))}
+        {missing.map((s) => (
+          <span key={s} className="comp-skill comp-skill-missing" title="Not found in your resume">
+            <span className="comp-skill-dot comp-dot-missing" />
+            {s}
+          </span>
+        ))}
+      </div>
+
+      {/* Legend (only if we have all 3 types) */}
+      {matched.length > 0 && partial.length > 0 && missing.length > 0 && (
+        <div className="comp-legend">
+          <span className="comp-legend-item"><span className="comp-dot-matched comp-legend-dot" />Matched</span>
+          <span className="comp-legend-item"><span className="comp-dot-partial comp-legend-dot" />Partial</span>
+          <span className="comp-legend-item"><span className="comp-dot-missing comp-legend-dot" />Missing</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── NEW: LearningRoadmap ──────────────────────────────────────────────────────
+
+/**
+ * LearningRoadmap — Prioritized list of skills to learn based on competency gaps.
+ *
+ * Props: recommendations — array from generateLearningRecommendations()
+ *   [{ skill, competency, priority: 'high'|'medium'|'low', reason }]
+ */
+export const LearningRoadmap = ({ recommendations = [] }) => {
+  if (recommendations.length === 0) return null
+
+  const high = recommendations.filter((r) => r.priority === 'high')
+  const medium = recommendations.filter((r) => r.priority === 'medium')
+
+  return (
+    <div className="learning-roadmap">
+      <div className="roadmap-header">
+        <span className="roadmap-title">📚 Learning Recommendations</span>
+        <span className="roadmap-subtitle">
+          Focus on these to boost your match score
+        </span>
+      </div>
+
+      {high.length > 0 && (
+        <div className="roadmap-group">
+          <div className="roadmap-group-label roadmap-label-high">🔴 High Priority</div>
+          <div className="roadmap-items">
+            {high.map((rec) => (
+              <div key={rec.skill} className="roadmap-item">
+                <div className="roadmap-item-skill">{rec.skill}</div>
+                <div className="roadmap-item-area">{rec.competency}</div>
+                <div className="roadmap-item-reason">{rec.reason}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {medium.length > 0 && (
+        <div className="roadmap-group">
+          <div className="roadmap-group-label roadmap-label-medium">🟡 Medium Priority</div>
+          <div className="roadmap-items">
+            {medium.map((rec) => (
+              <div key={rec.skill} className="roadmap-item">
+                <div className="roadmap-item-skill">{rec.skill}</div>
+                <div className="roadmap-item-area">{rec.competency}</div>
+                <div className="roadmap-item-reason">{rec.reason}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

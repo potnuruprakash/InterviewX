@@ -5,11 +5,10 @@ import {
   Brain, Clock, Tag, BarChart2, AlertCircle,
   ChevronRight, CheckCircle, Info,
   TrendingUp, Zap, BookOpen, Layers, Target, ShieldCheck,
-  SkipForward, Code2, AlertTriangle, Send, Loader2
+  SkipForward, AlertTriangle, Send, Loader2, Video, VideoOff, Mic, MicOff
 } from 'lucide-react'
-import useSpeechRecognition from '../hooks/useSpeechRecognition'
+import useSpeechRecognition, { normalizeTranscriptJoin } from '../hooks/useSpeechRecognition'
 import AnswerComposer from '../components/AnswerComposer'
-import CodingEditor from '../components/CodingEditor'
 import VideoRecorder from '../components/VideoRecorder'
 import AudioRecorder from '../components/AudioRecorder'
 import './InterviewPage.css'
@@ -62,7 +61,6 @@ export default function InterviewPage() {
   const [interview, setInterview] = useState(null)
   const [currentQuestion, setCurrentQuestion] = useState(null)
   const [answer, setAnswer] = useState('')
-  const [mode, setMode] = useState('audio') // 'audio' | 'video' | 'text'
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [skipping, setSkipping] = useState(false)
@@ -71,10 +69,8 @@ export default function InterviewPage() {
   const [lastEval, setLastEval] = useState(null)
   const [isComplete, setIsComplete] = useState(false)
 
-  // Coding challenge state
-  const [codeValue, setCodeValue] = useState('')
-  const [codingLanguage, setCodingLanguage] = useState('javascript')
-  const [codingExplanation, setCodingExplanation] = useState('')
+  // Video mode state — user can optionally enable camera
+  const [videoEnabled, setVideoEnabled] = useState(false)
 
   // Media Blobs
   const [audioBlob, setAudioBlob] = useState(null)
@@ -92,24 +88,14 @@ export default function InterviewPage() {
   const hasAutoCompletedRef = useRef(false)
   const videoRecorderRef = useRef(null)
   const audioRecorderRef = useRef(null)
+  // Track whether speech was auto-started for this question
+  const autoStartedSpeechRef = useRef(false)
 
   // Speech-to-Text Integration
-  // When a final speech segment is confirmed, append non-destructively
+  // When a final speech segment is confirmed, append non-destructively with punctuation awareness
   const handleFinalTranscript = useCallback((phrase) => {
-    if (currentQuestion?.type === 'coding') {
-      setCodingExplanation((prev) => {
-        const trimmed = prev.trimEnd()
-        if (!trimmed) return phrase
-        return `${trimmed} ${phrase}`
-      })
-    } else {
-      setAnswer((prev) => {
-        const trimmed = prev.trimEnd()
-        if (!trimmed) return phrase
-        return `${trimmed} ${phrase}`
-      })
-    }
-  }, [currentQuestion?.type])
+    setAnswer((prev) => normalizeTranscriptJoin(prev, phrase))
+  }, [])
 
   const {
     isSupported: isSpeechSupported,
@@ -119,6 +105,7 @@ export default function InterviewPage() {
     error: speechError,
     startListening,
     stopListening,
+    flushAndStop,
     reset: resetSpeech,
   } = useSpeechRecognition({ onFinalTranscript: handleFinalTranscript })
 
@@ -126,6 +113,7 @@ export default function InterviewPage() {
   useEffect(() => {
     if (!isLoaded || !id) return
     if (!isSignedIn) {
+      setError('Your session could not be verified. Please sign in again.')
       setLoading(false)
       return
     }
@@ -139,26 +127,62 @@ export default function InterviewPage() {
         const data = res.data
         setInterview(data.interview)
         setCurrentQuestion(data.currentQuestion)
-        setIsComplete(data.interview.status === 'completed')
 
-        // Initialize coding fields if first question is coding
-        if (data.currentQuestion?.type === 'coding') {
-          setCodeValue(data.currentQuestion.starterCode || '')
-          setCodingLanguage(data.currentQuestion.language || 'javascript')
-          setCodingExplanation('')
+        if (data.interview?.videoModeEnabled) {
+          setVideoEnabled(true)
+        }
+
+        const totalAllowed = data.interview?.configuredQuestionCount || data.interview?.totalQuestions || 5
+        const isInterviewDone =
+          data.isComplete ||
+          data.interview?.status === 'completed' ||
+          data.interview?.isComplete ||
+          !data.currentQuestion ||
+          (data.interview?.currentQuestionIndex >= totalAllowed)
+
+        setIsComplete(isInterviewDone)
+
+        if (isInterviewDone) {
+          navigate(`/interview/${id}/results`)
+          return
         }
 
         // Calculate exact remaining time from backend startedAt & durationMinutes
-        const rem = calculateRemainingSeconds(data.interview.startedAt, data.interview.durationMinutes)
+        const rem = calculateRemainingSeconds(data.interview?.startedAt, data.interview?.durationMinutes)
         setRemainingSeconds(rem)
       } catch (err) {
-        setError(err.message)
+        const msg = err.message || ''
+        if (msg.includes('already completed') || msg.includes('INTERVIEW_COMPLETED')) {
+          setIsComplete(true)
+          navigate(`/interview/${id}/results`)
+          return
+        }
+        startedRef.current = null
+        setError(msg || 'Could not start interview.')
       } finally {
         setLoading(false)
       }
     }
     init()
   }, [id, isLoaded, isSignedIn])
+
+  // Auto-start speech recognition when a new question becomes active
+  useEffect(() => {
+    if (!currentQuestion || loading || isComplete) return
+    // Only auto-start if speech is supported and not already listening
+    if (!isSpeechSupported) return
+    if (isListening) return
+    // Prevent duplicate starts for the same question
+    if (autoStartedSpeechRef.current === currentQuestion.id) return
+
+    autoStartedSpeechRef.current = currentQuestion.id
+    // Small delay to allow question animation to settle
+    const timer = setTimeout(() => {
+      startListening()
+      setIsMediaRecording(true)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [currentQuestion?.id, loading, isComplete, isSpeechSupported])
 
   // Real-time Countdown Timer (persists on refresh, never resets on re-render)
   useEffect(() => {
@@ -187,16 +211,18 @@ export default function InterviewPage() {
   // Automatic interview completion when timer hits 00:00
   const handleTimeoutAutoEnd = async () => {
     setTimeoutNotice(true)
-    // 1. Stop speech recognition and media capture
-    if (isListening) stopListening()
+    // Flush any pending interim speech and stop dictation
+    if (flushAndStop) {
+      flushAndStop()
+    } else if (isListening) {
+      stopListening()
+    }
     setIsMediaRecording(false)
 
     try {
-      // 2. Mark interview completed with time_expired reason
       await authApi.post(`/api/interviews/${id}/complete`, {
         completionReason: 'time_expired',
       })
-      // 3. Navigate cleanly to results page
       setTimeout(() => {
         navigate(`/interview/${id}/results`)
       }, 1500)
@@ -214,39 +240,37 @@ export default function InterviewPage() {
     return `${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   }
 
-  // Handle Mode Selection
-  const handleModeChange = (newMode) => {
-    if (newMode === mode) return
-    if (isListening) {
-      stopListening()
+  // Toggle video mode on/off
+  const handleToggleVideo = () => {
+    setVideoEnabled((prev) => !prev)
+    if (videoEnabled) {
+      // Turning off video — stop video recording
       setIsMediaRecording(false)
+    } else {
+      // Turning on video — start recording
+      setIsMediaRecording(true)
     }
-    setMode(newMode)
-  }
-
-  // Start / Stop Dictation
-  const handleStartSpeaking = () => {
-    startListening()
-    setIsMediaRecording(true)
-  }
-
-  const handleStopSpeaking = () => {
-    stopListening()
-    setIsMediaRecording(false)
   }
 
   // Clear Answer
   const handleClearAnswer = () => {
-    if (isListening) {
+    if (flushAndStop) {
+      flushAndStop()
+    } else if (isListening) {
       stopListening()
-      setIsMediaRecording(false)
     }
+    setIsMediaRecording(false)
     setAnswer('')
-    setCodeValue('')
-    setCodingExplanation('')
     setAudioBlob(null)
     setVideoBlob(null)
     resetSpeech()
+    // Restart speech after clear
+    setTimeout(() => {
+      if (isSpeechSupported && !isListening) {
+        startListening()
+        setIsMediaRecording(true)
+      }
+    }, 200)
   }
 
   // Media upload background synchronization
@@ -283,69 +307,112 @@ export default function InterviewPage() {
     }
   }
 
-  // Submit Answer Flow (handles text, speech-to-text, and coding)
+  // Submit Answer Flow
   const handleSubmit = async () => {
     if (!currentQuestion) return
 
-    // 1. Stop speech recognition and media recording
-    if (isListening) stopListening()
+    // Flush any pending speech buffer and stop
+    let textToSubmit = answer || ''
+    try {
+      if (typeof flushAndStop === 'function') {
+        const flushResult = flushAndStop()
+        const flushed = flushResult?.flushedText || interimTranscript || ''
+        if (flushed && flushed.trim()) {
+          textToSubmit = normalizeTranscriptJoin(textToSubmit, flushed.trim())
+        }
+      } else if (isListening) {
+        stopListening()
+      }
+    } catch (e) {
+      console.warn('[Interview] flush error on submit:', e)
+    }
     setIsMediaRecording(false)
 
-    const isCoding = currentQuestion.type === 'coding'
-    const textToSubmit = isCoding
-      ? (codingExplanation.trim() || codeValue.trim())
-      : answer.trim()
-
-    if (!textToSubmit && !codeValue.trim()) return
+    textToSubmit = (textToSubmit || '').trim()
+    if (!textToSubmit) {
+      setError('Please provide an answer before submitting.')
+      return
+    }
 
     setSubmitting(true)
     setError(null)
     setQuestionTimer(0)
 
     try {
+      const qId = currentQuestion.id || currentQuestion._id
       const payload = {
-        questionId: currentQuestion.id,
+        questionId: qId,
         answerText: textToSubmit,
-        responseType: isCoding ? 'coding' : 'text',
-        code: isCoding ? codeValue : null,
-        language: isCoding ? codingLanguage : null,
+        responseType: 'text',
+        code: null,
+        language: null,
       }
 
-      // 2. Submit response to backend
+      // Stop video recorder and get confirmed blob
+      let currentVideo = videoBlob
+      if (videoEnabled && videoRecorderRef.current?.stopAndGetBlob) {
+        try {
+          const recorded = await videoRecorderRef.current.stopAndGetBlob()
+          if (recorded && recorded.size > 0) {
+            currentVideo = recorded
+          }
+        } catch (e) {
+          console.warn('[InterviewPage] error stopping video recorder:', e)
+        }
+      }
+
       const res = await authApi.post(`/api/interviews/${id}/responses`, payload)
 
-      const responseId = res.data.response?.id
-      const questionId = currentQuestion.id
+      const responseId = res.data.response?.id || res.data.response?._id
       const currentAudio = audioBlob
-      const currentVideo = videoBlob
 
-      // 3. Concurrently submit supporting audio/video modalities
-      submitMedia(responseId, questionId, currentAudio, currentVideo)
+      // Concurrently submit supporting audio/video modalities
+      if (responseId && (currentAudio || currentVideo)) {
+        await submitMedia(responseId, qId, currentAudio, currentVideo)
+      }
 
-      // 4. Update UI state & next question
+      // Update UI state & next question
       setLastEval(res.data.response)
       setAnswer('')
-      setCodeValue('')
-      setCodingExplanation('')
       setAudioBlob(null)
       setVideoBlob(null)
       resetSpeech()
       setInterview(res.data.interview)
+      // Reset auto-started ref so next question triggers auto-listen
+      autoStartedSpeechRef.current = null
 
-      if (res.data.interview.isComplete) {
+      const interviewData = res.data?.interview
+      const nextQ = res.data?.nextQuestion
+      const totalAllowed = interviewData?.configuredQuestionCount || interviewData?.totalQuestions || totalQ
+      const isFinished =
+        res.data?.isComplete ||
+        interviewData?.isComplete ||
+        interviewData?.status === 'completed' ||
+        !nextQ ||
+        (interviewData?.currentQuestionIndex >= totalAllowed)
+
+      if (isFinished) {
         setIsComplete(true)
         setCurrentQuestion(null)
+        navigate(`/interview/${id}/results`)
       } else {
-        const nextQ = res.data.nextQuestion
         setCurrentQuestion(nextQ)
-        if (nextQ?.type === 'coding') {
-          setCodeValue(nextQ.starterCode || '')
-          setCodingLanguage(nextQ.language || 'javascript')
-          setCodingExplanation('')
-        }
       }
     } catch (err) {
-      setError(err.message || 'Could not submit answer. Please try again.')
+      console.error('[Interview] Submit error:', err)
+      const msg = err.response?.data?.message || err.message || ''
+      if (
+        msg.includes('already completed') ||
+        msg.includes('INTERVIEW_COMPLETED') ||
+        msg.includes('RESPONSE_EXISTS') ||
+        msg.includes('already submitted')
+      ) {
+        setIsComplete(true)
+        setCurrentQuestion(null)
+        navigate(`/interview/${id}/results`)
+        return
+      }
+      setError(msg || 'Could not submit answer. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -354,7 +421,7 @@ export default function InterviewPage() {
   // Skip Question Flow
   const handleInitiateSkip = () => {
     if (submitting || skipping) return
-    const hasDraftAnswer = (answer && answer.trim().length > 0) || (codeValue && codeValue.trim().length > 0)
+    const hasDraftAnswer = answer && answer.trim().length > 0
     if (hasDraftAnswer || isListening) {
       setShowSkipConfirm(true)
     } else {
@@ -368,8 +435,12 @@ export default function InterviewPage() {
     setSkipping(true)
     setError(null)
 
-    // Stop active dictation and media capture
-    if (isListening) stopListening()
+    // Stop active dictation and media capture cleanly
+    if (flushAndStop) {
+      flushAndStop()
+    } else if (isListening) {
+      stopListening()
+    }
     setIsMediaRecording(false)
 
     try {
@@ -379,36 +450,52 @@ export default function InterviewPage() {
 
       // Reset composer fields
       setAnswer('')
-      setCodeValue('')
-      setCodingExplanation('')
       setAudioBlob(null)
       setVideoBlob(null)
       resetSpeech()
-      setInterview(res.data.interview)
+      setInterview(res.data?.interview)
+      // Reset auto-started ref so next question triggers auto-listen
+      autoStartedSpeechRef.current = null
 
-      if (res.data.interview.isComplete) {
+      const interviewData = res.data?.interview
+      const totalAllowed = interviewData?.configuredQuestionCount || interviewData?.totalQuestions || totalQ
+      const isFinished =
+        res.data?.isComplete ||
+        interviewData?.isComplete ||
+        interviewData?.status === 'completed' ||
+        !res.data?.nextQuestion ||
+        (interviewData?.currentQuestionIndex >= totalAllowed)
+
+      if (isFinished) {
         setIsComplete(true)
         setCurrentQuestion(null)
         navigate(`/interview/${id}/results`)
       } else {
-        const nextQ = res.data.nextQuestion
-        setCurrentQuestion(nextQ)
-        if (nextQ?.type === 'coding') {
-          setCodeValue(nextQ.starterCode || '')
-          setCodingLanguage(nextQ.language || 'javascript')
-          setCodingExplanation('')
-        }
+        setCurrentQuestion(res.data.nextQuestion)
       }
     } catch (err) {
-      setError(err.message || 'Could not skip question. Please try again.')
+      const msg = err.message || ''
+      if (
+        msg.includes('already been skipped') ||
+        msg.includes('already completed') ||
+        msg.includes('ALREADY_SKIPPED') ||
+        msg.includes('INTERVIEW_COMPLETED')
+      ) {
+        // If question was already skipped or interview is done, finish gracefully
+        setIsComplete(true)
+        setCurrentQuestion(null)
+        navigate(`/interview/${id}/results`)
+      } else {
+        setError(msg || 'Could not skip question. Please try again.')
+      }
     } finally {
       setSkipping(false)
     }
   }
 
   // End Interview Flow
-  const handleEndInterview = async (auto = false) => {
-    if (!auto && !window.confirm('End interview now? This will complete your interview session and generate your evaluation.')) {
+  const handleEndInterview = async () => {
+    if (!window.confirm('End interview now? This will complete your interview session and generate your evaluation.')) {
       return
     }
     try {
@@ -422,7 +509,7 @@ export default function InterviewPage() {
   }
 
   // Progress calculations
-  const totalQ = interview?.totalQuestions || 10
+  const totalQ = interview?.configuredQuestionCount || interview?.totalQuestions || 5
   const currentQIndex = interview?.currentQuestionIndex ?? 0
   const skippedCount = interview?.skippedQuestionsCount || 0
   const answeredCount = Math.max(0, currentQIndex - skippedCount)
@@ -433,6 +520,7 @@ export default function InterviewPage() {
   const isWarningTime = remainingSeconds <= 300 && remainingSeconds > 60
   const isTimeExpired = remainingSeconds === 0
 
+  // ─── Loading Screen ───────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="interview-loading animate-fade-in">
@@ -446,6 +534,7 @@ export default function InterviewPage() {
     )
   }
 
+  // ─── Complete Screen ──────────────────────────────────────────────────────
   if (isComplete) {
     return (
       <div className="interview-complete animate-fade-in">
@@ -485,12 +574,48 @@ export default function InterviewPage() {
     )
   }
 
+  // ─── Error Screen (Session Out / Invalid Interview) ──────────────────────
+  if (!loading && (!interview || error)) {
+    const isSessionError = (error || '').toLowerCase().includes('session') || (error || '').toLowerCase().includes('unauthorized')
+    return (
+      <div className="interview-loading animate-fade-in">
+        <div className="loading-spinner-box">
+          <AlertTriangle size={36} color="#ef4444" />
+        </div>
+        <h2 className="loading-title">{isSessionError ? 'Session Out' : 'Unable to Load Interview'}</h2>
+        <p className="loading-subtitle">{error || 'Interview session data could not be retrieved.'}</p>
+        <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              startedRef.current = null
+              setError(null)
+              setLoading(true)
+              window.location.reload()
+            }}
+          >
+            Retry Connection
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => navigate('/dashboard')}
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Main Interview UI ────────────────────────────────────────────────────
   return (
     <div className="interview-page">
-      {/* Background Audio Recorder for Voice Mode (silent capture) */}
+      {/* Background Audio Recorder (silent capture when speech/audio active) */}
       <AudioRecorder
         ref={audioRecorderRef}
-        isRecording={isMediaRecording && mode === 'audio'}
+        isRecording={isMediaRecording && !videoEnabled}
         onRecordingComplete={(blob) => setAudioBlob(blob)}
         disabled={submitting || skipping}
       />
@@ -536,7 +661,7 @@ export default function InterviewPage() {
         </div>
       )}
 
-      {/* Professional Interview Top Bar */}
+      {/* ── Top Bar ─────────────────────────────────────────────────────── */}
       <header className="interview-topbar">
         <div className="interview-topbar-inner">
           <div className="topbar-left">
@@ -547,21 +672,24 @@ export default function InterviewPage() {
 
             <div className="interview-meta-pills">
               <span className="pill pill-type">
-                {interview?.interviewType ? `${interview.interviewType.charAt(0).toUpperCase() + interview.interviewType.slice(1)} Interview` : 'Technical Interview'}
+                {interview?.interviewType
+                  ? `${interview.interviewType.charAt(0).toUpperCase() + interview.interviewType.slice(1)} Interview`
+                  : 'Technical Interview'}
               </span>
               <span className="pill pill-adaptive">
                 <SparklesIcon size={12} />
-                <span>Adaptive Interview</span>
+                <span>Adaptive AI</span>
               </span>
             </div>
           </div>
 
-          <div className="topbar-right">
-            <div className="question-count-badge">
-              <span className="count-label">Question</span>
-              <span className="count-value">{Math.min(currentQIndex + 1, totalQ)} / {totalQ}</span>
-            </div>
+          <div className="topbar-center">
+            <span className="topbar-question-counter">
+              Question <strong>{Math.min(currentQIndex + 1, totalQ)}</strong> of <strong>{totalQ}</strong>
+            </span>
+          </div>
 
+          <div className="topbar-right">
             {/* Persistent Countdown Timer */}
             <div
               className={`timer-display ${isTimeExpired ? 'timer-expired' : isUrgentTime ? 'timer-urgent' : isWarningTime ? 'timer-warning' : ''}`}
@@ -580,7 +708,7 @@ export default function InterviewPage() {
             <button
               type="button"
               className="btn btn-ghost btn-end-session"
-              onClick={() => handleEndInterview(false)}
+              onClick={handleEndInterview}
               title="End interview and view results"
             >
               End Session
@@ -601,23 +729,24 @@ export default function InterviewPage() {
         </div>
       </header>
 
-      {/* Main 2-Column Responsive Layout */}
+      {/* ── 3-Column Main Layout ─────────────────────────────────────────── */}
       <main className="interview-main-layout">
-        {/* Left Column: Question & Composer / Code Editor */}
-        <section className="interview-main-column">
+
+        {/* ── LEFT PANEL: Question + Video ──────────────────────────────── */}
+        <section className="interview-left-panel">
+
           {/* Active Question Card */}
           {currentQuestion ? (
             <article className="question-card glass-card animate-fade-in" key={currentQuestion.id}>
+              {/* Question meta header */}
               <div className="question-card-header">
                 <div className="question-pill-group">
                   <span className="question-num-tag">
-                    {TYPE_ICONS[currentQuestion.type] || '❓'} Question {currentQIndex + 1}
+                    {TYPE_ICONS[currentQuestion.type] || '❓'} Q{currentQIndex + 1} / {totalQ}
                   </span>
                   <span className={`badge ${CATEGORY_COLORS[currentQuestion.category] || 'badge-purple'}`}>
                     <Tag size={11} />
-                    <span style={{ textTransform: 'capitalize' }}>
-                      {currentQuestion.type === 'coding' ? 'Coding Challenge' : currentQuestion.category}
-                    </span>
+                    <span style={{ textTransform: 'capitalize' }}>{currentQuestion.category}</span>
                   </span>
                   <span className={`badge ${DIFFICULTY_COLORS[currentQuestion.difficulty]}`}>
                     <span style={{ textTransform: 'capitalize' }}>{currentQuestion.difficulty}</span>
@@ -660,96 +789,89 @@ export default function InterviewPage() {
             </div>
           )}
 
-          {/* Conditional Rendering: Coding Challenge Editor vs Standard Answer Composer */}
-          {currentQuestion?.type === 'coding' ? (
-            <div className="coding-challenge-container animate-fade-in">
-              <CodingEditor
-                starterCode={currentQuestion.starterCode || ''}
-                defaultLanguage={currentQuestion.language || 'javascript'}
-                codeValue={codeValue}
-                onCodeChange={setCodeValue}
-                explanationValue={codingExplanation}
-                onExplanationChange={setCodingExplanation}
-                onLanguageChange={setCodingLanguage}
+          {/* Video Preview Panel */}
+          <div className="video-panel glass-card">
+            <div className="video-panel-header">
+              <span className="video-panel-title">Candidate Camera</span>
+              <button
+                type="button"
+                className={`btn-video-toggle ${videoEnabled ? 'active' : ''}`}
+                onClick={handleToggleVideo}
                 disabled={submitting || skipping || isTimeExpired}
-              />
-
-              {/* Action Bar for Coding Challenge */}
-              <div className="coding-action-bar glass-card">
-                <div className="coding-action-left">
-                  <span className="shortcut-hint">
-                    Write solution in editor · You can also speak your explanation in Voice/Video mode
-                  </span>
-                </div>
-
-                <div className="coding-action-right">
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-skip-question"
-                    onClick={handleInitiateSkip}
-                    disabled={submitting || skipping || isTimeExpired}
-                    title="Skip this coding challenge"
-                    id="skip-coding-btn"
-                  >
-                    {skipping ? (
-                      <>
-                        <Loader2 size={15} className="spin" />
-                        <span>Skipping...</span>
-                      </>
-                    ) : (
-                      <>
-                        <SkipForward size={15} />
-                        <span>Skip Question</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-submit-answer"
-                    onClick={handleSubmit}
-                    disabled={(!codeValue.trim() && !codingExplanation.trim()) || submitting || skipping || isTimeExpired}
-                    id="submit-coding-btn"
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 size={16} className="spin" />
-                        <span>Evaluating Solution...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send size={16} />
-                        <span>Submit Code</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+                title={videoEnabled ? 'Disable camera' : 'Enable camera'}
+              >
+                {videoEnabled ? <Video size={14} /> : <VideoOff size={14} />}
+                <span>{videoEnabled ? 'Camera On' : 'Enable Camera'}</span>
+              </button>
             </div>
-          ) : (
-            <AnswerComposer
-              answer={answer}
-              onAnswerChange={setAnswer}
-              mode={mode}
-              onModeChange={handleModeChange}
-              isListening={isListening}
-              interimTranscript={interimTranscript}
-              speechStatus={speechStatus}
-              speechError={speechError}
-              isSpeechSupported={isSpeechSupported}
-              onStartSpeaking={handleStartSpeaking}
-              onStopSpeaking={handleStopSpeaking}
-              onSubmit={handleSubmit}
-              onSkip={handleInitiateSkip}
-              onClear={handleClearAnswer}
-              submitting={submitting}
-              skipping={skipping}
-              mediaSubmitting={mediaSubmitting}
-              disabled={!currentQuestion || isTimeExpired}
-              hasAudioAttached={Boolean(audioBlob)}
-              hasVideoAttached={Boolean(videoBlob)}
-            />
-          )}
+
+            {videoEnabled ? (
+              <VideoRecorder
+                ref={videoRecorderRef}
+                isRecording={isMediaRecording && videoEnabled}
+                onRecordingComplete={(blob) => setVideoBlob(blob)}
+                disabled={submitting || skipping || isTimeExpired}
+                autoStartStream={true}
+              />
+            ) : (
+              <div className="video-placeholder">
+                <VideoOff size={28} className="video-off-icon" />
+                <p>Camera is off</p>
+                <span>Enable for video analysis</span>
+              </div>
+            )}
+
+            {/* Status Indicators */}
+            <div className="media-status-row">
+              {videoEnabled && (
+                <span className="media-status-chip active">
+                  <span className="status-dot live" />
+                  Camera active
+                </span>
+              )}
+              <span className={`media-status-chip ${isListening ? 'active' : speechError ? 'error' : ''}`}>
+                <span className={`status-dot ${isListening ? 'live' : ''}`} />
+                {isListening ? 'Listening...' : speechError ? 'Mic unavailable' : isSpeechSupported ? 'Mic ready' : 'Mic unsupported'}
+              </span>
+            </div>
+          </div>
+
+          {/* Skip button in left panel */}
+          <button
+            type="button"
+            className="btn btn-skip-left"
+            onClick={handleInitiateSkip}
+            disabled={submitting || skipping || isTimeExpired}
+            id="skip-question-btn"
+          >
+            {skipping ? (
+              <><Loader2 size={15} className="spin" /><span>Skipping...</span></>
+            ) : (
+              <><SkipForward size={15} /><span>Skip Question</span></>
+            )}
+          </button>
+        </section>
+
+        {/* ── CENTER PANEL: Answer / Input ──────────────────────────────── */}
+        <section className="interview-center-panel">
+          <AnswerComposer
+            answer={answer}
+            onAnswerChange={setAnswer}
+            isListening={isListening}
+            interimTranscript={interimTranscript}
+            speechStatus={speechStatus}
+            speechError={speechError}
+            isSpeechSupported={isSpeechSupported}
+            onSubmit={handleSubmit}
+            onSkip={handleInitiateSkip}
+            onClear={handleClearAnswer}
+            submitting={submitting}
+            skipping={skipping}
+            mediaSubmitting={mediaSubmitting}
+            disabled={!currentQuestion || isTimeExpired}
+            hasAudioAttached={Boolean(audioBlob)}
+            hasVideoAttached={Boolean(videoBlob)}
+          />
 
           {error && (
             <div className="interview-error-banner animate-fade-in">
@@ -758,7 +880,7 @@ export default function InterviewPage() {
             </div>
           )}
 
-          {/* Previous Question Answer Evaluation Feedback */}
+          {/* Previous Answer Evaluation Feedback */}
           {lastEval && (
             <div className="previous-eval-card glass-card animate-fade-in">
               <div className="previous-eval-header">
@@ -812,25 +934,14 @@ export default function InterviewPage() {
           )}
         </section>
 
-        {/* Right Sidebar: Video Preview, Session Progress & Adaptive Info */}
+        {/* ── RIGHT SIDEBAR ─────────────────────────────────────────────── */}
         <aside className="interview-sidebar">
-          {/* Candidate Camera Preview (when video mode selected) */}
-          {mode === 'video' && (
-            <div className="sidebar-card camera-card glass-card">
-              <VideoRecorder
-                ref={videoRecorderRef}
-                isRecording={isMediaRecording && mode === 'video'}
-                onRecordingComplete={(blob) => setVideoBlob(blob)}
-                disabled={submitting || skipping || isTimeExpired}
-              />
-            </div>
-          )}
 
           {/* Session Progress Card */}
           <div className="sidebar-card glass-card">
             <div className="sidebar-card-header">
               <span className="sidebar-card-title">Session Progress</span>
-              <span className="progress-fraction">{currentQIndex} / {totalQ} completed</span>
+              <span className="sidebar-card-subtitle">{currentQIndex} / {totalQ} completed</span>
             </div>
 
             <div className="sidebar-progress-track">
@@ -842,11 +953,11 @@ export default function InterviewPage() {
 
             <div className="progress-stats-grid">
               <div className="stat-box">
-                <span className="stat-num">{answeredCount}</span>
+                <span className="stat-num stat-answered">{answeredCount}</span>
                 <span className="stat-label">Answered</span>
               </div>
               <div className="stat-box">
-                <span className="stat-num" style={{ color: '#f59e0b' }}>{skippedCount}</span>
+                <span className="stat-num stat-skipped">{skippedCount}</span>
                 <span className="stat-label">Skipped</span>
               </div>
               <div className="stat-box">
@@ -860,14 +971,15 @@ export default function InterviewPage() {
           <div className="sidebar-card glass-card">
             <div className="sidebar-card-header">
               <span className="sidebar-card-title">Adaptive Intelligence</span>
-              <Brain size={13} className="text-secondary" />
+              <Brain size={13} className="sidebar-card-icon" />
             </div>
 
             <div className="adaptive-meta-list">
               <div className="adaptive-data-row">
                 <span className="data-key">Difficulty</span>
                 <span className={`badge ${DIFFICULTY_COLORS[interview?.interviewState?.currentDifficulty || interview?.difficulty || 'medium']}`}>
-                  {interview?.interviewState?.currentDifficulty || interview?.difficulty || 'medium'}
+                  {(interview?.interviewState?.currentDifficulty || interview?.difficulty || 'medium').charAt(0).toUpperCase()
+                    + (interview?.interviewState?.currentDifficulty || interview?.difficulty || 'medium').slice(1)}
                 </span>
               </div>
 
@@ -877,7 +989,7 @@ export default function InterviewPage() {
               </div>
 
               {interview?.interviewState?.strongAreas?.length > 0 && (
-                <div className="adaptive-data-row">
+                <div className="adaptive-data-row adaptive-data-row--wrap">
                   <span className="data-key">Demonstrated</span>
                   <div className="skill-tag-group">
                     {interview.interviewState.strongAreas.slice(0, 3).map((s, idx) => (
@@ -888,7 +1000,7 @@ export default function InterviewPage() {
               )}
 
               {interview?.interviewState?.weakAreas?.length > 0 && (
-                <div className="adaptive-data-row">
+                <div className="adaptive-data-row adaptive-data-row--wrap">
                   <span className="data-key">Developing</span>
                   <div className="skill-tag-group">
                     {interview.interviewState.weakAreas.slice(0, 3).map((w, idx) => (
@@ -900,11 +1012,11 @@ export default function InterviewPage() {
             </div>
           </div>
 
-          {/* Multimodal Evaluation Pipeline Status */}
+          {/* AI Evaluation Pipeline Status */}
           <div className="sidebar-card glass-card">
             <div className="sidebar-card-header">
               <span className="sidebar-card-title">AI Evaluation Pipeline</span>
-              <Layers size={13} className="text-secondary" />
+              <Layers size={13} className="sidebar-card-icon" />
             </div>
 
             <div className="pipeline-items">
@@ -914,19 +1026,19 @@ export default function InterviewPage() {
                 <span className="pipeline-badge ready">Active</span>
               </div>
 
-              <div className={`pipeline-item ${mode === 'audio' || mode === 'video' ? 'active' : ''}`}>
-                <span className={`pipeline-dot ${mode === 'audio' || mode === 'video' ? 'live-dot' : ''}`} />
+              <div className={`pipeline-item ${isListening ? 'active' : ''}`}>
+                <span className={`pipeline-dot ${isListening ? 'live-dot' : ''}`} />
                 <span className="pipeline-name">Speech Analysis</span>
-                <span className={`pipeline-badge ${mode === 'audio' || mode === 'video' ? 'ready' : 'standby'}`}>
-                  {mode === 'audio' || mode === 'video' ? 'Active' : 'Standby'}
+                <span className={`pipeline-badge ${isListening ? 'ready' : 'standby'}`}>
+                  {isListening ? 'Active' : 'Standby'}
                 </span>
               </div>
 
-              <div className={`pipeline-item ${mode === 'video' ? 'active' : ''}`}>
-                <span className={`pipeline-dot ${mode === 'video' ? 'live-dot' : ''}`} />
+              <div className={`pipeline-item ${videoEnabled ? 'active' : ''}`}>
+                <span className={`pipeline-dot ${videoEnabled ? 'live-dot' : ''}`} />
                 <span className="pipeline-name">Video Analysis</span>
-                <span className={`pipeline-badge ${mode === 'video' ? 'ready' : 'standby'}`}>
-                  {mode === 'video' ? 'Active' : 'Standby'}
+                <span className={`pipeline-badge ${videoEnabled ? 'ready' : 'standby'}`}>
+                  {videoEnabled ? 'Active' : 'Standby'}
                 </span>
               </div>
 

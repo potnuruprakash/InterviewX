@@ -1,7 +1,17 @@
 /* ============================================================
-   CANDIDATE CAMERA PANEL — InterviewX
+   CANDIDATE CAMERA — InterviewX
+   Embedded cleanly inside the video-panel card
    ============================================================ */
 
+/* Used when VideoRecorder is embedded inside a parent card */
+.camera-embed-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+/* Legacy standalone card wrapper (kept for backward compat) */
 .camera-panel-card {
   display: flex;
   flex-direction: column;

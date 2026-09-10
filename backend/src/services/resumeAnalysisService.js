@@ -171,9 +171,31 @@ const splitIntoSections = (text) => {
 
 // ─── Skills Section Parser ───────────────────────────────────────────────────
 
+/**
+ * Parse skills from the dedicated skills section.
+ * Uses BOTH normalizeFromText (comma/bullet/newline separated) AND
+ * extractSkillsFromText (sliding-window for whitespace/inline mentions).
+ * This handles multi-column PDF layouts and space-separated lists.
+ */
 const parseSkillsSection = (lines) => {
   const text = lines.join('\n');
-  return normalizeFromText(text, 'skills_section');
+
+  // Strategy 1: delimiter-based splitting (comma, pipe, bullet, newline)
+  const fromDelimiters = normalizeFromText(text, 'skills_section');
+
+  // Strategy 2: sliding-window scan for any recognized skill tokens
+  const fromScan = extractSkillsFromText(text, 'skills_section');
+
+  // Merge, dedup by canonicalName — delimiter results take priority
+  const seen = new Set(fromDelimiters.map((s) => s.canonicalName));
+  const merged = [...fromDelimiters];
+  for (const s of fromScan) {
+    if (!seen.has(s.canonicalName)) {
+      seen.add(s.canonicalName);
+      merged.push(s);
+    }
+  }
+  return merged;
 };
 
 // ─── Education Parser ────────────────────────────────────────────────────────
@@ -457,6 +479,22 @@ const analyzeResume = (extractedText) => {
     ...additionalFromExperience,
   ];
 
+  // Safety net: if very few skills found so far, do a full-text scan of entire resume
+  // This catches resumes with no "Skills" heading — skills mentioned inline in bullets
+  const canonicalSoFar = new Set(allSkills.map((s) => s.canonicalName));
+  if (canonicalSoFar.size < 3) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ResumeAnalysis] Fewer than 3 skills found from sections — running full-text implied scan');
+    }
+    const impliedFromFullText = extractSkillsFromText(text, 'implied');
+    for (const s of impliedFromFullText) {
+      if (!canonicalSoFar.has(s.canonicalName)) {
+        canonicalSoFar.add(s.canonicalName);
+        allSkills.push(s);
+      }
+    }
+  }
+
   // Final deduplication by canonicalName
   const finalSkills = [];
   const seenCanonical = new Set();
@@ -465,6 +503,16 @@ const analyzeResume = (extractedText) => {
       seenCanonical.add(skill.canonicalName);
       finalSkills.push(skill);
     }
+  }
+
+  // ── Dev-only debug logging ──────────────────────────────────────────────────
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[ResumeAnalysis] Extracted text length: ${text.length} chars`);
+    console.log(`[ResumeAnalysis] Skills from section: ${skillsFromSection.length}`);
+    console.log(`[ResumeAnalysis] Skills from projects: ${additionalFromProjects.length}`);
+    console.log(`[ResumeAnalysis] Skills from experience: ${additionalFromExperience.length}`);
+    console.log(`[ResumeAnalysis] Final skill count: ${finalSkills.length}`);
+    console.log(`[ResumeAnalysis] Canonical skill names: ${finalSkills.map((s) => s.canonicalName).join(', ')}`);
   }
 
   return {

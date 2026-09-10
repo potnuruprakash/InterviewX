@@ -130,3 +130,57 @@ tbody tr:hover { background: var(--bg-glass); }
   .areas-grid { grid-template-columns: 1fr; }
 }
 
+/* ============================================================
+   InterviewX Light Mode — Progress Page
+   ============================================================ */
+
+[data-theme='light'] .progress-page {
+  background: #F5F6F8;
+}
+
+[data-theme='light'] thead tr {
+  border-bottom: 1px solid #EAECF0;
+}
+
+[data-theme='light'] th {
+  background: #F8F9FB;
+  color: #667085;
+}
+
+[data-theme='light'] td {
+  border-bottom: 1px solid #EAECF0;
+  color: #344054;
+}
+
+[data-theme='light'] tbody tr:hover {
+  background: #F8F9FC;
+}
+
+[data-theme='light'] .score-pill.green {
+  background: #ECFDF3;
+  color: #027A48;
+}
+
+[data-theme='light'] .score-pill.yellow {
+  background: #FFFAEB;
+  color: #B54708;
+}
+
+[data-theme='light'] .score-pill.red {
+  background: #FEF3F2;
+  color: #B42318;
+}
+
+[data-theme='light'] .area-strong {
+  background: #ECFDF3;
+  color: #027A48;
+  border-color: rgba(2, 122, 72, 0.2);
+}
+
+[data-theme='light'] .area-improve {
+  background: #FFFAEB;
+  color: #B54708;
+  border-color: rgba(181, 71, 8, 0.2);
+}
+
+

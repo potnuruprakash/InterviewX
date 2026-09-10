@@ -246,6 +246,9 @@ const analyzeJobDescription = (rawText, targetRole) => {
   // If no explicit sections found, scan the whole text for skills
   if (requiredSkills.length === 0 && preferredSkills.length === 0) {
     // All skills from full text are treated as required when no explicit separation
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[JobAnalysis] No explicit required/preferred sections found — scanning full JD text for skills');
+    }
     requiredSkills = extractSkillsBlock(text.split('\n'));
   }
 
@@ -275,6 +278,14 @@ const analyzeJobDescription = (rawText, targetRole) => {
         break;
       }
     }
+  }
+
+  // ── Dev-only debug logging ────────────────────────────────────────────────
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[JobAnalysis] JD text length: ${text.length} chars`);
+    console.log(`[JobAnalysis] Required skills (${requiredSkills.length}): ${requiredSkills.map((s) => s.canonicalName).join(', ') || '(none)'}`);
+    console.log(`[JobAnalysis] Preferred skills (${preferredSkills.length}): ${preferredSkills.map((s) => s.canonicalName).join(', ') || '(none)'}`);
+    console.log(`[JobAnalysis] Soft skills: ${softSkills.join(', ') || '(none)'}`);
   }
 
   return {

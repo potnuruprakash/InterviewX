@@ -215,3 +215,9 @@
   color: var(--text-muted);
   font-size: 14px;
 }
+
+[data-theme='light'] .landing-header {
+  background: rgba(250, 250, 251, 0.95);
+  border-bottom: 1px solid #E5E7EB;
+}
+

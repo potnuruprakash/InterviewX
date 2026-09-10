@@ -930,16 +930,16 @@ const generateInterviewQuestions = ({
   const behQuestions = generateBehavioralQuestions(behCount, difficulty);
   questions.push(...behQuestions.slice(0, behCount));
 
-  // Coding challenges — for technical / developer roles
-  const roleText = `${jobProfile.targetRole || ''} ${jobProfile.title || ''} ${candidateProfile.targetRole || ''}`;
-  const isDevRole = /developer|engineer|full\s*stack|frontend|backend|web|software|programmer|coder|sde/i.test(roleText) ||
-    candidateSkills.some((s) => /javascript|react|python|node|sql|typescript|java|c\+\+|golang/i.test(String(s)));
-  const includeCoding = (interviewType === 'technical' || (interviewType === 'mixed' && isDevRole)) && interviewType !== 'behavioral' && interviewType !== 'hr';
-  const codingCount = includeCoding ? Math.min(2, Math.max(1, Math.round(max * 0.2))) : 0;
-
-  if (codingCount > 0) {
-    const codingQuestions = generateCodingQuestions([...matchedSkills, ...candidateSkills], difficulty, codingCount);
-    questions.push(...codingQuestions);
+  // No coding implementation questions: Interview questions focus on technical reasoning,
+  // concepts, architecture, system design, and role-specific knowledge.
+  const extraTechNeeded = (interviewType === 'technical' || interviewType === 'mixed') && questions.length < max;
+  if (extraTechNeeded && matchedSkills.length > 0) {
+    const conceptualQuestions = generateTechnicalQuestions(
+      [...matchedSkills, ...candidateSkills],
+      difficulty,
+      Math.min(2, max - questions.length)
+    );
+    questions.push(...conceptualQuestions);
   }
 
   // Skill gap — from missing required skills

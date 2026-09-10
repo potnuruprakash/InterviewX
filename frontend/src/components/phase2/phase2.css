@@ -133,3 +133,235 @@
 .jd-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .jd-meta-item { font-size: 13px; color: rgba(255,255,255,0.6); }
 .jd-meta-label { font-size: 11px; color: rgba(255,255,255,0.35); display: block; margin-bottom: 2px; }
+
+/* ── NEW: CompetencyCard ─────────────────────────────────────────── */
+
+.competency-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.competency-card:hover { background: rgba(255, 255, 255, 0.05); }
+
+.comp-primary { border-color: rgba(124, 58, 237, 0.2); }
+.comp-secondary { opacity: 0.9; }
+
+.comp-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comp-card-label-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.comp-icon { font-size: 16px; }
+
+.comp-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.comp-primary-badge {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  background: rgba(124, 58, 237, 0.2);
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  border-radius: 999px;
+  color: #c4b5fd;
+}
+
+.comp-percent {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.comp-good   { color: #34d399; }
+.comp-medium { color: #fbbf24; }
+.comp-low    { color: #f87171; }
+
+/* Progress bar */
+.comp-progress-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.comp-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+.comp-progress-fill.comp-good   { background: linear-gradient(90deg, #10b981, #34d399); }
+.comp-progress-fill.comp-medium { background: linear-gradient(90deg, #d97706, #fbbf24); }
+.comp-progress-fill.comp-low    { background: linear-gradient(90deg, #dc2626, #f87171); }
+
+/* Skill pills */
+.comp-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.comp-skill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.comp-skill-matched {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  color: #6ee7b7;
+}
+
+.comp-skill-partial {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.comp-skill-missing {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+/* Status dots */
+.comp-skill-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.comp-dot-matched { background: #10b981; }
+.comp-dot-partial { background: #f59e0b; }
+.comp-dot-missing { background: #ef4444; }
+
+/* Legend */
+.comp-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.comp-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+}
+
+.comp-legend-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* ── NEW: LearningRoadmap ────────────────────────────────────────── */
+
+.learning-roadmap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+.roadmap-header {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.roadmap-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.roadmap-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.roadmap-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roadmap-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.roadmap-label-high   { color: #f87171; }
+.roadmap-label-medium { color: #fbbf24; }
+
+.roadmap-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.roadmap-item {
+  display: grid;
+  grid-template-columns: 110px 130px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 8px;
+}
+
+.roadmap-item-skill {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.roadmap-item-area {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.roadmap-item-reason {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .roadmap-item {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}

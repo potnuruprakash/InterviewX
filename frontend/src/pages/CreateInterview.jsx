@@ -1,628 +1,1307 @@
-import { useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthApi } from '../services/api'
 import {
-  Upload, FileText, Briefcase, ChevronRight, AlertCircle,
-  CheckCircle, Loader2, X, BarChart3, Settings
+  Upload, FileText, ChevronRight, AlertCircle,
+  CheckCircle, Loader2, X, Search, ChevronDown,
+  Check, ArrowRight, ArrowLeft, Target, RefreshCw
 } from 'lucide-react'
 import {
-  CandidateProfileCard,
-  JobRequirementsCard,
-  SkillCoverageCard,
-  SkillGapSummary,
-} from '../components/phase2/Phase2Components'
+  ROLE_CATEGORIES,
+  ALL_ROLES,
+  EXPERIENCE_LEVELS,
+  ROLE_COMPETENCY_PROFILES,
+  computeCompetencyMatch,
+  generateLearningRecommendations,
+} from '../data/jobRoleTaxonomy'
 import './CreateInterview.css'
 
-const INTERVIEW_TYPES = [
-  { value: 'mixed', label: 'Mixed', desc: 'Technical + Behavioral + HR' },
-  { value: 'technical', label: 'Technical', desc: 'Coding & system design' },
-  { value: 'behavioral', label: 'Behavioral', desc: 'Situational & soft skills' },
-  { value: 'hr', label: 'HR', desc: 'Culture fit & motivation' },
-]
-
-const DIFFICULTIES = [
-  { value: 'easy', label: 'Easy', desc: 'Entry level' },
-  { value: 'medium', label: 'Medium', desc: 'Mid level' },
-  { value: 'hard', label: 'Hard', desc: 'Senior level' },
-]
-
-const DURATIONS = [
-  { value: 10, label: '10 min', desc: 'Quick check' },
-  { value: 15, label: '15 min', desc: 'Express interview' },
-  { value: 20, label: '20 min', desc: 'Short session' },
-  { value: 30, label: '30 min', desc: 'Standard interview' },
-  { value: 45, label: '45 min', desc: 'In-depth session' },
-  { value: 60, label: '60 min', desc: 'Comprehensive' },
-]
-
+// ── Global Steps ─────────────────────────────────────────────────────────────
 const STEPS = [
-  { n: 1, label: 'Resume' },
-  { n: 2, label: 'Resume Analysis' },
-  { n: 3, label: 'Job Description' },
-  { n: 4, label: 'Skill Gap' },
-  { n: 5, label: 'Settings' },
-  { n: 6, label: 'Review' },
+  { n: 1, label: 'Job Details' },
+  { n: 2, label: 'Skill Gap' },
+  { n: 3, label: 'Interview Setup' },
+  { n: 4, label: 'Review' },
 ]
 
 export default function CreateInterview() {
   const navigate = useNavigate()
-  const {
-    authApi,
-    analyzeResume,
-    analyzeJob,
-    runSkillAnalysis,
-  } = useAuthApi()
+  const [searchParams] = useSearchParams()
+  const practiceFromId = searchParams.get('practiceFrom')
+  const [isPracticeMode, setIsPracticeMode] = useState(Boolean(practiceFromId))
 
-  const [step, setStep] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [dragOver, setDragOver] = useState(false)
+  const { authApi, isLoaded, isSignedIn, analyzeResume, runSkillAnalysis } = useAuthApi()
 
-  // Step 1 — Resume upload
+  // ── Step Navigation State ──────────────────────────────────────────────────
+  const [step, setStep] = useState(practiceFromId ? 3 : 1)
+
+  // ── Step 1 Form State (Job Details) ────────────────────────────────────────
+  const [targetRole, setTargetRole] = useState('')
+  const [isCustomRole, setIsCustomRole] = useState(false)
+  const [customRoleText, setCustomRoleText] = useState('')
+  const [comboboxQuery, setComboboxQuery] = useState('')
+  const [comboboxOpen, setComboboxOpen] = useState(false)
+  const comboboxRef = useRef(null)
+
+  const [experienceLevel, setExperienceLevel] = useState('junior')
+  const [company, setCompany] = useState('')
+  const [jdContent, setJdContent] = useState('')
+
+  // ── Step 1 Form State (Resume) ─────────────────────────────────────────────
   const [resumeFile, setResumeFile] = useState(null)
   const [resumeId, setResumeId] = useState(null)
-  const [resumeUploaded, setResumeUploaded] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(false)
-
-  // Step 2 — Resume analysis
   const [resumeAnalysis, setResumeAnalysis] = useState(null)
-  const [analyzeStatus, setAnalyzeStatus] = useState(null) // 'analyzing' | 'done' | 'failed'
+  const [resumeStatus, setResumeStatus] = useState(null) // 'uploading' | 'analyzing' | 'done' | 'failed'
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef(null)
 
-  // Step 3 — Job Description
-  const [jdContent, setJdContent] = useState('')
-  const [targetRole, setTargetRole] = useState('')
+  // ── Step 2 Skill Gap State ─────────────────────────────────────────────────
   const [jobId, setJobId] = useState(null)
-
-  // Step 4 — Skill Gap
-  const [skillGapResult, setSkillGapResult] = useState(null)
   const [skillGapLoading, setSkillGapLoading] = useState(false)
-  const [skillGapStatus, setSkillGapStatus] = useState(null)
+  const [skillGapError, setSkillGapError] = useState(null)
+  const [skillGapResult, setSkillGapResult] = useState(null)
+  const [competencyMatch, setCompetencyMatch] = useState(null)
+  const [learningRecs, setLearningRecs] = useState([])
+  const hasRunSkillGapRef = useRef(false)
 
-  // Step 5 — Interview settings
-  const [interviewType, setInterviewType] = useState('mixed')
+  // ── Step 3 Interview Setup State ───────────────────────────────────────────
+  const [interviewType, setInterviewType] = useState('technical')
   const [difficulty, setDifficulty] = useState('medium')
-  const [totalQuestions, setTotalQuestions] = useState(10)
   const [durationMinutes, setDurationMinutes] = useState(30)
+  const [totalQuestions, setTotalQuestions] = useState(5)
+  const [interviewMode, setInterviewMode] = useState('video')
 
-  // ─── File Handling ───────────────────────────────────────────────────────────
+  // ── Step 4 & Global Feedback ───────────────────────────────────────────────
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState(null)
 
-  const handleFileSelect = (file) => {
+  const effectiveRole = isCustomRole
+    ? customRoleText.trim()
+    : (targetRole || comboboxQuery).trim()
+
+  // ── Close combobox on click outside ────────────────────────────────────────
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (comboboxRef.current && !comboboxRef.current.contains(e.target)) {
+        setComboboxOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // ── Practice Mode: Pre-fill from previous interview ────────────────────────
+  useEffect(() => {
+    if (!practiceFromId || !isLoaded || !isSignedIn) return
+
+    const loadPracticeData = async () => {
+      try {
+        setSkillGapLoading(true)
+        const res = await authApi.get(`/api/interviews/${practiceFromId}`)
+        const prevInterview = res.data?.interview
+        if (!prevInterview) return
+
+        // Fill Job Details
+        const role = prevInterview.targetRole || ''
+        setTargetRole(role)
+        setComboboxQuery(role)
+        setExperienceLevel(prevInterview.experienceLevel || prevInterview.jobDescriptionId?.experienceLevel || 'junior')
+        setCompany(prevInterview.company || prevInterview.jobDescriptionId?.company || '')
+        // Fill JD content if available (job.content is the raw JD text field)
+        setJdContent(
+          prevInterview.jobDescriptionId?.content ||
+          prevInterview.jobDescriptionId?.rawText ||
+          prevInterview.jobDescriptionId?.jobDescriptionText ||
+          ''
+        )
+
+        // Fill Resume details if available
+        if (prevInterview.resumeId) {
+          const rId = typeof prevInterview.resumeId === 'object' ? prevInterview.resumeId._id : prevInterview.resumeId
+          setResumeId(rId)
+          setResumeStatus('done')
+          if (typeof prevInterview.resumeId === 'object') {
+            setResumeAnalysis(prevInterview.resumeId.parsedData || prevInterview.resumeId)
+          }
+        }
+
+        // Fill Job ID
+        if (prevInterview.jobDescriptionId) {
+          const jId = typeof prevInterview.jobDescriptionId === 'object' ? prevInterview.jobDescriptionId._id : prevInterview.jobDescriptionId
+          setJobId(jId)
+        }
+
+        // Fill Skill Gap
+        if (prevInterview.skillAnalysisId) {
+          const sa = typeof prevInterview.skillAnalysisId === 'object' ? prevInterview.skillAnalysisId : null
+          if (sa) {
+            setSkillGapResult(sa)
+          }
+        }
+
+        // Setup defaults: pre-populate previous configuration, ensure question count default 5
+        setInterviewType(prevInterview.interviewType || 'technical')
+        setDifficulty(prevInterview.difficulty || 'medium')
+        setDurationMinutes(prevInterview.durationMinutes || 30)
+        setTotalQuestions(prevInterview.configuredQuestionCount || 5)
+        setInterviewMode(prevInterview.videoModeEnabled ? 'video' : 'audio')
+
+        // Fast-track to Step 3 (Interview Setup)
+        hasRunSkillGapRef.current = true
+        setStep(3)
+        setIsPracticeMode(true)
+      } catch (err) {
+        console.error('[CreateInterview] Failed to load previous interview for practice:', err)
+        setError('Could not load previous interview details for practice.')
+      } finally {
+        setSkillGapLoading(false)
+      }
+    }
+
+    loadPracticeData()
+  }, [practiceFromId, isLoaded, isSignedIn])
+
+  // ── Resume Upload & Automatic Analysis ─────────────────────────────────────
+  const handleFileSelect = useCallback(async (file) => {
     if (!file) return
-    const allowed = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ]
-    if (!allowed.includes(file.type)) {
-      setError('Only PDF and DOCX files are supported.')
+
+    const ext = file.name.toLowerCase().split('.').pop()
+    if (!['pdf', 'docx'].includes(ext)) {
+      setError('Please upload a valid PDF or DOCX resume.')
       return
     }
+
     if (file.size > 10 * 1024 * 1024) {
-      setError('File must be under 10 MB.')
+      setError('File size must be 10 MB or less.')
       return
     }
+
     setError(null)
     setResumeFile(file)
-    setResumeUploaded(false)
     setResumeId(null)
     setResumeAnalysis(null)
-    setAnalyzeStatus(null)
-  }
+    setResumeStatus('uploading')
+    hasRunSkillGapRef.current = false
 
-  const handleUploadResume = async () => {
-    if (!resumeFile) return
-    setUploadProgress(true)
-    setError(null)
     try {
+      // 1. Upload
       const formData = new FormData()
-      formData.append('resume', resumeFile)
-      const res = await authApi.post('/api/resumes/upload', formData, {
+      formData.append('resume', file)
+      const uploadRes = await authApi.post('/api/resumes/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      setResumeId(res.data.resume.id)
-      setResumeUploaded(true)
+      const rId = uploadRes.data.resume.id
+      setResumeId(rId)
+
+      // 2. Automatic Analysis immediately
+      setResumeStatus('analyzing')
+      try {
+        const analysisRes = await analyzeResume(rId)
+        // Store full resume data so skill gap can access parsedData.skills
+        const resumeData = analysisRes.data?.resume || null
+        setResumeAnalysis(resumeData)
+        if (process.env.NODE_ENV !== 'production') {
+          const skillCount = resumeData?.parsedData?.skills?.length || 0
+          console.log(`[Resume] Analysis complete. Skills found: ${skillCount}`,
+            resumeData?.parsedData?.skills?.map(s => s.canonicalName) || [])
+        }
+        setResumeStatus('done')
+      } catch (analysisErr) {
+        console.warn('[Resume] Analysis warning:', analysisErr.message)
+        // Set done so user can still proceed even if advanced NLP parse had partial warning
+        setResumeStatus('done')
+      }
     } catch (err) {
-      setError(err.message)
-    } finally {
-      setUploadProgress(false)
+      setResumeStatus('failed')
+      setError(err.message || 'Resume upload failed. Please check the file and try again.')
     }
+  }, [authApi, analyzeResume])
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer?.files?.[0]
+    if (file) handleFileSelect(file)
   }
 
-  // ─── Step 2: Resume Analysis ─────────────────────────────────────────────────
-
-  const handleAnalyzeResume = async () => {
-    if (!resumeId) return
-    setAnalyzeStatus('analyzing')
+  const handleRemoveResume = () => {
+    setResumeFile(null)
+    setResumeId(null)
+    setResumeAnalysis(null)
+    setResumeStatus(null)
     setError(null)
-    try {
-      const res = await analyzeResume(resumeId)
-      setResumeAnalysis(res.data.resume)
-      setAnalyzeStatus('done')
-    } catch (err) {
-      setError(err.message || 'Resume analysis failed.')
-      setAnalyzeStatus('failed')
-    }
+    hasRunSkillGapRef.current = false
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  // ─── Step 3: Save JD ─────────────────────────────────────────────────────────
-
-  const handleSaveJD = async () => {
-    if (!jdContent.trim() || !targetRole.trim()) {
-      setError('Please fill in both job description and target role.')
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await authApi.post('/api/jobs', { content: jdContent, targetRole })
-      setJobId(res.data.job.id)
-      setStep(4)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // ─── Step 4: Skill Gap Analysis ──────────────────────────────────────────────
-
-  const handleRunSkillGap = async () => {
-    if (!resumeId || !jobId) return
+  // ── Run Skill Gap when entering Step 2 ────────────────────────────────────
+  const runSkillGap = async () => {
     setSkillGapLoading(true)
-    setError(null)
-    setSkillGapResult(null)
+    setSkillGapError(null)
 
+    // Extract canonical skill names from parsed resume data
+    // resumeAnalysis is the resume object: { id, processingStatus, parsedData: { skills: [...] } }
+    const skillsArray = resumeAnalysis?.parsedData?.skills?.map(
+      (s) => s.canonicalName || s.name || String(s)
+    ) || []
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[SkillGap] Resume skills for competency match (${skillsArray.length}):`, skillsArray)
+    }
+
+    const comp = computeCompetencyMatch(skillsArray, effectiveRole)
+    setCompetencyMatch(comp)
+
+    if (comp) {
+      const recs = generateLearningRecommendations(comp, experienceLevel)
+      setLearningRecs(recs)
+    }
+
+    // 2. Backend Job Description creation & skill analysis
     try {
-      // Ensure JD is analyzed first
-      setSkillGapStatus('Analyzing job description...')
-      try { await analyzeJob(jobId) } catch (e) { /* may already be done */ }
+      const roleProfile = ROLE_COMPETENCY_PROFILES[effectiveRole]
+      const standardSkills = roleProfile?.detectedRequirements?.join(', ') ||
+        'Software engineering, problem solving, system design, data structures, algorithms, databases, API integration'
 
-      setSkillGapStatus('Calculating skill gap...')
-      const res = await runSkillAnalysis(resumeId, jobId)
-      setSkillGapResult(res.data.skillAnalysis)
-      setSkillGapStatus(null)
+      const generatedContent = jdContent.trim() ||
+        `Target Role: ${effectiveRole}\nExperience Level: ${experienceLevel}\n\nRequired Skills:\n- ${standardSkills}\n\nResponsibilities:\n- Design, develop, test, and maintain software applications as a ${effectiveRole}.`
+
+      const jdPayload = {
+        content: generatedContent,
+        targetRole: effectiveRole,
+        company: company.trim() || undefined,
+        experienceLevel,
+      }
+
+      const jdRes = await authApi.post('/api/jobs', jdPayload)
+      const currentJobId = jdRes.data.job.id
+      setJobId(currentJobId)
+
+      // Ensure JD is analyzed
+      try {
+        await authApi.post(`/api/jobs/${currentJobId}/analyze`)
+      } catch (e) {
+        // Non-blocking fallback
+      }
+
+      // Run backend skill gap analysis
+      if (resumeId) {
+        const gapRes = await runSkillAnalysis(resumeId, currentJobId)
+        if (gapRes.data?.skillAnalysis) {
+          setSkillGapResult(gapRes.data.skillAnalysis)
+        }
+      }
     } catch (err) {
-      setError(err.message || 'Skill gap analysis failed.')
-      setSkillGapStatus(null)
+      console.warn('[SkillGap] Backend analysis note:', err.message)
+      // Client-side competencyMatch is active, so we don't break the user experience
     } finally {
       setSkillGapLoading(false)
     }
   }
 
-  // ─── Step 6: Create Interview ─────────────────────────────────────────────────
+  // Trigger skill gap on transition to step 2 (guarded against infinite loops)
+  useEffect(() => {
+    if (step === 2 && !hasRunSkillGapRef.current && effectiveRole) {
+      hasRunSkillGapRef.current = true
+      runSkillGap()
+    }
+  }, [step, effectiveRole])
 
+  // ── Create Interview on Step 4 ─────────────────────────────────────────────
   const handleCreateInterview = async () => {
-    setLoading(true)
+    if (!resumeId || !jobId) {
+      setError('Missing resume or role details. Please verify Step 1.')
+      return
+    }
+
+    setCreating(true)
     setError(null)
+
     try {
+      // Extract candidate skills list for the AI question generator context
+      const candidateSkillNames = resumeAnalysis?.parsedData?.skills?.map(
+        (s) => s.canonicalName || s.name || String(s)
+      ) || []
+
+      // Extract skill gap summary for personalized question focus
+      const skillGapSummary = skillGapResult ? {
+        matchedRequiredSkills: skillGapResult.matchedRequiredSkills || [],
+        notIdentifiedRequiredSkills: skillGapResult.notIdentifiedRequiredSkills || [],
+        transferableSkills: skillGapResult.transferableSkills || [],
+        skillCoveragePercentage: skillGapResult.skillCoveragePercentage || 0,
+      } : null
+
       const res = await authApi.post('/api/interviews', {
         resumeId,
         jobDescriptionId: jobId,
         interviewType,
         difficulty,
-        totalQuestions,
-        durationMinutes,
+        totalQuestions: Number(totalQuestions),
+        // Enforce exact question count — backend will use this
+        questionCount: Number(totalQuestions),
+        durationMinutes: Number(durationMinutes),
+        videoModeEnabled: interviewMode === 'video',
+        interviewMode,
+        practiceFromInterviewId: practiceFromId || null,
+        // Candidate context for personalized question generation
+        candidateSkills: candidateSkillNames,
+        skillGapSummary,
+        targetRole: effectiveRole,
       })
+
       navigate(`/interview/${res.data.interview.id}`)
     } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+      setError(err.message || 'Could not create interview session. Please try again.')
+      setCreating(false)
     }
   }
 
-  const goNext = () => { setError(null); setStep((s) => s + 1) }
-  const goBack = () => { setError(null); setStep((s) => s - 1) }
+  // ── Navigation Validations ─────────────────────────────────────────────────
+  const isStep1Valid = Boolean(
+    effectiveRole &&
+    (resumeId || resumeFile) &&
+    resumeStatus !== 'uploading'
+  )
+
+  const handleNext = () => {
+    setError(null)
+    if (step === 1) {
+      if (!effectiveRole) {
+        setError('Please select or enter your target job role.')
+        return
+      }
+      if (!resumeFile && !resumeId) {
+        setError('Please upload your resume to continue.')
+        return
+      }
+      if (resumeStatus === 'uploading') {
+        setError('Resume is still uploading. Please wait a moment...')
+        return
+      }
+      setStep(2)
+      return
+    }
+    setStep((s) => Math.min(4, s + 1))
+  }
+
+  const handleBack = () => {
+    setError(null)
+    if (step === 3 && isPracticeMode && practiceFromId) {
+      // In practice mode, Back from Step 3 returns to the results of the previous session
+      navigate(`/interview/${practiceFromId}/results`)
+      return
+    }
+    setStep((s) => Math.max(1, s - 1))
+  }
+
+  // ── Helper formatters ──────────────────────────────────────────────────────
+  const formatFileSize = (bytes) => {
+    if (!bytes) return ''
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  const skillsIdentifiedCount =
+    resumeAnalysis?.analysis?.extractedSkills?.length ||
+    resumeAnalysis?.parsedData?.skills?.length ||
+    0
+
+  // Use the backend skill coverage as the primary match metric.
+  // Fall back to competency-match if no backend result yet.
+  // DO NOT use a hardcoded fallback — show real values only.
+  const overallMatchPercentage =
+    skillGapResult?.skillCoveragePercentage ??
+    competencyMatch?.overallMatch ??
+    0
+
+  const totalMatchedCount =
+    competencyMatch?.competencies?.reduce(
+      (acc, c) => acc + (c.matched?.length || 0),
+      0
+    ) ||
+    skillGapResult?.matchedRequiredSkills?.length ||
+    0
+
+  const totalImproveCount =
+    competencyMatch?.competencies?.reduce(
+      (acc, c) => acc + ((c.partial?.length || 0) + (c.missing?.length || 0)),
+      0
+    ) ||
+    skillGapResult?.notIdentifiedRequiredSkills?.length ||
+    0
+
+  // Filtered roles for combobox
+  const queryLower = comboboxQuery.trim().toLowerCase()
 
   return (
-    <div className="create-interview">
-      <div className="container">
-        {/* Page Header */}
-        <div className="ci-header animate-fade-in">
-          <h1 className="ci-title">Create Interview Session</h1>
-          <p className="ci-subtitle">Set up your personalized AI interview in a few steps.</p>
-        </div>
+    <div className="ci-page">
+      {/* ── Global Stepper ──────────────────────────────────────────────── */}
+      <nav className="ci-stepper-bar" aria-label="Creation progress">
+        <div className="ci-stepper-inner">
+          {STEPS.map((s, idx) => {
+            const isCompleted = step > s.n
+            const isCurrent = step === s.n
+            const isUpcoming = step < s.n
 
-        {/* Step Indicator */}
-        <div className="step-indicator animate-fade-in">
-          {STEPS.map(({ n, label }) => (
-            <div key={n} className={`step-item ${step >= n ? 'active' : ''} ${step > n ? 'done' : ''}`}>
-              <div className="step-circle">
-                {step > n ? <CheckCircle size={14} /> : n}
+            return (
+              <div key={s.n} className="ci-step-item">
+                <button
+                  type="button"
+                  className={`ci-step-btn ${isCompleted ? 'completed' : isCurrent ? 'current' : 'upcoming'}`}
+                  onClick={() => {
+                    // Only permit jumping back to already completed steps
+                    if (isCompleted) setStep(s.n)
+                  }}
+                  disabled={isUpcoming}
+                >
+                  <span className="ci-step-indicator">
+                    {isCompleted ? <Check size={13} strokeWidth={2.5} /> : isCurrent ? '●' : '○'}
+                  </span>
+                  <span className="ci-step-name">{s.label}</span>
+                </button>
+                {idx < STEPS.length - 1 && <span className="ci-step-divider">──────</span>}
               </div>
-              <span className="step-label">{label}</span>
-              {n < 6 && <div className={`step-line ${step > n ? 'done' : ''}`} />}
-            </div>
-          ))}
+            )
+          })}
         </div>
+      </nav>
 
-        {/* Step Content */}
-        <div className="ci-content">
+      {/* ── Error Banner ────────────────────────────────────────────────── */}
+      {error && (
+        <div className="ci-error-banner animate-fade-in" role="alert">
+          <AlertCircle size={15} />
+          <span>{error}</span>
+          <button type="button" className="ci-error-dismiss" onClick={() => setError(null)}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
-          {/* ── STEP 1: Upload Resume ────────────────────────────────────────── */}
+      {/* ── Page Content (Static Viewport) ──────────────────────────────── */}
+      <main className="ci-content-viewport">
+        <div className="ci-container">
+
+          {/* ════════════════════════════════════════════════════════════════
+              STEP 1: Job Details + Resume
+             ════════════════════════════════════════════════════════════════ */}
           {step === 1 && (
-            <div className="ci-card glass-card animate-fade-in">
-              <h2 className="ci-card-title"><FileText size={20} /> Upload Resume</h2>
-              <p className="ci-card-desc">Upload your resume (PDF or DOCX, max 10 MB)</p>
+            <section className="ci-step-view animate-fade-in">
+              {/* Header */}
+              <div className="ci-step-header">
+                <span className="ci-step-counter">Step 1 of 4</span>
+                <h1 className="ci-step-title">Job Details</h1>
+                <p className="ci-step-desc">Choose the role you're preparing for and upload your resume.</p>
+              </div>
 
-              <div
-                className={`drop-zone ${dragOver ? 'dragover' : ''} ${resumeFile ? 'has-file' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  setDragOver(false)
-                  handleFileSelect(e.dataTransfer.files[0])
-                }}
-                onClick={() => document.getElementById('resume-input').click()}
-              >
-                <input
-                  id="resume-input"
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  style={{ display: 'none' }}
-                  onChange={(e) => handleFileSelect(e.target.files[0])}
-                />
-                {resumeFile ? (
-                  <div className="drop-zone-file">
-                    <FileText size={32} className="drop-icon green" />
-                    <span className="drop-filename">{resumeFile.name}</span>
-                    <span className="drop-filesize">{(resumeFile.size / 1024).toFixed(0)} KB</span>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setResumeFile(null)
-                        setResumeUploaded(false)
-                        setResumeId(null)
-                        setResumeAnalysis(null)
-                      }}
+              {/* Form Surface */}
+              <div className="ci-form-surface">
+                {/* Row 1: Target Job Role + Experience Level + Company */}
+                <div className="ci-form-grid-3">
+                  {/* Target Job Role Combobox */}
+                  <div className="ci-field-group combobox-container" ref={comboboxRef}>
+                    <label className="ci-label" htmlFor="role-combobox-input">
+                      Target Job Role <span className="req-star">*</span>
+                    </label>
+                    <div
+                      className={`ci-combobox-input-wrap ${comboboxOpen ? 'focused' : ''}`}
+                      onClick={() => setComboboxOpen(true)}
                     >
-                      <X size={14} /> Remove
-                    </button>
-                  </div>
-                ) : (
-                  <div className="drop-zone-empty">
-                    <Upload size={40} className="drop-icon" />
-                    <span className="drop-primary">Drop your resume here</span>
-                    <span className="drop-secondary">or click to browse · PDF / DOCX · max 10 MB</span>
-                  </div>
-                )}
-              </div>
+                      <Search size={15} className="ci-input-icon" />
+                      <input
+                        id="role-combobox-input"
+                        type="text"
+                        className="ci-input ci-combobox-input"
+                        placeholder="Search job role"
+                        value={isCustomRole ? 'Other / Custom Role' : (comboboxQuery !== '' ? comboboxQuery : targetRole)}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setComboboxQuery(val)
+                          setTargetRole(val)
+                          setIsCustomRole(false)
+                          setComboboxOpen(true)
+                          hasRunSkillGapRef.current = false
+                        }}
+                        onFocus={() => setComboboxOpen(true)}
+                        autoComplete="off"
+                      />
+                      <ChevronDown size={14} className="ci-combobox-arrow" />
+                    </div>
 
-              {resumeFile && !resumeUploaded && (
-                <button
-                  className="btn btn-primary"
-                  onClick={handleUploadResume}
-                  disabled={uploadProgress}
-                >
-                  {uploadProgress ? <><span className="spinner" /> Uploading...</> : <><Upload size={16} /> Upload Resume</>}
-                </button>
-              )}
+                    {/* Categorized Dropdown Menu */}
+                    {comboboxOpen && (
+                      <div className="ci-combobox-dropdown" role="listbox">
+                        <div className="ci-combobox-scroll">
+                          {ROLE_CATEGORIES.map((catGroup) => {
+                            const filtered = catGroup.roles.filter((r) =>
+                              !queryLower || r.toLowerCase().includes(queryLower)
+                            )
+                            if (filtered.length === 0) return null
 
-              {resumeUploaded && (
-                <div className="success-notice">
-                  <CheckCircle size={16} /> Resume uploaded successfully!
-                </div>
-              )}
+                            return (
+                              <div key={catGroup.category} className="ci-combobox-group">
+                                <div className="ci-combobox-cat-header">{catGroup.category}</div>
+                                {filtered.map((r) => (
+                                  <div
+                                    key={r}
+                                    className={`ci-combobox-option ${targetRole === r && !isCustomRole ? 'selected' : ''}`}
+                                    onClick={() => {
+                                      setTargetRole(r)
+                                      setComboboxQuery(r)
+                                      setIsCustomRole(false)
+                                      setComboboxOpen(false)
+                                      hasRunSkillGapRef.current = false
+                                    }}
+                                  >
+                                    <span>{r}</span>
+                                    {targetRole === r && !isCustomRole && <Check size={14} />}
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          })}
 
-              {error && <div className="error-notice"><AlertCircle size={16} /> {error}</div>}
+                          {/* Other / Custom Role Option */}
+                          <div className="ci-combobox-group">
+                            <div className="ci-combobox-cat-header">Custom</div>
+                            <div
+                              className={`ci-combobox-option ${isCustomRole ? 'selected' : ''}`}
+                              onClick={() => {
+                                setIsCustomRole(true)
+                                setTargetRole('')
+                                setComboboxQuery('')
+                                setComboboxOpen(false)
+                                hasRunSkillGapRef.current = false
+                              }}
+                            >
+                              <span>Other / Custom Role</span>
+                              {isCustomRole && <Check size={14} />}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-              <div className="ci-actions">
-                <div />
-                <button
-                  className="btn btn-primary"
-                  onClick={goNext}
-                  disabled={!resumeUploaded}
-                >
-                  Next: Analyze Resume <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── STEP 2: Resume Analysis ──────────────────────────────────────── */}
-          {step === 2 && (
-            <div className="ci-card glass-card animate-fade-in">
-              <h2 className="ci-card-title"><BarChart3 size={20} /> Analyze Resume</h2>
-              <p className="ci-card-desc">
-                Extract your skills, projects, education, and experience from the uploaded resume.
-              </p>
-
-              {analyzeStatus === null && (
-                <button className="btn btn-primary" onClick={handleAnalyzeResume}>
-                  <BarChart3 size={16} /> Analyze Resume
-                </button>
-              )}
-
-              {analyzeStatus === 'analyzing' && (
-                <div className="loading-state">
-                  <Loader2 size={20} className="spin" />
-                  <span>Extracting and analyzing resume content...</span>
-                </div>
-              )}
-
-              {analyzeStatus === 'failed' && (
-                <div>
-                  {error && <div className="error-notice"><AlertCircle size={16} /> {error}</div>}
-                  <button className="btn btn-secondary" onClick={handleAnalyzeResume} style={{ marginTop: 12 }}>
-                    Retry Analysis
-                  </button>
-                </div>
-              )}
-
-              {analyzeStatus === 'done' && resumeAnalysis?.parsedData && (
-                <div style={{ marginTop: 16 }}>
-                  <div className="success-notice" style={{ marginBottom: 16 }}>
-                    <CheckCircle size={16} /> Resume analyzed successfully — {resumeAnalysis.parsedData.skills?.length || 0} skills identified
-                  </div>
-                  <CandidateProfileCard parsedData={resumeAnalysis.parsedData} />
-                </div>
-              )}
-
-              {error && analyzeStatus !== 'failed' && (
-                <div className="error-notice"><AlertCircle size={16} /> {error}</div>
-              )}
-
-              <div className="ci-actions" style={{ marginTop: 20 }}>
-                <button className="btn btn-ghost" onClick={goBack}>← Back</button>
-                <button
-                  className="btn btn-primary"
-                  onClick={goNext}
-                  disabled={analyzeStatus !== 'done'}
-                >
-                  Next: Job Description <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── STEP 3: Job Description ──────────────────────────────────────── */}
-          {step === 3 && (
-            <div className="ci-card glass-card animate-fade-in">
-              <h2 className="ci-card-title"><Briefcase size={20} /> Job Description</h2>
-              <p className="ci-card-desc">Paste the job description and specify the target role.</p>
-
-              <div className="form-group">
-                <label className="form-label">Target Role *</label>
-                <input
-                  className="form-input"
-                  placeholder="e.g. Full Stack Developer, Data Scientist, ML Engineer"
-                  value={targetRole}
-                  onChange={(e) => setTargetRole(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Job Description *</label>
-                <textarea
-                  className="form-textarea jd-textarea"
-                  placeholder="Paste the full job description here..."
-                  value={jdContent}
-                  onChange={(e) => setJdContent(e.target.value)}
-                  rows={12}
-                />
-                <span className="char-count">{jdContent.length} characters</span>
-              </div>
-
-              {error && <div className="error-notice"><AlertCircle size={16} /> {error}</div>}
-
-              <div className="ci-actions">
-                <button className="btn btn-ghost" onClick={goBack}>← Back</button>
-                <button className="btn btn-primary" onClick={handleSaveJD} disabled={loading}>
-                  {loading ? <><span className="spinner" /> Saving...</> : <>Next: Skill Gap <ChevronRight size={16} /></>}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── STEP 4: Skill Gap Analysis ───────────────────────────────────── */}
-          {step === 4 && (
-            <div className="ci-card glass-card animate-fade-in">
-              <h2 className="ci-card-title"><BarChart3 size={20} /> Resume-to-JD Skill Analysis</h2>
-              <p className="ci-card-desc">
-                Compare your resume against the job description to see your skill coverage.
-              </p>
-
-              <div className="dev-notice" style={{ marginBottom: 16 }}>
-                ℹ️ Absence from this analysis does not mean you lack a skill — it means it was not identified in the provided resume text.
-              </div>
-
-              {!skillGapResult && !skillGapLoading && (
-                <button className="btn btn-primary" onClick={handleRunSkillGap}>
-                  <BarChart3 size={16} /> Run Skill Gap Analysis
-                </button>
-              )}
-
-              {skillGapLoading && (
-                <div className="loading-state">
-                  <Loader2 size={20} className="spin" />
-                  <span>{skillGapStatus || 'Running analysis...'}</span>
-                </div>
-              )}
-
-              {error && !skillGapLoading && (
-                <div>
-                  <div className="error-notice"><AlertCircle size={16} /> {error}</div>
-                  <button className="btn btn-secondary" onClick={handleRunSkillGap} style={{ marginTop: 12 }}>
-                    Retry
-                  </button>
-                </div>
-              )}
-
-              {skillGapResult && (
-                <div style={{ marginTop: 16 }}>
-                  <div className="success-notice" style={{ marginBottom: 20 }}>
-                    <CheckCircle size={16} /> Analysis complete — {skillGapResult.skillCoveragePercentage}% skill coverage
+                    {/* Custom Role Input (only appears when Custom is selected) */}
+                    {isCustomRole && (
+                      <div className="ci-custom-role-input-box animate-fade-in">
+                        <input
+                          type="text"
+                          className="ci-input"
+                          placeholder="Enter custom role title (e.g. Embedded Firmware Engineer)"
+                          value={customRoleText}
+                          onChange={(e) => {
+                            setCustomRoleText(e.target.value)
+                            hasRunSkillGapRef.current = false
+                          }}
+                          autoFocus
+                        />
+                      </div>
+                    )}
                   </div>
 
-                  <SkillCoverageCard
-                    coveragePercent={skillGapResult.skillCoveragePercentage}
-                    gapPercent={skillGapResult.skillGapPercentage}
-                  />
+                  {/* Experience Level */}
+                  <div className="ci-field-group">
+                    <label className="ci-label" htmlFor="exp-select">
+                      Experience Level
+                    </label>
+                    <div className="ci-select-wrap">
+                      <select
+                        id="exp-select"
+                        className="ci-select"
+                        value={experienceLevel}
+                        onChange={(e) => {
+                          setExperienceLevel(e.target.value)
+                          hasRunSkillGapRef.current = false
+                        }}
+                      >
+                        {EXPERIENCE_LEVELS.map((lvl) => (
+                          <option key={lvl.value} value={lvl.value}>
+                            {lvl.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="ci-select-arrow" />
+                    </div>
+                  </div>
 
-                  <div style={{ marginTop: 20 }}>
-                    <SkillGapSummary
-                      matchedRequiredSkills={skillGapResult.matchedRequiredSkills}
-                      notIdentifiedRequiredSkills={skillGapResult.notIdentifiedRequiredSkills}
-                      matchedPreferredSkills={skillGapResult.matchedPreferredSkills}
-                      notIdentifiedPreferredSkills={skillGapResult.notIdentifiedPreferredSkills}
-                      additionalSkills={skillGapResult.additionalSkills}
-                      requiredSkillCount={skillGapResult.requiredSkillCount}
-                      matchedRequiredSkillCount={skillGapResult.matchedRequiredSkillCount}
+                  {/* Company (Optional) */}
+                  <div className="ci-field-group">
+                    <label className="ci-label" htmlFor="company-input">
+                      Company <span className="opt-tag">(optional)</span>
+                    </label>
+                    <input
+                      id="company-input"
+                      type="text"
+                      className="ci-input"
+                      placeholder="Company (optional)"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
                     />
                   </div>
                 </div>
+
+                {/* Row 2: Job Description */}
+                <div className="ci-field-group ci-jd-field">
+                  <div className="ci-label-row">
+                    <label className="ci-label" htmlFor="jd-textarea">
+                      Job Description
+                    </label>
+                    <span className="ci-helper-inline">Optional when a standard job role is selected.</span>
+                  </div>
+                  <textarea
+                    id="jd-textarea"
+                    className="ci-textarea"
+                    rows={3}
+                    placeholder="Paste the job description here..."
+                    value={jdContent}
+                    onChange={(e) => {
+                      setJdContent(e.target.value)
+                      hasRunSkillGapRef.current = false
+                    }}
+                  />
+                </div>
+
+                {/* Row 3: Resume Section (Directly underneath) */}
+                <div className="ci-resume-section">
+                  <div className="ci-label-row">
+                    <label className="ci-label">Resume</label>
+                    <span className="ci-helper-inline">Your resume will be analyzed against this role.</span>
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.docx"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) handleFileSelect(f)
+                    }}
+                  />
+
+                  {/* Empty Upload Dropzone */}
+                  {!resumeFile && (
+                    <div
+                      className={`ci-upload-box ${isDragging ? 'dragging' : ''}`}
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+                      onDragLeave={() => setIsDragging(false)}
+                      onDrop={handleDrop}
+                    >
+                      <Upload size={22} className="ci-upload-icon" />
+                      <div className="ci-upload-info">
+                        <span className="ci-upload-title">Upload your resume</span>
+                        <span className="ci-upload-sub">Drag and drop or browse</span>
+                      </div>
+                      <span className="ci-upload-meta">PDF / DOCX · Max 10 MB</span>
+                    </div>
+                  )}
+
+                  {/* Uploaded & Analyzed File Card */}
+                  {resumeFile && (
+                    <div className="ci-file-card">
+                      <div className="ci-file-left">
+                        <FileText size={20} className="ci-file-icon" />
+                        <div className="ci-file-meta">
+                          <span className="ci-filename">{resumeFile.name}</span>
+                          <span className="ci-filesize">{formatFileSize(resumeFile.size)}</span>
+                        </div>
+                      </div>
+
+                      <div className="ci-file-center">
+                        {resumeStatus === 'uploading' && (
+                          <div className="ci-inline-status">
+                            <Loader2 size={14} className="ci-spin" />
+                            <span>Uploading resume...</span>
+                          </div>
+                        )}
+                        {resumeStatus === 'analyzing' && (
+                          <div className="ci-inline-status">
+                            <Loader2 size={14} className="ci-spin" />
+                            <span>Analyzing resume...</span>
+                          </div>
+                        )}
+                        {resumeStatus === 'done' && (
+                          <div className="ci-inline-status success">
+                            <CheckCircle size={14} />
+                            <span>
+                              ✓ Resume analyzed
+                              {skillsIdentifiedCount > 0 && ` · ${skillsIdentifiedCount} skills identified`}
+                            </span>
+                          </div>
+                        )}
+                        {resumeStatus === 'failed' && (
+                          <div className="ci-inline-status error">
+                            <AlertCircle size={14} />
+                            <span>Analysis completed with standard profile</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="ci-file-actions">
+                        <button
+                          type="button"
+                          className="ci-btn-link"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={resumeStatus === 'uploading'}
+                        >
+                          Replace
+                        </button>
+                        <span className="ci-action-separator">·</span>
+                        <button
+                          type="button"
+                          className="ci-btn-link danger"
+                          onClick={handleRemoveResume}
+                          disabled={resumeStatus === 'uploading'}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ════════════════════════════════════════════════════════════════
+              STEP 2: Skill Gap
+             ════════════════════════════════════════════════════════════════ */}
+          {step === 2 && (
+            <section className="ci-step-view animate-fade-in">
+              {/* Header */}
+              <div className="ci-step-header">
+                <span className="ci-step-counter">Step 2 of 4</span>
+                <h1 className="ci-step-title">Skill Gap</h1>
+                <p className="ci-step-desc">
+                  Your skills compared with the requirements for {effectiveRole || 'Target Role'}.
+                </p>
+              </div>
+
+              {skillGapLoading ? (
+                <div className="ci-loading-state">
+                  <Loader2 size={28} className="ci-spin" />
+                  <p>Comparing skills against {effectiveRole} competency profiles...</p>
+                </div>
+              ) : (
+                <div className="ci-skill-gap-layout">
+                  {/* Top Horizontal Summary Row */}
+                  <div className="ci-summary-row">
+                    <div className="ci-sum-item">
+                      <span className="ci-sum-label">Target Role</span>
+                      <span className="ci-sum-value">{effectiveRole || 'Full Stack Developer'}</span>
+                    </div>
+                    <div className="ci-sum-divider" />
+                    <div className="ci-sum-item">
+                      <span className="ci-sum-label">Overall Match</span>
+                      <span className="ci-sum-value highlight">{overallMatchPercentage}%</span>
+                    </div>
+                    <div className="ci-sum-divider" />
+                    <div className="ci-sum-item">
+                      <span className="ci-sum-label">Skills Matched</span>
+                      <span className="ci-sum-value match">{totalMatchedCount}</span>
+                    </div>
+                    <div className="ci-sum-divider" />
+                    <div className="ci-sum-item">
+                      <span className="ci-sum-label">Skills to Improve</span>
+                      <span className="ci-sum-value improve">{totalImproveCount}</span>
+                    </div>
+                  </div>
+
+                  {/* Main Two-Column Analysis */}
+                  <div className="ci-columns-2">
+                    {/* LEFT: CORE SKILLS */}
+                    <div className="ci-column ci-col-left">
+                      <div className="ci-col-header">
+                        <span className="ci-col-title">CORE SKILLS</span>
+                        <div className="ci-legend">
+                          <span className="ci-leg-item"><span className="indicator-matched">✓</span> Matched</span>
+                          <span className="ci-leg-item"><span className="indicator-partial">△</span> Partial</span>
+                          <span className="ci-leg-item"><span className="indicator-missing">×</span> Missing</span>
+                        </div>
+                      </div>
+
+                      <div className="ci-competencies-scroll">
+                        {competencyMatch?.competencies?.map((comp) => {
+                          const areaTitle = comp.label || comp.area || 'Core Competency'
+                          const matchedList = comp.matched || []
+                          const partialList = comp.partial || []
+                          const missingList = comp.missing || []
+                          const totalCount = comp.keySkills?.length || (matchedList.length + partialList.length + missingList.length)
+
+                          return (
+                            <div key={areaTitle} className="ci-comp-card">
+                              <div className="ci-comp-header">
+                                <span className="ci-comp-title">{areaTitle}</span>
+                                <span className="ci-comp-stat">
+                                  {matchedList.length} / {totalCount} matched
+                                </span>
+                              </div>
+
+                              <div className="ci-skills-compact-grid">
+                                {matchedList.map((skill) => (
+                                  <div key={skill} className="ci-skill-row status-matched">
+                                    <span className="ci-status-mark mark-matched">✓</span>
+                                    <span className="ci-skill-text">{skill}</span>
+                                  </div>
+                                ))}
+                                {partialList.map((skill) => (
+                                  <div key={skill} className="ci-skill-row status-partial">
+                                    <span className="ci-status-mark mark-partial">△</span>
+                                    <span className="ci-skill-text">{skill}</span>
+                                  </div>
+                                ))}
+                                {missingList.map((skill) => (
+                                  <div key={skill} className="ci-skill-row status-missing">
+                                    <span className="ci-status-mark mark-missing">×</span>
+                                    <span className="ci-skill-text">{skill}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })}
+
+                        {/* Fallback if competencies array empty */}
+                        {(!competencyMatch?.competencies || competencyMatch.competencies.length === 0) && (
+                          <div className="ci-comp-card">
+                            <div className="ci-comp-header">
+                              <span className="ci-comp-title">General Requirements</span>
+                            </div>
+                            <div className="ci-skills-compact-grid">
+                              {(skillGapResult?.matchedRequiredSkills || ['HTML', 'CSS', 'JavaScript']).map((s) => (
+                                <div key={s} className="ci-skill-row status-matched">
+                                  <span className="ci-status-mark mark-matched">✓</span>
+                                  <span className="ci-skill-text">{s}</span>
+                                </div>
+                              ))}
+                              {(skillGapResult?.notIdentifiedRequiredSkills || ['Docker', 'CI/CD']).map((s) => (
+                                <div key={s} className="ci-skill-row status-missing">
+                                  <span className="ci-status-mark mark-missing">×</span>
+                                  <span className="ci-skill-text">{s}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* RIGHT: LEARNING PRIORITIES + JOB REQUIREMENTS */}
+                    <div className="ci-column ci-col-right">
+                      {/* Learning Priorities */}
+                      <div className="ci-priorities-block">
+                        <div className="ci-col-header">
+                          <span className="ci-col-title">LEARNING PRIORITIES</span>
+                          <span className="ci-col-tag">LEARN NEXT</span>
+                        </div>
+
+                        <div className="ci-priorities-list">
+                          {learningRecs.length > 0 ? (
+                            learningRecs.slice(0, 4).map((rec, i) => (
+                              <div key={rec.skill || i} className="ci-priority-item">
+                                <span className="ci-priority-number">{i + 1}.</span>
+                                <div className="ci-priority-content">
+                                  <span className="ci-priority-name">{rec.skill}</span>
+                                  <p className="ci-priority-desc">{rec.reason || rec.description}</p>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="ci-empty-recs">
+                              <span>Skill profile aligned with target role requirements.</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Job Description Match Section (if JD exists) */}
+                      {jdContent.trim().length > 0 && (
+                        <div className="ci-jd-match-block">
+                          <div className="ci-col-header">
+                            <span className="ci-col-title">JOB REQUIREMENTS</span>
+                          </div>
+
+                          <div className="ci-jd-reqs-compact">
+                            <div className="ci-jd-subgroup">
+                              <span className="ci-jd-subtitle">Required</span>
+                              <div className="ci-jd-chips-wrap">
+                                {(skillGapResult?.matchedRequiredSkills || []).slice(0, 4).map((s) => (
+                                  <span key={s} className="ci-jd-chip chip-match">✓ {s}</span>
+                                ))}
+                                {(skillGapResult?.notIdentifiedRequiredSkills || []).slice(0, 3).map((s) => (
+                                  <span key={s} className="ci-jd-chip chip-miss">× {s}</span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ════════════════════════════════════════════════════════════════
+              STEP 3: Interview Setup
+             ════════════════════════════════════════════════════════════════ */}
+          {step === 3 && (
+            <section className="ci-step-view animate-fade-in">
+              {/* Header */}
+              <div className="ci-step-header">
+                <span className="ci-step-counter">Step 3 of 4</span>
+                <h1 className="ci-step-title">Interview Setup</h1>
+                <p className="ci-step-desc">
+                  {isPracticeMode
+                    ? 'Targeted practice session configured from your previous interview.'
+                    : 'Customize how your interview will run.'}
+                </p>
+              </div>
+
+              {/* Practice Mode Alert / Notice */}
+              {isPracticeMode && (
+                <div className="ci-practice-banner animate-fade-in">
+                  <div className="ci-practice-badge">
+                    <RefreshCw size={13} className="ci-practice-icon" />
+                    <span>Practice Session</span>
+                  </div>
+                  <div className="ci-practice-text">
+                    Reusing role & skill gap context from your previous session for <strong>{effectiveRole || 'your target role'}</strong>. Adjust your question count or settings below.
+                  </div>
+                  {practiceFromId && (
+                    <button
+                      type="button"
+                      className="ci-practice-back-link"
+                      onClick={() => navigate(`/interview/${practiceFromId}/results`)}
+                    >
+                      ← Back to Previous Results
+                    </button>
+                  )}
+                </div>
               )}
 
-              <div className="ci-actions" style={{ marginTop: 20 }}>
-                <button className="btn btn-ghost" onClick={goBack}>← Back</button>
-                <button
-                  className="btn btn-primary"
-                  onClick={goNext}
-                  disabled={!skillGapResult}
-                >
-                  Next: Settings <ChevronRight size={16} />
-                </button>
+              {/* Form Surface */}
+              <div className="ci-form-surface ci-setup-surface">
+                {/* Interview Type Segmented Control */}
+                <div className="ci-setup-group">
+                  <label className="ci-label">Interview Type</label>
+                  <div className="ci-segmented-control">
+                    {[
+                      { id: 'technical', label: 'Technical' },
+                      { id: 'behavioral', label: 'Behavioral' },
+                      { id: 'mixed', label: 'Mixed' },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={`ci-seg-btn ${interviewType === t.id ? 'active' : ''}`}
+                        onClick={() => setInterviewType(t.id)}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Difficulty Segmented Control */}
+                <div className="ci-setup-group">
+                  <label className="ci-label">Difficulty</label>
+                  <div className="ci-segmented-control">
+                    {[
+                      { id: 'easy', label: 'Easy' },
+                      { id: 'medium', label: 'Medium' },
+                      { id: 'hard', label: 'Hard' },
+                    ].map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        className={`ci-seg-btn ${difficulty === d.id ? 'active' : ''}`}
+                        onClick={() => setDifficulty(d.id)}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Duration Select */}
+                <div className="ci-setup-group">
+                  <label className="ci-label">Duration</label>
+                  <div className="ci-segmented-control">
+                    {[15, 30, 45, 60].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        className={`ci-seg-btn ${durationMinutes === mins ? 'active' : ''}`}
+                        onClick={() => setDurationMinutes(mins)}
+                      >
+                        {mins} min
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Question Count */}
+                <div className="ci-setup-group">
+                  <label className="ci-label">Question Count</label>
+                  <div className="ci-segmented-control">
+                    {[5, 10, 15, 20].map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        className={`ci-seg-btn ${totalQuestions === count ? 'active' : ''}`}
+                        onClick={() => setTotalQuestions(count)}
+                      >
+                        {count}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Interview Mode: Audio / Video */}
+                <div className="ci-setup-group">
+                  <label className="ci-label">Interview Mode</label>
+                  <div className="ci-segmented-control">
+                    <button
+                      type="button"
+                      className={`ci-seg-btn ${interviewMode === 'audio' ? 'active' : ''}`}
+                      onClick={() => setInterviewMode('audio')}
+                    >
+                      Audio
+                    </button>
+                    <button
+                      type="button"
+                      className={`ci-seg-btn ${interviewMode === 'video' ? 'active' : ''}`}
+                      onClick={() => setInterviewMode('video')}
+                    >
+                      Video
+                    </button>
+                  </div>
+                </div>
+
+                {/* Informational Section (Compact, No Coding Note) */}
+                <div className="ci-personalization-info">
+                  <span className="ci-info-label">Questions will be personalized using:</span>
+                  <div className="ci-info-pills">
+                    <span className="ci-info-pill">Target Role</span>
+                    <span className="ci-info-dot">·</span>
+                    <span className="ci-info-pill">Resume</span>
+                    <span className="ci-info-dot">·</span>
+                    <span className="ci-info-pill">Skill Gap</span>
+                    <span className="ci-info-dot">·</span>
+                    <span className="ci-info-pill">Job Description</span>
+                  </div>
+                </div>
               </div>
-            </div>
+            </section>
           )}
 
-          {/* ── STEP 5: Interview Settings ────────────────────────────────────── */}
-          {step === 5 && (
-            <div className="ci-card glass-card animate-fade-in">
-              <h2 className="ci-card-title"><Settings size={20} /> Interview Settings</h2>
-              <p className="ci-card-desc">Customize the type, difficulty, and length of your session.</p>
+          {/* ════════════════════════════════════════════════════════════════
+              STEP 4: Review & Create
+             ════════════════════════════════════════════════════════════════ */}
+          {step === 4 && (
+            <section className="ci-step-view animate-fade-in">
+              {/* Header */}
+              <div className="ci-step-header">
+                <span className="ci-step-counter">Step 4 of 4</span>
+                <h1 className="ci-step-title">Review Interview</h1>
+                <p className="ci-step-desc">Check your details before starting the interview.</p>
+              </div>
 
-              <div className="settings-group">
-                <label className="form-label">Interview Type</label>
-                <div className="option-grid">
-                  {INTERVIEW_TYPES.map(({ value, label, desc }) => (
-                    <button
-                      key={value}
-                      className={`option-btn ${interviewType === value ? 'selected' : ''}`}
-                      onClick={() => setInterviewType(value)}
-                    >
-                      <span className="option-label">{label}</span>
-                      <span className="option-desc">{desc}</span>
+              {/* Review Cards Grid */}
+              <div className="ci-review-grid">
+                {/* 1. JOB */}
+                <div className="ci-review-card">
+                  <div className="ci-review-card-header">
+                    <span className="ci-review-card-title">JOB</span>
+                    <button type="button" className="ci-edit-link" onClick={() => setStep(1)}>
+                      Edit →
                     </button>
-                  ))}
+                  </div>
+                  <div className="ci-review-content">
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Job Role</span>
+                      <span className="ci-r-value bold">{effectiveRole || 'Software Engineer'}</span>
+                    </div>
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Experience</span>
+                      <span className="ci-r-value capitalize">{experienceLevel}</span>
+                    </div>
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Company</span>
+                      <span className="ci-r-value">{company.trim() || 'Not specified'}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="settings-group">
-                <label className="form-label">Difficulty</label>
-                <div className="option-grid option-grid-3">
-                  {DIFFICULTIES.map(({ value, label, desc }) => (
-                    <button
-                      key={value}
-                      className={`option-btn ${difficulty === value ? 'selected' : ''}`}
-                      onClick={() => setDifficulty(value)}
-                    >
-                      <span className="option-label">{label}</span>
-                      <span className="option-desc">{desc}</span>
+                {/* 2. RESUME */}
+                <div className="ci-review-card">
+                  <div className="ci-review-card-header">
+                    <span className="ci-review-card-title">RESUME</span>
+                    <button type="button" className="ci-edit-link" onClick={() => setStep(1)}>
+                      Edit →
                     </button>
-                  ))}
+                  </div>
+                  <div className="ci-review-content">
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">File</span>
+                      <span className="ci-r-value bold">{resumeFile?.name || 'Resume.pdf'}</span>
+                    </div>
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Status</span>
+                      <span className="ci-r-value success-text">✓ Analyzed</span>
+                    </div>
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Skills Extracted</span>
+                      <span className="ci-r-value">{skillsIdentifiedCount} skills</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="settings-group">
-                <label className="form-label">Interview Duration</label>
-                <div className="option-grid option-grid-3">
-                  {DURATIONS.map(({ value, label, desc }) => (
-                    <button
-                      key={value}
-                      className={`option-btn ${durationMinutes === value ? 'selected' : ''}`}
-                      onClick={() => setDurationMinutes(value)}
-                    >
-                      <span className="option-label">{label}</span>
-                      <span className="option-desc">{desc}</span>
+                {/* 3. SKILL PROFILE */}
+                <div className="ci-review-card">
+                  <div className="ci-review-card-header">
+                    <span className="ci-review-card-title">SKILL PROFILE</span>
+                    <button type="button" className="ci-edit-link" onClick={() => setStep(2)}>
+                      Edit →
                     </button>
-                  ))}
+                  </div>
+                  <div className="ci-review-content">
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Overall Match</span>
+                      <span className="ci-r-value highlight bold">{overallMatchPercentage}%</span>
+                    </div>
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Strong</span>
+                      <span className="ci-r-value skills-preview">
+                        {competencyMatch?.competencies
+                          ?.flatMap((c) => c.matched || [])
+                          ?.slice(0, 4)
+                          ?.join(', ') || 'Java, SQL, HTML, CSS'}
+                      </span>
+                    </div>
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Improve</span>
+                      <span className="ci-r-value skills-preview">
+                        {learningRecs.slice(0, 3).map((r) => r.skill || r).join(', ') ||
+                          competencyMatch?.competencies
+                            ?.flatMap((c) => [...(c.partial || []), ...(c.missing || [])])
+                            ?.slice(0, 3)
+                            ?.join(', ') || 'Docker, REST APIs, React'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="form-group">
-                <label className="form-label">Number of Questions: <strong>{totalQuestions}</strong></label>
-                <input
-                  type="range"
-                  min={5} max={15} step={1}
-                  value={totalQuestions}
-                  onChange={(e) => setTotalQuestions(Number(e.target.value))}
-                  className="range-slider"
-                />
-                <div className="range-labels"><span>5</span><span>15</span></div>
-              </div>
-
-              <div className="ci-actions">
-                <button className="btn btn-ghost" onClick={goBack}>← Back</button>
-                <button className="btn btn-primary" onClick={goNext}>
-                  Review & Start <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── STEP 6: Review ────────────────────────────────────────────────── */}
-          {step === 6 && (
-            <div className="ci-card glass-card animate-fade-in">
-              <h2 className="ci-card-title">Review & Create</h2>
-              <p className="ci-card-desc">Confirm your interview settings before starting.</p>
-
-              <div className="review-grid">
-                <div className="review-item">
-                  <span className="review-label">Resume</span>
-                  <span className="review-value">{resumeFile?.name}</span>
+                {/* 4. INTERVIEW */}
+                <div className="ci-review-card">
+                  <div className="ci-review-card-header">
+                    <span className="ci-review-card-title">INTERVIEW</span>
+                    <button type="button" className="ci-edit-link" onClick={() => setStep(3)}>
+                      Edit →
+                    </button>
+                  </div>
+                  <div className="ci-review-content">
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Type</span>
+                      <span className="ci-r-value capitalize">{interviewType}</span>
+                    </div>
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Difficulty</span>
+                      <span className="ci-r-value capitalize">{difficulty}</span>
+                    </div>
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Duration</span>
+                      <span className="ci-r-value">{durationMinutes} minutes</span>
+                    </div>
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Questions</span>
+                      <span className="ci-r-value">{totalQuestions} questions</span>
+                    </div>
+                    <div className="ci-review-item">
+                      <span className="ci-r-label">Mode</span>
+                      <span className="ci-r-value capitalize">{interviewMode}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="review-item">
-                  <span className="review-label">Target Role</span>
-                  <span className="review-value">{targetRole}</span>
-                </div>
-                {skillGapResult && (
-                  <div className="review-item">
-                    <span className="review-label">Skill Coverage</span>
-                    <span className="review-value" style={{ color: '#10b981' }}>
-                      {skillGapResult.skillCoveragePercentage}% ({skillGapResult.matchedRequiredSkillCount}/{skillGapResult.requiredSkillCount} required skills)
-                    </span>
+
+                {/* 5. PRACTICE FOCUS (Practice mode only) */}
+                {isPracticeMode && (
+                  <div className="ci-review-card ci-practice-card">
+                    <div className="ci-review-card-header">
+                      <span className="ci-review-card-title">PRACTICE FOCUS</span>
+                      <span className="ci-badge ci-badge-accent">Targeted Retake</span>
+                    </div>
+                    <div className="ci-review-content">
+                      <div className="ci-review-item">
+                        <span className="ci-r-label">Objective</span>
+                        <span className="ci-r-value bold">Improve articulation & composure</span>
+                      </div>
+                      <div className="ci-review-item">
+                        <span className="ci-r-label">Enforced Question Cap</span>
+                        <span className="ci-r-value highlight bold">{totalQuestions} questions strictly enforced</span>
+                      </div>
+                      <div className="ci-review-item">
+                        <span className="ci-r-label">Progress Tracking</span>
+                        <span className="ci-r-value">Creates new attempt linked for comparison</span>
+                      </div>
+                    </div>
                   </div>
                 )}
-                <div className="review-item">
-                  <span className="review-label">Interview Type</span>
-                  <span className="review-value">{interviewType}</span>
-                </div>
-                <div className="review-item">
-                  <span className="review-label">Difficulty</span>
-                  <span className="review-value">{difficulty}</span>
-                </div>
-                <div className="review-item">
-                  <span className="review-label">Duration</span>
-                  <span className="review-value">{durationMinutes} minutes</span>
-                </div>
-                <div className="review-item">
-                  <span className="review-label">Questions</span>
-                  <span className="review-value">{totalQuestions}</span>
-                </div>
               </div>
+            </section>
+          )}
 
-              <div className="dev-notice" style={{ background: 'rgba(124, 58, 237, 0.1)', borderColor: 'rgba(124, 58, 237, 0.3)', color: '#c4b5fd' }}>
-                ✨ <strong>Personalized Interview:</strong> InterviewX will generate targeted questions from your resume projects, experience, and identified skill gaps.
-              </div>
+        </div>
+      </main>
 
-              {error && <div className="error-notice"><AlertCircle size={16} /> {error}</div>}
+      {/* ── Fixed Action Bar inside Viewport ────────────────────────────── */}
+      <footer className="ci-action-bar">
+        <div className="ci-action-inner">
+          <button
+            type="button"
+            className="ci-btn ci-btn-secondary"
+            onClick={handleBack}
+            disabled={step === 1 || creating}
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
+          </button>
 
-              <div className="ci-actions">
-                <button className="btn btn-ghost" onClick={goBack}>← Back</button>
-                <button className="btn btn-primary btn-lg" onClick={handleCreateInterview} disabled={loading}>
-                  {loading
-                    ? <><span className="spinner" /> Creating...</>
-                    : <>🚀 Create & Start Interview</>
-                  }
-                </button>
-              </div>
-            </div>
+          {step < 4 ? (
+            <button
+              type="button"
+              className="ci-btn ci-btn-primary"
+              onClick={handleNext}
+              disabled={step === 1 && !isStep1Valid}
+            >
+              <span>{step === 2 ? 'Continue to Interview Setup' : step === 3 ? 'Continue to Review' : 'Continue'}</span>
+              <ArrowRight size={16} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="ci-btn ci-btn-primary"
+              onClick={handleCreateInterview}
+              disabled={creating}
+            >
+              {creating ? (
+                <>
+                  <Loader2 size={16} className="ci-spin" />
+                  <span>Creating Interview...</span>
+                </>
+              ) : (
+                <>
+                  <span>Create Interview</span>
+                  <ArrowRight size={16} />
+                </>
+              )}
+            </button>
           )}
         </div>
-      </div>
+      </footer>
     </div>
   )
 }

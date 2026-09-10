@@ -141,30 +141,57 @@ const VideoRecorder = forwardRef(function VideoRecorder(
     }
   }
 
+  const stopAndGetBlob = () => {
+    return new Promise((resolve) => {
+      const mr = mediaRecorderRef.current
+      if (!mr || mr.state === 'inactive') {
+        if (chunksRef.current.length > 0) {
+          const mimeType = mr?.mimeType || 'video/webm'
+          const blob = new Blob(chunksRef.current, { type: mimeType })
+          resolve(blob.size > 0 ? blob : null)
+        } else {
+          resolve(null)
+        }
+        return
+      }
+
+      const mimeType = mr.mimeType || 'video/webm'
+      const prevOnStop = mr.onstop
+
+      mr.onstop = (e) => {
+        try {
+          if (prevOnStop) prevOnStop(e)
+        } catch (err) {
+          console.warn('[VideoRecorder] onstop handler err:', err)
+        }
+        if (chunksRef.current.length > 0) {
+          const blob = new Blob(chunksRef.current, { type: mimeType })
+          resolve(blob.size > 0 ? blob : null)
+        } else {
+          resolve(null)
+        }
+      }
+
+      try {
+        mr.stop()
+      } catch (err) {
+        console.warn('[VideoRecorder] Error in stop():', err)
+        resolve(null)
+      }
+    })
+  }
+
   useImperativeHandle(ref, () => ({
     getStream: () => streamRef.current,
     stopRecording: stopMediaRecording,
+    stopAndGetBlob,
     startRecording: startMediaRecording,
     stopCamera: cleanup,
     startCamera: requestCamera,
   }))
 
   return (
-    <div className="camera-panel-card glass-card">
-      <div className="camera-card-header">
-        <div className="camera-title">
-          <Video size={14} className="camera-header-icon" />
-          <span>Candidate Camera</span>
-        </div>
-
-        {streamActive && (
-          <div className="camera-status-tag active">
-            <span className="camera-dot live" />
-            <span>Camera active</span>
-          </div>
-        )}
-      </div>
-
+    <div className="camera-embed-wrapper">
       <div className="camera-viewport">
         {streamActive ? (
           <video
@@ -183,9 +210,9 @@ const VideoRecorder = forwardRef(function VideoRecorder(
           <div className="camera-denied-state">
             <VideoOff size={24} className="camera-off-icon" />
             <p className="camera-denied-msg">
-              Camera access is unavailable.
+              Camera access unavailable.
               <br />
-              You can continue with audio or text.
+              Continue with audio or text.
             </p>
             <button
               type="button"
@@ -199,15 +226,7 @@ const VideoRecorder = forwardRef(function VideoRecorder(
         ) : (
           <div className="camera-placeholder">
             <Camera size={28} className="camera-off-icon" />
-            <p>Camera is currently off</p>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={requestCamera}
-              disabled={disabled}
-            >
-              Enable Camera
-            </button>
+            <p>Starting camera...</p>
           </div>
         )}
 
