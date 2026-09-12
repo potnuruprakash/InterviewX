@@ -102,8 +102,11 @@ const normalizeList = (skills, source = 'unknown') => {
 const normalizeFromText = (text, source = 'unknown') => {
   if (!text) return [];
 
+  // Step 0: Ensure colons attached directly to letters get spaced properly (e.g. "Languages:Java" -> "Languages: Java")
+  const preprocessed = text.replace(/([A-Za-z0-9&/_-]+):(?=[A-Za-z0-9])/g, (m, g1) => g1 + ': ');
+
   // Step 1: Split on common explicit delimiters: comma, pipe, semicolon, newline, bullet, dash at line start
-  const afterDelimiters = text.split(/[,|\n;•\r]+/);
+  const afterDelimiters = preprocessed.split(/[,|\n;•\r]+/);
 
   // Step 2: Within each token from step 1, also split on 2+ consecutive spaces/tabs
   // This handles PDF-extracted multi-column skill lists where columns are spaced out
@@ -115,9 +118,22 @@ const normalizeFromText = (text, source = 'unknown') => {
     }
   }
 
-  const cleaned = tokens
-    .map((t) => t.replace(/^[-–•*▪►]\s*/, '').trim())
-    .filter((t) => t.length > 0 && t.length < 60); // Ignore very long tokens (likely sentences)
+  const cleaned = [];
+  for (const t of tokens) {
+    const raw = t.replace(/^[-–•*▪►]\s*/, '').trim();
+    if (!raw || raw.length >= 60) continue;
+
+    // If token has a category prefix like "Programming Languages: Java" or "Frontend: HTML",
+    // strip the prefix before the colon if the whole token is not an exact known skill.
+    if (raw.includes(':') && !isKnownSkill(raw)) {
+      const afterColon = raw.split(':').slice(1).join(':').trim();
+      if (afterColon) {
+        cleaned.push(afterColon);
+        continue;
+      }
+    }
+    cleaned.push(raw);
+  }
 
   return normalizeList(cleaned, source);
 };
@@ -154,11 +170,16 @@ const getCanonicalName = (skillName) => {
 const extractSkillsFromText = (text, source = 'implied') => {
   if (!text) return [];
 
+  // Separate colons so attached words like "ProgrammingLanguages:Java" split cleanly
+  const preprocessed = text
+    .replace(/([A-Za-z0-9&/_-]+):(?=[A-Za-z0-9])/g, (m, g1) => g1 + ': ')
+    .replace(/:/g, ' ');
+
   const seen = new Set();
   const result = [];
 
   // Try multi-word phrases (up to 4 words) as well as single words
-  const words = text.split(/\s+/);
+  const words = preprocessed.split(/\s+/);
 
   for (let i = 0; i < words.length; i++) {
     for (let len = 1; len <= 4 && i + len <= words.length; len++) {

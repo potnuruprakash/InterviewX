@@ -883,6 +883,46 @@
         "powerbi",
         "microsoft power bi"
       ]
+    },
+    "VS Code": {
+      "category": "tool",
+      "aliases": [
+        "vs code",
+        "vscode",
+        "visual studio code",
+        "vsc"
+      ]
+    },
+    "Object-Oriented Programming": {
+      "category": "concept",
+      "aliases": [
+        "object-oriented programming",
+        "object oriented programming",
+        "oop",
+        "oops"
+      ]
+    },
+    "Render": {
+      "category": "cloud",
+      "aliases": [
+        "render",
+        "render.com"
+      ]
+    },
+    "Clerk": {
+      "category": "tool",
+      "aliases": [
+        "clerk",
+        "clerk auth",
+        "clerk authentication"
+      ]
+    },
+    "Postman": {
+      "category": "testing",
+      "aliases": [
+        "postman",
+        "postman api"
+      ]
     }
   }
 }

@@ -74,6 +74,28 @@ export default function SkillGapPage() {
     return () => { isMounted = false }
   }, [isLoaded, isSignedIn, authApi])
 
+  // Auto-fetch existing analysis when both resume and JD are selected
+  useEffect(() => {
+    if (!selectedResumeId || !selectedJobId) {
+      setAnalysis(null)
+      return
+    }
+
+    let isMounted = true
+    const checkExisting = async () => {
+      try {
+        const res = await authApi.get(`/api/skill-analysis/by-context?resumeId=${selectedResumeId}&jobDescriptionId=${selectedJobId}`)
+        if (isMounted && res.data?.skillAnalysis) {
+          setAnalysis(res.data.skillAnalysis)
+        }
+      } catch (e) {
+        // Silent catch: user can still click Run
+      }
+    }
+    checkExisting()
+    return () => { isMounted = false }
+  }, [selectedResumeId, selectedJobId, authApi])
+
   const handleRunAnalysis = async () => {
     if (!selectedResumeId || !selectedJobId) {
       setError('Please select both a resume and a job description.')
@@ -85,12 +107,17 @@ export default function SkillGapPage() {
     setAnalysis(null)
 
     try {
-      // Step 1: Ensure resume is analyzed
-      setStatusMsg('Analyzing resume...')
+      // Step 1: Ensure resume is analyzed (force=true ensures fresh extraction with improved parser)
+      setStatusMsg('Analyzing resume & extracting skills...')
       try {
-        await analyzeResume(selectedResumeId)
+        const resumeRes = await analyzeResume(selectedResumeId, true)
+        const updatedResume = resumeRes.data?.resume
+        if (updatedResume) {
+          setResumes((prev) =>
+            prev.map((r) => (r._id === selectedResumeId ? { ...r, ...updatedResume } : r))
+          )
+        }
       } catch (e) {
-        // May already be analyzed — continue
         if (!e.message?.includes('cached')) {
           console.warn('[SkillGap] Resume pre-analyze warning:', e.message)
         }
@@ -155,11 +182,14 @@ export default function SkillGapPage() {
                     onChange={(e) => { setSelectedResumeId(e.target.value); setAnalysis(null) }}
                   >
                     <option value="">— Select a resume —</option>
-                    {resumes.map((r) => (
-                      <option key={r._id} value={r._id}>
-                        {r.originalName} {r.processingStatus === 'completed' ? '✓' : '(not analyzed)'}
-                      </option>
-                    ))}
+                    {resumes.map((r) => {
+                      const count = r.parsedData?.skills?.length || 0;
+                      return (
+                        <option key={r._id} value={r._id}>
+                          {r.originalName} {count > 0 ? `(${count} skills ✓)` : r.processingStatus === 'completed' ? '✓' : '(not analyzed)'}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -247,7 +277,7 @@ export default function SkillGapPage() {
                     <div className="sgp-section-title">
                       Candidate Profile — {selectedResume?.originalName}
                     </div>
-                    <CandidateProfileCard parsedData={analysis.candidateProfile} />
+                    <CandidateProfileCard parsedData={analysis.candidateProfile || selectedResume?.parsedData} />
                   </div>
                 )}
 

@@ -55,10 +55,14 @@ const runSkillAnalysis = async (req, res) => {
         const { extractTextFromFile } = require('../services/resumeParserService');
         const { analyzeResume } = require('../services/resumeAnalysisService');
 
-        // Re-use already extracted text if available, otherwise re-extract
-        let extractedText = resume.extractedText;
-        if (!extractedText) {
+        // Always extract fresh text from file using improved parser
+        let extractedText;
+        try {
           extractedText = await extractTextFromFile(resume.filePath, resume.mimeType);
+        } catch (fileErr) {
+          // Fall back to existing extractedText only if file cannot be read
+          extractedText = resume.extractedText;
+          if (!extractedText) throw fileErr;
         }
 
         if (process.env.NODE_ENV === 'development') {

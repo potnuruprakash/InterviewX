@@ -10,31 +10,39 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Extract text from a PDF file using pdf2json with fallback to pdf-parse.
- * @param {string} filePath - Absolute path to the PDF file
+ * Helper to reliably resolve a file path across different working directories
+ */
+const resolveFilePath = (filePath) => {
+  if (!filePath) return filePath;
+  if (fs.existsSync(filePath)) return filePath;
+  const cwdPath = path.resolve(filePath);
+  if (fs.existsSync(cwdPath)) return cwdPath;
+  const backendPath = path.resolve(__dirname, '../../', filePath);
+  if (fs.existsSync(backendPath)) return backendPath;
+  const uploadsPath = path.resolve(__dirname, '../../uploads', path.basename(filePath));
+  if (fs.existsSync(uploadsPath)) return uploadsPath;
+  const rootUploadsPath = path.resolve(process.cwd(), 'uploads', path.basename(filePath));
+  if (fs.existsSync(rootUploadsPath)) return rootUploadsPath;
+  return filePath;
+};
+
+/**
+ * Extract text from a PDF file using pdf-parse with fallback to pdf2json.
+ * @param {string} filePath - Path to the PDF file
  * @returns {Promise<string>} Extracted text
  */
 const extractTextFromPDF = async (filePath) => {
-  if (!fs.existsSync(filePath)) {
+  const resolvedPath = resolveFilePath(filePath);
+  if (!fs.existsSync(resolvedPath)) {
     throw new Error(`File not found: ${filePath}`);
   }
 
-  const buffer = fs.readFileSync(filePath);
+  const buffer = fs.readFileSync(resolvedPath);
   if (buffer.length === 0) {
     throw new Error('The uploaded PDF file is empty.');
   }
 
-  // Strategy 1: pdf2json (handles all modern xref, form fields, links)
-  try {
-    const text = await extractWithPdf2Json(filePath);
-    if (text && text.trim().length >= 20) {
-      return cleanExtractedText(text);
-    }
-  } catch (pdf2JsonErr) {
-    console.warn('[PDFParser] pdf2json warning:', pdf2JsonErr.message);
-  }
-
-  // Strategy 2: pdf-parse fallback
+  // Strategy 1: pdf-parse (Mozilla PDF.js text stream in reading order with proper word spacing)
   try {
     let pdfParseModule = require('pdf-parse');
     const pdfParse = typeof pdfParseModule === 'function'
@@ -49,7 +57,17 @@ const extractTextFromPDF = async (filePath) => {
       }
     }
   } catch (pdfParseErr) {
-    console.warn('[PDFParser] pdf-parse fallback warning:', pdfParseErr.message);
+    console.warn('[PDFParser] pdf-parse warning:', pdfParseErr.message);
+  }
+
+  // Strategy 2: pdf2json fallback
+  try {
+    const text = await extractWithPdf2Json(resolvedPath);
+    if (text && text.trim().length >= 20) {
+      return cleanExtractedText(text);
+    }
+  } catch (pdf2JsonErr) {
+    console.warn('[PDFParser] pdf2json fallback warning:', pdf2JsonErr.message);
   }
 
   throw new Error(
@@ -169,6 +187,8 @@ const cleanExtractedText = (rawText) => {
     .replace(/\r/g, '\n')
     // Replace tabs with spaces
     .replace(/\t/g, ' ')
+    // Ensure space after colons attached directly to words (e.g. "Languages:Java" -> "Languages: Java")
+    .replace(/([A-Za-z0-9&/_-]+):(?=[A-Za-z0-9])/g, '$1: ')
     // Remove null bytes and control characters (keep newlines)
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
     // Normalize more than 2 consecutive blank lines → 2 blank lines
@@ -185,4 +205,5 @@ module.exports = {
   extractTextFromPDF,
   extractTextFromDOCX,
   cleanExtractedText,
+  resolveFilePath,
 };

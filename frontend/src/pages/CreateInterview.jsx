@@ -196,7 +196,7 @@ export default function CreateInterview() {
       // 2. Automatic Analysis immediately
       setResumeStatus('analyzing')
       try {
-        const analysisRes = await analyzeResume(rId)
+        const analysisRes = await analyzeResume(rId, true)
         // Store full resume data so skill gap can access parsedData.skills
         const resumeData = analysisRes.data?.resume || null
         setResumeAnalysis(resumeData)
@@ -239,22 +239,47 @@ export default function CreateInterview() {
     setSkillGapLoading(true)
     setSkillGapError(null)
 
-    // Extract canonical skill names from parsed resume data
-    // resumeAnalysis is the resume object: { id, processingStatus, parsedData: { skills: [...] } }
-    const skillsArray = resumeAnalysis?.parsedData?.skills?.map(
-      (s) => s.canonicalName || s.name || String(s)
-    ) || []
+    // 1. Extract canonical skill names from parsed resume data
+    let skillsArray = (
+      resumeAnalysis?.parsedData?.skills ||
+      resumeAnalysis?.skills ||
+      resumeAnalysis?.analysis?.extractedSkills ||
+      []
+    ).map((s) => s.canonicalName || s.name || String(s))
+
+    // If skills are missing and resumeId exists, pre-fetch or analyze the resume
+    if (skillsArray.length === 0 && resumeId) {
+      try {
+        const analysisRes = await analyzeResume(resumeId, true)
+        const resumeData = analysisRes.data?.resume
+        if (resumeData) {
+          setResumeAnalysis(resumeData)
+          const fetched = (
+            resumeData.parsedData?.skills ||
+            resumeData.skills ||
+            []
+          ).map((s) => s.canonicalName || s.name || String(s))
+          if (fetched.length > 0) {
+            skillsArray = fetched
+          }
+        }
+      } catch (err) {
+        console.warn('[SkillGap] Could not pre-fetch resume skills:', err.message)
+      }
+    }
 
     if (process.env.NODE_ENV !== 'production') {
       console.log(`[SkillGap] Resume skills for competency match (${skillsArray.length}):`, skillsArray)
     }
 
-    const comp = computeCompetencyMatch(skillsArray, effectiveRole)
-    setCompetencyMatch(comp)
+    if (skillsArray.length > 0) {
+      const comp = computeCompetencyMatch(skillsArray, effectiveRole)
+      setCompetencyMatch(comp)
 
-    if (comp) {
-      const recs = generateLearningRecommendations(comp, experienceLevel)
-      setLearningRecs(recs)
+      if (comp) {
+        const recs = generateLearningRecommendations(comp, experienceLevel)
+        setLearningRecs(recs)
+      }
     }
 
     // 2. Backend Job Description creation & skill analysis
@@ -263,8 +288,13 @@ export default function CreateInterview() {
       const standardSkills = roleProfile?.detectedRequirements?.join(', ') ||
         'Software engineering, problem solving, system design, data structures, algorithms, databases, API integration'
 
-      const generatedContent = jdContent.trim() ||
-        `Target Role: ${effectiveRole}\nExperience Level: ${experienceLevel}\n\nRequired Skills:\n- ${standardSkills}\n\nResponsibilities:\n- Design, develop, test, and maintain software applications as a ${effectiveRole}.`
+      const userJD = jdContent.trim()
+      const hasDetailedJD = userJD.length > 80 && /[,\n;•]/.test(userJD)
+      const generatedContent = userJD
+        ? (hasDetailedJD
+            ? userJD
+            : `Target Role: ${effectiveRole}\nExperience Level: ${experienceLevel}\n\nRequired Skills:\n- ${standardSkills}\n\nJob Notes:\n${userJD}\n\nResponsibilities:\n- Design, develop, test, and maintain software applications as a ${effectiveRole}.`)
+        : `Target Role: ${effectiveRole}\nExperience Level: ${experienceLevel}\n\nRequired Skills:\n- ${standardSkills}\n\nResponsibilities:\n- Design, develop, test, and maintain software applications as a ${effectiveRole}.`
 
       const jdPayload = {
         content: generatedContent,
@@ -273,9 +303,12 @@ export default function CreateInterview() {
         experienceLevel,
       }
 
-      const jdRes = await authApi.post('/api/jobs', jdPayload)
-      const currentJobId = jdRes.data.job.id
-      setJobId(currentJobId)
+      let currentJobId = jobId
+      if (!currentJobId) {
+        const jdRes = await authApi.post('/api/jobs', jdPayload)
+        currentJobId = jdRes.data.job.id
+        setJobId(currentJobId)
+      }
 
       // Ensure JD is analyzed
       try {
@@ -288,7 +321,29 @@ export default function CreateInterview() {
       if (resumeId) {
         const gapRes = await runSkillAnalysis(resumeId, currentJobId)
         if (gapRes.data?.skillAnalysis) {
-          setSkillGapResult(gapRes.data.skillAnalysis)
+          const sa = gapRes.data.skillAnalysis
+          setSkillGapResult(sa)
+
+          // Synchronize candidate skills from backend response
+          const backendSkills = (
+            sa.candidateProfile?.skills ||
+            sa.candidateSkills ||
+            []
+          ).map((s) => s.canonicalName || s.name || String(s))
+
+          const resolvedSkills = backendSkills.length > 0 ? backendSkills : skillsArray
+          if (resolvedSkills.length > 0) {
+            setResumeAnalysis((prev) => ({
+              ...prev,
+              parsedData: sa.candidateProfile || prev?.parsedData,
+            }))
+            const freshComp = computeCompetencyMatch(resolvedSkills, effectiveRole)
+            setCompetencyMatch(freshComp)
+            if (freshComp) {
+              const recs = generateLearningRecommendations(freshComp, experienceLevel)
+              setLearningRecs(recs)
+            }
+          }
         }
       }
     } catch (err) {
@@ -299,13 +354,16 @@ export default function CreateInterview() {
     }
   }
 
-  // Trigger skill gap on transition to step 2 (guarded against infinite loops)
+  // Trigger skill gap on transition to step 2 (auto-retries if match was uncomputed or 0)
   useEffect(() => {
-    if (step === 2 && !hasRunSkillGapRef.current && effectiveRole) {
-      hasRunSkillGapRef.current = true
-      runSkillGap()
+    if (step === 2 && effectiveRole) {
+      const matchEmpty = !competencyMatch || competencyMatch.overallMatch === 0
+      if (!hasRunSkillGapRef.current || matchEmpty) {
+        hasRunSkillGapRef.current = true
+        runSkillGap()
+      }
     }
-  }, [step, effectiveRole])
+  }, [step, effectiveRole, competencyMatch?.overallMatch])
 
   // ── Create Interview on Step 4 ─────────────────────────────────────────────
   const handleCreateInterview = async () => {
@@ -386,6 +444,7 @@ export default function CreateInterview() {
 
   const handleBack = () => {
     setError(null)
+    hasRunSkillGapRef.current = false
     if (step === 3 && isPracticeMode && practiceFromId) {
       // In practice mode, Back from Step 3 returns to the results of the previous session
       navigate(`/interview/${practiceFromId}/results`)
@@ -402,17 +461,21 @@ export default function CreateInterview() {
   }
 
   const skillsIdentifiedCount =
-    resumeAnalysis?.analysis?.extractedSkills?.length ||
     resumeAnalysis?.parsedData?.skills?.length ||
+    resumeAnalysis?.skills?.length ||
+    resumeAnalysis?.analysis?.extractedSkills?.length ||
+    skillGapResult?.candidateSkillCount ||
     0
 
-  // Use the backend skill coverage as the primary match metric.
-  // Fall back to competency-match if no backend result yet.
-  // DO NOT use a hardcoded fallback — show real values only.
+  // Match percentage reflects the competency match grid and learning priorities.
+  // Prioritizes competencyMatch.overallMatch (aligning with Skills Matched & Skills to Improve),
+  // falling back to skillGapResult.skillCoveragePercentage if competency match is not ready.
   const overallMatchPercentage =
-    skillGapResult?.skillCoveragePercentage ??
-    competencyMatch?.overallMatch ??
-    0
+    (competencyMatch && typeof competencyMatch.overallMatch === 'number' && competencyMatch.overallMatch > 0)
+      ? competencyMatch.overallMatch
+      : (skillGapResult && skillGapResult.skillCoveragePercentage > 0
+          ? skillGapResult.skillCoveragePercentage
+          : (competencyMatch?.overallMatch || skillGapResult?.skillCoveragePercentage || 0))
 
   const totalMatchedCount =
     competencyMatch?.competencies?.reduce(

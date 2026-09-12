@@ -178,7 +178,22 @@ const splitIntoSections = (text) => {
  * This handles multi-column PDF layouts and space-separated lists.
  */
 const parseSkillsSection = (lines) => {
-  const text = lines.join('\n');
+  // Extract both original lines and after-colon contents for clean tokenization
+  const processedLines = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    processedLines.push(trimmed);
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx !== -1) {
+      const after = trimmed.slice(colonIdx + 1).trim();
+      if (after) {
+        processedLines.push(after);
+      }
+    }
+  }
+
+  const text = processedLines.join('\n');
 
   // Strategy 1: delimiter-based splitting (comma, pipe, bullet, newline)
   const fromDelimiters = normalizeFromText(text, 'skills_section');
