@@ -340,6 +340,120 @@ export default function ResultsPage() {
           </div>
         </div>
 
+        {/* Empirical Evaluation Sub-Pillars */}
+        <div className="sub-pillars-card glass-card animate-fade-in">
+          <div className="sub-pillars-header">
+            <div className="sub-pillars-title-wrap">
+              <Activity size={18} className="icon-glow" />
+              <div>
+                <h2>Empirical Evaluation Breakdown</h2>
+                <p>Granular scoring across technical precision, communicative structure, and supporting evidence.</p>
+              </div>
+            </div>
+            <div className="session-counts-chips">
+              <span className="count-chip answered">✓ {fe?.questionsAnswered ?? 0} Answered</span>
+              <span className="count-chip skipped">↷ {fe?.questionsSkipped ?? 0} Skipped</span>
+              {(fe?.questionsTimedOut > 0) && (
+                <span className="count-chip timedout">⏱ {fe.questionsTimedOut} Timed Out</span>
+              )}
+            </div>
+          </div>
+
+          <div className="sub-pillars-grid">
+            <div className="sub-pillar-item">
+              <div className="sub-pillar-meta">
+                <span className="sub-pillar-name">Technical Accuracy</span>
+                <span className="sub-pillar-score">{fe?.technicalAccuracy ?? fe?.technicalScore ?? 75}%</span>
+              </div>
+              <div className="progress-bar-track">
+                <div className="progress-bar-fill fill-cyan" style={{ width: `${fe?.technicalAccuracy ?? fe?.technicalScore ?? 75}%` }} />
+              </div>
+              <span className="sub-pillar-desc">Correctness of syntax, architecture patterns, and domain concepts.</span>
+            </div>
+
+            <div className="sub-pillar-item">
+              <div className="sub-pillar-meta">
+                <span className="sub-pillar-name">Relevance</span>
+                <span className="sub-pillar-score">{fe?.relevance ?? 80}%</span>
+              </div>
+              <div className="progress-bar-track">
+                <div className="progress-bar-fill fill-purple" style={{ width: `${fe?.relevance ?? 80}%` }} />
+              </div>
+              <span className="sub-pillar-desc">Direct alignment with the interviewer's prompt and core question constraints.</span>
+            </div>
+
+            <div className="sub-pillar-item">
+              <div className="sub-pillar-meta">
+                <span className="sub-pillar-name">Completeness</span>
+                <span className="sub-pillar-score">{fe?.completeness ?? 70}%</span>
+              </div>
+              <div className="progress-bar-track">
+                <div className="progress-bar-fill fill-emerald" style={{ width: `${fe?.completeness ?? 70}%` }} />
+              </div>
+              <span className="sub-pillar-desc">Coverage of key expected concepts, trade-offs, and boundary cases.</span>
+            </div>
+
+            <div className="sub-pillar-item">
+              <div className="sub-pillar-meta">
+                <span className="sub-pillar-name">Communication</span>
+                <span className="sub-pillar-score">{fe?.communication ?? 80}%</span>
+              </div>
+              <div className="progress-bar-track">
+                <div className="progress-bar-fill fill-blue" style={{ width: `${fe?.communication ?? 80}%` }} />
+              </div>
+              <span className="sub-pillar-desc">Structured clarity, optimal pacing (130-160 WPM), and low filler density.</span>
+            </div>
+
+            <div className="sub-pillar-item">
+              <div className="sub-pillar-meta">
+                <span className="sub-pillar-name">Depth</span>
+                <span className="sub-pillar-score">{fe?.depth ?? 75}%</span>
+              </div>
+              <div className="progress-bar-track">
+                <div className="progress-bar-fill fill-indigo" style={{ width: `${fe?.depth ?? 75}%` }} />
+              </div>
+              <span className="sub-pillar-desc">Technical granularity, architectural trade-offs, and internal mechanisms.</span>
+            </div>
+
+            <div className="sub-pillar-item">
+              <div className="sub-pillar-meta">
+                <span className="sub-pillar-name">Evidence & STAR</span>
+                <span className="sub-pillar-score">{fe?.evidence ?? 70}%</span>
+              </div>
+              <div className="progress-bar-track">
+                <div className="progress-bar-fill fill-amber" style={{ width: `${fe?.evidence ?? 70}%` }} />
+              </div>
+              <span className="sub-pillar-desc">Concrete project metrics, situational framing, and measurable outcomes.</span>
+            </div>
+          </div>
+
+          {/* Actionable Strengths & Recommended Practice Roadmap */}
+          {(fe?.strengths?.length > 0 || fe?.recommendedPractice?.length > 0) && (
+            <div className="sub-pillars-footer">
+              {fe?.strengths?.length > 0 && (
+                <div className="strengths-column">
+                  <span className="footer-col-title"><CheckCircle size={14} color="#10b981" /> Demonstrated Strengths</span>
+                  <ul className="footer-bullet-list">
+                    {fe.strengths.map((s, idx) => (
+                      <li key={idx}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {fe?.recommendedPractice?.length > 0 && (
+                <div className="practice-column">
+                  <span className="footer-col-title"><Target size={14} color="#06b6d4" /> Recommended Practice Roadmap</span>
+                  <ul className="footer-bullet-list">
+                    {fe.recommendedPractice.map((p, idx) => (
+                      <li key={idx}>{p}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* TOP 3 PRIORITIZED IMPROVEMENTS */}
         {topPriorityImprovements.length > 0 && (
           <div className="top-priorities-section animate-fade-in">

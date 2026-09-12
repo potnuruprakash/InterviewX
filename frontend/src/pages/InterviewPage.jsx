@@ -11,9 +11,12 @@ import useSpeechRecognition, { normalizeTranscriptJoin } from '../hooks/useSpeec
 import AnswerComposer from '../components/AnswerComposer'
 import VideoRecorder from '../components/VideoRecorder'
 import AudioRecorder from '../components/AudioRecorder'
+import FloatingCamera from '../components/FloatingCamera'
 import './InterviewPage.css'
 
 const CATEGORY_COLORS = {
+  introduction: 'badge-cyan',
+  resume: 'badge-green',
   technical: 'badge-purple',
   coding: 'badge-purple',
   behavioral: 'badge-cyan',
@@ -24,6 +27,7 @@ const CATEGORY_COLORS = {
   skill_gap: 'badge-red',
   experience: 'badge-green',
   follow_up: 'badge-yellow',
+  job_description: 'badge-purple',
 }
 
 const DIFFICULTY_COLORS = {
@@ -33,6 +37,8 @@ const DIFFICULTY_COLORS = {
 }
 
 const TYPE_ICONS = {
+  introduction: '👋',
+  resume: '📄',
   technical: '⚙️',
   coding: '💻',
   project: '🏗️',
@@ -43,11 +49,15 @@ const TYPE_ICONS = {
   follow_up: '↩️',
 }
 
-// Helper to calculate exact remaining seconds based on interview started timestamp
-const calculateRemainingSeconds = (startedAt, durationMinutes = 30) => {
-  if (!startedAt) return durationMinutes * 60
+// Helper to calculate exact remaining seconds based on server expiresAt or started timestamp
+const calculateRemainingSeconds = (startedAt, durationMinutes = 30, expiresAt = null) => {
+  if (expiresAt) {
+    const end = new Date(expiresAt).getTime()
+    return Math.max(0, Math.floor((end - Date.now()) / 1000))
+  }
+  if (!startedAt) return (durationMinutes || 30) * 60
   const startTime = new Date(startedAt).getTime()
-  const endTime = startTime + durationMinutes * 60 * 1000
+  const endTime = startTime + (durationMinutes || 30) * 60 * 1000
   const remaining = Math.floor((endTime - Date.now()) / 1000)
   return Math.max(0, remaining)
 }
@@ -147,8 +157,12 @@ export default function InterviewPage() {
           return
         }
 
-        // Calculate exact remaining time from backend startedAt & durationMinutes
-        const rem = calculateRemainingSeconds(data.interview?.startedAt, data.interview?.durationMinutes)
+        // Calculate exact remaining time from backend startedAt, durationMinutes & expiresAt
+        const rem = calculateRemainingSeconds(
+          data.interview?.startedAt,
+          data.interview?.durationMinutes,
+          data.interview?.expiresAt || data.expiresAt
+        )
         setRemainingSeconds(rem)
       } catch (err) {
         const msg = err.message || ''
@@ -184,13 +198,16 @@ export default function InterviewPage() {
     return () => clearTimeout(timer)
   }, [currentQuestion?.id, loading, isComplete, isSpeechSupported])
 
+  // Workspace ref for bounding floating draggable camera
+  const workspaceRef = useRef(null)
+
   // Real-time Countdown Timer (persists on refresh, never resets on re-render)
   useEffect(() => {
     if (isComplete || loading || !interview?.startedAt) return
 
     const tick = () => {
       setQuestionTimer((t) => t + 1)
-      const rem = calculateRemainingSeconds(interview.startedAt, interview.durationMinutes)
+      const rem = calculateRemainingSeconds(interview.startedAt, interview.durationMinutes, interview.expiresAt)
       setRemainingSeconds(rem)
 
       // When timer hits 00:00, execute timeout auto-completion exactly once
@@ -206,7 +223,7 @@ export default function InterviewPage() {
     timerRef.current = setInterval(tick, 1000)
 
     return () => clearInterval(timerRef.current)
-  }, [isComplete, loading, interview?.startedAt, interview?.durationMinutes])
+  }, [isComplete, loading, interview?.startedAt, interview?.durationMinutes, interview?.expiresAt])
 
   // Automatic interview completion when timer hits 00:00
   const handleTimeoutAutoEnd = async () => {
@@ -220,12 +237,23 @@ export default function InterviewPage() {
     setIsMediaRecording(false)
 
     try {
+      // Auto-save draft answer if candidate typed anything
+      const draft = (answer || '').trim()
+      if (draft && currentQuestion) {
+        const qId = currentQuestion.id || currentQuestion._id
+        await authApi.post(`/api/interviews/${id}/responses`, {
+          questionId: qId,
+          answerText: draft,
+          responseType: 'text',
+        }).catch((e) => console.warn('[Interview] Draft auto-submit on timeout:', e.message))
+      }
+
       await authApi.post(`/api/interviews/${id}/complete`, {
         completionReason: 'time_expired',
       })
       setTimeout(() => {
         navigate(`/interview/${id}/results`)
-      }, 1500)
+      }, 1200)
     } catch (err) {
       console.warn('[Interview] Timeout complete notice:', err.message)
       navigate(`/interview/${id}/results`)
@@ -611,13 +639,27 @@ export default function InterviewPage() {
 
   // ─── Main Interview UI ────────────────────────────────────────────────────
   return (
-    <div className="interview-page">
+    <div className="interview-page" ref={workspaceRef}>
       {/* Background Audio Recorder (silent capture when speech/audio active) */}
       <AudioRecorder
         ref={audioRecorderRef}
         isRecording={isMediaRecording && !videoEnabled}
         onRecordingComplete={(blob) => setAudioBlob(blob)}
         disabled={submitting || skipping}
+      />
+
+      {/* Floating Draggable Candidate Camera Feed */}
+      <FloatingCamera
+        containerRef={workspaceRef}
+        videoEnabled={videoEnabled}
+        onToggleVideo={handleToggleVideo}
+        isListening={isListening}
+        isMediaRecording={isMediaRecording}
+        speechError={speechError}
+        isSpeechSupported={isSpeechSupported}
+        videoRecorderRef={videoRecorderRef}
+        onVideoBlob={setVideoBlob}
+        disabled={submitting || skipping || isTimeExpired}
       />
 
       {/* Timeout notification banner */}
@@ -690,6 +732,18 @@ export default function InterviewPage() {
           </div>
 
           <div className="topbar-right">
+            {/* Camera feed toggle button */}
+            <button
+              type="button"
+              className={`btn-topbar-camera ${videoEnabled ? 'active' : ''}`}
+              onClick={handleToggleVideo}
+              disabled={submitting || skipping || isTimeExpired}
+              title={videoEnabled ? 'Disable camera feed' : 'Enable candidate camera'}
+            >
+              {videoEnabled ? <Video size={14} /> : <VideoOff size={14} />}
+              <span>{videoEnabled ? 'Camera On' : 'Camera Off'}</span>
+            </button>
+
             {/* Persistent Countdown Timer */}
             <div
               className={`timer-display ${isTimeExpired ? 'timer-expired' : isUrgentTime ? 'timer-urgent' : isWarningTime ? 'timer-warning' : ''}`}
@@ -732,7 +786,7 @@ export default function InterviewPage() {
       {/* ── 3-Column Main Layout ─────────────────────────────────────────── */}
       <main className="interview-main-layout">
 
-        {/* ── LEFT PANEL: Question + Video ──────────────────────────────── */}
+        {/* ── LEFT PANEL: Question + Guidance ──────────────────────────────── */}
         <section className="interview-left-panel">
 
           {/* Active Question Card */}
@@ -772,6 +826,18 @@ export default function InterviewPage() {
                 {currentQuestion.text}
               </h2>
 
+              {/* Expected Topics / Focus Areas */}
+              {currentQuestion.expectedTopics && currentQuestion.expectedTopics.length > 0 && (
+                <div className="question-topics-box">
+                  <span className="topics-label">Key Topics Expected:</span>
+                  <div className="topics-list">
+                    {currentQuestion.expectedTopics.map((topic, i) => (
+                      <span key={i} className="topic-chip">{topic}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Question Assessment Source */}
               {currentQuestion.source && currentQuestion.source !== 'static_bank' && (
                 <div className="question-source-indicator">
@@ -789,67 +855,48 @@ export default function InterviewPage() {
             </div>
           )}
 
-          {/* Video Preview Panel */}
-          <div className="video-panel glass-card">
-            <div className="video-panel-header">
-              <span className="video-panel-title">Candidate Camera</span>
-              <button
-                type="button"
-                className={`btn-video-toggle ${videoEnabled ? 'active' : ''}`}
-                onClick={handleToggleVideo}
-                disabled={submitting || skipping || isTimeExpired}
-                title={videoEnabled ? 'Disable camera' : 'Enable camera'}
-              >
-                {videoEnabled ? <Video size={14} /> : <VideoOff size={14} />}
-                <span>{videoEnabled ? 'Camera On' : 'Enable Camera'}</span>
-              </button>
+          {/* Question Guidance & Actions Card */}
+          <div className="question-meta-card glass-card">
+            <div className="meta-card-header">
+              <span className="meta-card-title">Candidate Controls</span>
+              <div className="media-status-row">
+                <span className={`media-status-chip ${isListening ? 'active' : speechError ? 'error' : ''}`}>
+                  <span className={`status-dot ${isListening ? 'live' : ''}`} />
+                  {isListening ? 'Mic live' : speechError ? 'Mic unavailable' : isSpeechSupported ? 'Mic ready' : 'Mic off'}
+                </span>
+                {videoEnabled && (
+                  <span className="media-status-chip active">
+                    <span className="status-dot live" />
+                    Cam live
+                  </span>
+                )}
+              </div>
             </div>
 
-            {videoEnabled ? (
-              <VideoRecorder
-                ref={videoRecorderRef}
-                isRecording={isMediaRecording && videoEnabled}
-                onRecordingComplete={(blob) => setVideoBlob(blob)}
-                disabled={submitting || skipping || isTimeExpired}
-                autoStartStream={true}
-              />
-            ) : (
-              <div className="video-placeholder">
-                <VideoOff size={28} className="video-off-icon" />
-                <p>Camera is off</p>
-                <span>Enable for video analysis</span>
-              </div>
-            )}
+            <p className="meta-card-desc">
+              Answer with concrete technical reasoning, architectural decisions, and trade-offs. You may type or use dictation.
+            </p>
 
-            {/* Status Indicators */}
-            <div className="media-status-row">
-              {videoEnabled && (
-                <span className="media-status-chip active">
-                  <span className="status-dot live" />
-                  Camera active
-                </span>
-              )}
-              <span className={`media-status-chip ${isListening ? 'active' : speechError ? 'error' : ''}`}>
-                <span className={`status-dot ${isListening ? 'live' : ''}`} />
-                {isListening ? 'Listening...' : speechError ? 'Mic unavailable' : isSpeechSupported ? 'Mic ready' : 'Mic unsupported'}
+            <div className="meta-card-actions">
+              <button
+                type="button"
+                className="btn btn-skip-left"
+                onClick={handleInitiateSkip}
+                disabled={submitting || skipping || isTimeExpired}
+                id="skip-question-btn"
+                title="Skip question without penalty"
+              >
+                {skipping ? (
+                  <><Loader2 size={15} className="spin" /><span>Skipping...</span></>
+                ) : (
+                  <><SkipForward size={15} /><span>Skip Question</span></>
+                )}
+              </button>
+              <span className="skip-hint-text">
+                Skipping advances to the next question without lowering your evaluation score.
               </span>
             </div>
           </div>
-
-          {/* Skip button in left panel */}
-          <button
-            type="button"
-            className="btn btn-skip-left"
-            onClick={handleInitiateSkip}
-            disabled={submitting || skipping || isTimeExpired}
-            id="skip-question-btn"
-          >
-            {skipping ? (
-              <><Loader2 size={15} className="spin" /><span>Skipping...</span></>
-            ) : (
-              <><SkipForward size={15} /><span>Skip Question</span></>
-            )}
-          </button>
         </section>
 
         {/* ── CENTER PANEL: Answer / Input ──────────────────────────────── */}

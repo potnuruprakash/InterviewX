@@ -1,0 +1,271 @@
+/**
+ * FloatingCamera CSS
+ * Requirements 9, 10, 11:
+ * - Floating, compact, rounded corners, subtle shadow
+ * - Drag states: cursor: grab / grabbing
+ * - Video aspect ratio preserved (object-fit: cover)
+ * - Light and Dark theme support
+ */
+
+.floating-camera-window {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  background: rgba(18, 22, 34, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, width 0.2s ease, height 0.2s ease;
+  overflow: hidden;
+}
+
+/* Light Theme Variables */
+:root[data-theme='light'] .floating-camera-window,
+.light .floating-camera-window {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 14px 32px -4px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.floating-camera-window:hover {
+  border-color: rgba(109, 74, 255, 0.4);
+  box-shadow: 0 20px 42px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(109, 74, 255, 0.2);
+}
+
+.floating-camera-window.is-dragging {
+  cursor: grabbing !important;
+  opacity: 0.95;
+  box-shadow: 0 24px 50px -8px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(109, 74, 255, 0.5);
+  transition: none; /* Instant tracking without drag lag */
+}
+
+/* ── Top Header / Drag Handle ─────────────────────────────────────────── */
+.floating-cam-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 500;
+  color: #cbd5e1;
+  cursor: grab;
+}
+
+:root[data-theme='light'] .floating-cam-header,
+.light .floating-cam-header {
+  background: rgba(0, 0, 0, 0.03);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  color: #475569;
+}
+
+.floating-camera-window.is-dragging .floating-cam-header {
+  cursor: grabbing;
+}
+
+.floating-cam-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.drag-grip-icon {
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+  opacity: 0.7;
+}
+
+.floating-cam-label {
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Window Controls ─────────────────────────────────────────────────── */
+.floating-cam-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.floating-cam-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+:root[data-theme='light'] .floating-cam-ctrl-btn,
+.light .floating-cam-ctrl-btn {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.04);
+  color: #475569;
+}
+
+.floating-cam-ctrl-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+:root[data-theme='light'] .floating-cam-ctrl-btn:hover:not(:disabled),
+.light .floating-cam-ctrl-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+  color: #0f172a;
+}
+
+.floating-cam-ctrl-btn.active {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.floating-cam-ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Viewport ────────────────────────────────────────────────────────── */
+.floating-cam-viewport {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  background: #0b0f19;
+  overflow: hidden;
+}
+
+.floating-cam-viewport video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scaleX(-1); /* Mirror camera preview for natural feel */
+}
+
+/* Custom override for VideoRecorder container within floating camera */
+.floating-cam-viewport .camera-embed-wrapper {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.floating-cam-viewport .camera-viewport {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+.floating-cam-off-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 6px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.cam-off-icon {
+  opacity: 0.6;
+}
+
+/* ── Footer / Status Row ─────────────────────────────────────────────── */
+.floating-cam-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+:root[data-theme='light'] .floating-cam-footer,
+.light .floating-cam-footer {
+  background: rgba(0, 0, 0, 0.03);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  color: #64748b;
+}
+
+.floating-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.floating-cam-frame-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.status-dot.live {
+  background: #10b981;
+}
+
+.status-dot.error {
+  background: #ef4444;
+}
+
+.status-dot.pulse {
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulseLive 1.6s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+@keyframes pulseLive {
+  to {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+}
+
+.mic-live-icon {
+  color: #10b981;
+}
+
+/* ── Minimized State ─────────────────────────────────────────────────── */
+.floating-camera-window.is-minimized {
+  border-radius: 20px;
+}
+
+.floating-camera-window.is-minimized .floating-cam-header {
+  padding: 5px 10px;
+  border-bottom: none;
+}
+
+.floating-camera-window.is-minimized .floating-cam-footer {
+  display: none;
+}

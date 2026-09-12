@@ -68,6 +68,18 @@ export default function ProgressPage() {
     .sort((a, b) => b.score - a.score)
     .slice(0, 8)
 
+  // Calculate longitudinal skill trends only when >= 2 session data points exist
+  const skillTrends = Object.entries(allSkillScores).map(([skill, scores]) => {
+    const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    let trend = null
+    if (scores.length >= 2) {
+      // progress is sorted descending by completedAt (scores[0] is most recent)
+      const diff = scores[0] - scores[scores.length - 1]
+      trend = diff > 3 ? 'up' : diff < -3 ? 'down' : 'stable'
+    }
+    return { skill, score: avg, count: scores.length, trend }
+  }).sort((a, b) => b.score - a.score)
+
   // Count modalities used
   const modalityCounts = { text: 0, audio: 0, video: 0 }
   for (const p of progress) {
@@ -195,6 +207,39 @@ export default function ProgressPage() {
           )}
         </div>
 
+        {/* Longitudinal Skill Progression Trends */}
+        {skillTrends.length > 0 && (
+          <div className="skill-trends-section glass-card animate-fade-in" style={{ marginTop: '20px', padding: '16px 20px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <TrendingUp size={15} color="#06b6d4" />
+              Skill Trends Across Sessions
+            </h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {skillTrends.slice(0, 10).map((st) => (
+                <div
+                  key={st.skill}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '4px 10px',
+                    borderRadius: '999px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    fontSize: '12px',
+                  }}
+                >
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{st.skill}</span>
+                  <span style={{ color: '#c4b5fd', fontWeight: 700 }}>{st.score}%</span>
+                  {st.trend === 'up' && <span style={{ color: '#10b981', fontWeight: 700 }} title="Improving across sessions">↑</span>}
+                  {st.trend === 'down' && <span style={{ color: '#ef4444', fontWeight: 700 }} title="Needs reinforcement">↓</span>}
+                  {st.trend === 'stable' && <span style={{ color: '#94a3b8' }} title="Consistent across sessions">→</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Strong / Improvement Areas */}
         {(topStrong.length > 0 || topImprovements.length > 0) && (
           <div className="areas-grid animate-fade-in">
@@ -240,6 +285,7 @@ export default function ProgressPage() {
                     <th>Score</th>
                     <th>Modalities</th>
                     <th>Date</th>
+                    <th style={{ textAlign: 'right' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -264,6 +310,15 @@ export default function ProgressPage() {
                         </span>
                       </td>
                       <td className="date-cell">{new Date(p.completedAt).toLocaleDateString()}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <Link
+                          to={`/interview/${p.interviewId || p.id}/results`}
+                          className="btn btn-ghost btn-xs"
+                          style={{ color: '#06b6d4', fontWeight: 600 }}
+                        >
+                          Report →
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

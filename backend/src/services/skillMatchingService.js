@@ -157,37 +157,47 @@ const areSkillsRelated = (skillA, skillB) => {
   return Boolean(superA && superB && superA === superB);
 };
 
+const extractCanonical = (s) => {
+  if (!s) return null;
+  if (typeof s === 'string') return s.trim();
+  if (typeof s === 'object') {
+    return (s.canonicalName || s.name || s.skill || '').trim() || null;
+  }
+  return null;
+};
+
 /**
  * Match candidate skills against required and preferred JD skills.
  *
- * @param {Array<{ canonicalName: string }>} candidateSkills
- * @param {Array<{ canonicalName: string }>} requiredSkills
- * @param {Array<{ canonicalName: string }>} preferredSkills
+ * @param {Array<{ canonicalName: string }|string>} candidateSkills
+ * @param {Array<{ canonicalName: string }|string>} requiredSkills
+ * @param {Array<{ canonicalName: string }|string>} preferredSkills
  * @returns {Object} Matching result
  */
 const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
   // Build a set of candidate canonical skill names (lowercase for safety)
   const candidateSet = new Set(
     (candidateSkills || [])
-      .filter((s) => s && s.canonicalName)
-      .map((s) => s.canonicalName.toLowerCase().trim())
+      .map(extractCanonical)
+      .filter(Boolean)
+      .map((s) => s.toLowerCase())
   );
 
   const candidateNames = Array.from(candidateSet);
 
   // Build sets for required and preferred
   const requiredCanonicals = (requiredSkills || [])
-    .filter((s) => s && s.canonicalName)
-    .map((s) => s.canonicalName);
+    .map(extractCanonical)
+    .filter(Boolean);
 
   const preferredCanonicals = (preferredSkills || [])
-    .filter((s) => s && s.canonicalName)
-    .map((s) => s.canonicalName);
+    .map(extractCanonical)
+    .filter(Boolean);
 
   // All JD skills (required + preferred) — for computing additionalSkills
   const allJDSkillSet = new Set([
-    ...requiredCanonicals.map((s) => s.toLowerCase().trim()),
-    ...preferredCanonicals.map((s) => s.toLowerCase().trim()),
+    ...requiredCanonicals.map((s) => s.toLowerCase()),
+    ...preferredCanonicals.map((s) => s.toLowerCase()),
   ]);
 
   // ── Required skill matching ──────────────────────────────────────
@@ -239,7 +249,15 @@ const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
     }
   }
 
+  // Pure missing skills (required skills with no match and no transferable related skills)
+  const missingSkills = notIdentifiedRequiredSkills.filter(
+    (skill) => !transferableSkills.some((ts) => ts.toLowerCase().trim() === skill.toLowerCase().trim())
+  );
+
   return {
+    matchedSkills: matchedRequiredSkills,
+    partiallyMatchedSkills: transferableSkills,
+    missingSkills,
     matchedRequiredSkills,
     notIdentifiedRequiredSkills,
     transferableSkills,       // skills candidate has in the same domain as missing required

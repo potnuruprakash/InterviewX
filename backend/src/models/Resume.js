@@ -95,6 +95,8 @@ const resumeSchema = new mongoose.Schema(
       experience: [experienceSchema],
       education: [educationSchema],
       certifications: [certificationSchema],
+      tools: [{ type: String }],
+      technologies: [{ type: String }],
     },
     processingStatus: {
       type: String,

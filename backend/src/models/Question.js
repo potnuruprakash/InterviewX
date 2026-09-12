@@ -17,15 +17,15 @@ const questionSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    // Phase 3 & Coding — expanded type system
+    // Phase 3 & Structured Question Engine
     type: {
       type: String,
-      enum: ['technical', 'coding', 'project', 'experience', 'behavioral', 'job_specific', 'skill_gap', 'follow_up'],
+      enum: ['introduction', 'resume', 'technical', 'coding', 'project', 'experience', 'behavioral', 'job_specific', 'skill_gap', 'follow_up'],
       default: 'technical',
     },
     category: {
       type: String,
-      enum: ['technical', 'coding', 'behavioral', 'hr', 'project', 'conceptual', 'situational', 'skill_gap', 'experience', 'follow_up'],
+      enum: ['introduction', 'resume', 'project', 'technical', 'coding', 'behavioral', 'hr', 'conceptual', 'situational', 'skill_gap', 'experience', 'follow_up', 'job_description'],
       default: 'technical',
     },
     difficulty: {
@@ -43,10 +43,10 @@ const questionSchema = new mongoose.Schema(
       type: String,
       default: 'general',
     },
-    // Phase 3 — question source
+    // Phase 3 & Master Prompt — question source
     source: {
       type: String,
-      enum: ['resume', 'job_description', 'skill_gap', 'behavioral', 'experience', 'static_bank'],
+      enum: ['resume', 'project', 'job_description', 'skill_gap', 'behavioral', 'experience', 'previous_answer', 'general_pool', 'static_bank'],
       default: 'static_bank',
     },
     // Phase 3 — which project from resume this references
@@ -54,7 +54,11 @@ const questionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    // Phase 4 — expected concepts for SBERT evaluation
+    // Master Prompt & SBERT evaluation
+    expectedTopics: {
+      type: [String],
+      default: [],
+    },
     expectedConcepts: {
       type: [String],
       default: [],
@@ -96,10 +100,10 @@ const questionSchema = new mongoose.Schema(
       type: String,
       default: 'javascript',
     },
-    // Question Status (e.g. pending, answered, skipped)
+    // Question Status (e.g. pending, answered, skipped, timeout)
     status: {
       type: String,
-      enum: ['pending', 'answered', 'skipped'],
+      enum: ['pending', 'answered', 'skipped', 'timeout'],
       default: 'pending',
     },
     skippedAt: {

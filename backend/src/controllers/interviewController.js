@@ -43,9 +43,11 @@ const formatQuestion = (q) => q ? {
   category: q.category,
   difficulty: q.difficulty,
   targetSkill: q.targetSkill || q.skill,
-  skill: q.skill,
+  skill: q.skill || q.targetSkill || 'general',
   source: q.source,
   sourceProject: q.sourceProject,
+  expectedTopics: q.expectedTopics || q.expectedConcepts || q.expectedKeyPoints || [],
+  expectedConcepts: q.expectedConcepts || [],
   order: q.order,
   followUpAllowed: q.followUpAllowed,
   contextNote: q.contextNote,
@@ -89,18 +91,23 @@ const createInterview = async (req, res) => {
       skillAnalysis = await SkillAnalysis.findOne({ clerkUserId, resumeId, jobDescriptionId });
     } catch (e) { /* not critical */ }
 
+    const targetRole = job.targetRole || job.role || 'Software Engineer';
+    const durationMins = Math.max(5, Math.min(120, Number(durationMinutes) || 30));
+    const durationSecs = durationMins * 60;
+
     // Create interview
     const interview = await Interview.create({
       clerkUserId,
       resumeId,
       jobDescriptionId,
       skillAnalysisId: skillAnalysis?._id || null,
-      targetRole: job.targetRole || job.role || 'Software Engineer',
+      targetRole,
       interviewType,
       difficulty,
       configuredQuestionCount: requestedCount,
       totalQuestions: requestedCount,
-      durationMinutes: Math.max(5, Math.min(120, Number(durationMinutes) || 30)),
+      durationMinutes: durationMins,
+      durationSeconds: durationSecs,
       videoModeEnabled: isVideoEnabled,
       practiceFromInterviewId: practiceFromInterviewId || null,
       status: 'created',
@@ -116,14 +123,14 @@ const createInterview = async (req, res) => {
     let questionData = [];
     let generationSource = 'static_bank';
 
-    // NOTE: resume.parsedData (not resume.analysis) is where structured skills live.
-    // resume.analysis does not exist — using it always returns {}, causing generic questions.
+    // Candidate profile extraction
     const candidateProfile = resume.parsedData || {};
     const jobProfile = job.parsedData || {};
 
     const hasPersonalizationData = (
       candidateProfile.skills?.length > 0 ||
       candidateProfile.extractedSkills?.length > 0 ||
+      candidateProfile.projects?.length > 0 ||
       skillAnalysis !== null
     );
 
@@ -132,6 +139,7 @@ const createInterview = async (req, res) => {
         candidateProfile,
         jobProfile,
         skillAnalysis: skillAnalysis || {},
+        targetRole,
         interviewType,
         difficulty,
         totalQuestions: requestedCount,
@@ -148,9 +156,10 @@ const createInterview = async (req, res) => {
         ...fallback.map((q) => ({
           ...q,
           type: q.category || 'technical',
-          source: 'static_bank',
+          source: 'general_pool',
           targetSkill: q.skill,
           expectedConcepts: q.expectedKeyPoints || [],
+          expectedTopics: q.expectedKeyPoints || [],
           followUpAllowed: true,
           contextNote: null,
         })),
@@ -179,9 +188,10 @@ const createInterview = async (req, res) => {
           unique.push({
             ...q,
             type: q.category || 'technical',
-            source: 'static_bank',
+            source: 'general_pool',
             targetSkill: q.skill,
             expectedConcepts: q.expectedKeyPoints || [],
+            expectedTopics: q.expectedKeyPoints || [],
             followUpAllowed: true,
             contextNote: null,
           });
@@ -202,9 +212,10 @@ const createInterview = async (req, res) => {
         difficulty: q.difficulty || difficulty,
         targetSkill: q.targetSkill || q.skill || null,
         skill: q.skill || q.targetSkill || 'general',
-        source: q.source || 'static_bank',
+        source: q.source || 'general_pool',
         sourceProject: q.sourceProject || null,
         expectedConcepts: q.expectedConcepts || q.expectedKeyPoints || [],
+        expectedTopics: q.expectedTopics || q.expectedConcepts || q.expectedKeyPoints || [],
         expectedKeyPoints: q.expectedKeyPoints || q.expectedConcepts || [],
         order: index,
         followUpAllowed: q.followUpAllowed !== false,
@@ -231,6 +242,7 @@ const createInterview = async (req, res) => {
         configuredQuestionCount: interview.configuredQuestionCount,
         totalQuestions: interview.totalQuestions,
         durationMinutes: interview.durationMinutes,
+        durationSeconds: interview.durationSeconds,
         videoModeEnabled: interview.videoModeEnabled,
         questionGenerationSource: generationSource,
         createdAt: interview.createdAt,
@@ -279,22 +291,46 @@ const getInterview = async (req, res) => {
 // START INTERVIEW
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// START INTERVIEW
+// ─────────────────────────────────────────────────────────────────────────────
+
 const startInterview = async (req, res) => {
   try {
     const interview = await Interview.findOne({ _id: req.params.id, clerkUserId: req.clerkUserId });
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
+
     const maxAllowedQuestions = interview.configuredQuestionCount || interview.totalQuestions || 5;
+    const durationSeconds = interview.durationSeconds || (interview.durationMinutes || 30) * 60;
+    if (!interview.durationSeconds) {
+      interview.durationSeconds = durationSeconds;
+    }
+
+    // Set server-authoritative timer timestamps if not already set
+    if (!interview.startedAt) {
+      interview.startedAt = new Date();
+      interview.expiresAt = new Date(interview.startedAt.getTime() + durationSeconds * 1000);
+      interview.status = 'in_progress';
+      await interview.save();
+    } else if (!interview.expiresAt) {
+      interview.expiresAt = new Date(new Date(interview.startedAt).getTime() + durationSeconds * 1000);
+      await interview.save();
+    }
+
+    const now = Date.now();
+    const isTimeExpired = interview.expiresAt && now >= new Date(interview.expiresAt).getTime();
     const isAllQuestionsFinished = interview.currentQuestionIndex >= maxAllowedQuestions;
-    if (interview.status === 'completed' || isAllQuestionsFinished) {
+
+    if (interview.status === 'completed' || isAllQuestionsFinished || isTimeExpired) {
       if (interview.status !== 'completed') {
         interview.status = 'completed';
         interview.completedAt = interview.completedAt || new Date();
-        interview.completionReason = interview.completionReason || 'all_questions_completed';
+        interview.completionReason = isTimeExpired ? 'time_expired' : (interview.completionReason || 'all_questions_completed');
         await interview.save();
         await saveProgress(interview, req.clerkUserId);
       }
       return sendSuccess(res, {
-        message: 'Interview already completed.',
+        message: isTimeExpired ? 'Interview duration expired.' : 'Interview already completed.',
         isComplete: true,
         interview: {
           id: interview._id,
@@ -303,8 +339,13 @@ const startInterview = async (req, res) => {
           totalQuestions: maxAllowedQuestions,
           configuredQuestionCount: maxAllowedQuestions,
           durationMinutes: interview.durationMinutes || 30,
+          durationSeconds: interview.durationSeconds,
           startedAt: interview.startedAt,
+          expiresAt: interview.expiresAt,
+          remainingSeconds: 0,
           skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+          answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+          timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
           completionReason: interview.completionReason || null,
           videoModeEnabled: interview.videoModeEnabled || false,
           videoRecorded: interview.videoRecorded || false,
@@ -312,12 +353,6 @@ const startInterview = async (req, res) => {
         },
         currentQuestion: null,
       });
-    }
-
-    if (interview.status === 'created') {
-      interview.status = 'in_progress';
-      interview.startedAt = new Date();
-      await interview.save();
     }
 
     let firstQuestion = await Question.findOne({
@@ -354,8 +389,13 @@ const startInterview = async (req, res) => {
             totalQuestions: maxAllowedQuestions,
             configuredQuestionCount: maxAllowedQuestions,
             durationMinutes: interview.durationMinutes || 30,
+            durationSeconds: interview.durationSeconds,
             startedAt: interview.startedAt,
+            expiresAt: interview.expiresAt,
+            remainingSeconds: 0,
             skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+            answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+            timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
             completionReason: interview.completionReason,
             videoModeEnabled: interview.videoModeEnabled || false,
             videoRecorded: interview.videoRecorded || false,
@@ -366,6 +406,10 @@ const startInterview = async (req, res) => {
       }
     }
 
+    const remainingSecs = interview.expiresAt
+      ? Math.max(0, Math.floor((new Date(interview.expiresAt).getTime() - now) / 1000))
+      : durationSeconds;
+
     return sendSuccess(res, {
       message: 'Interview started.',
       interview: {
@@ -375,8 +419,13 @@ const startInterview = async (req, res) => {
         totalQuestions: maxAllowedQuestions,
         configuredQuestionCount: maxAllowedQuestions,
         durationMinutes: interview.durationMinutes || 30,
+        durationSeconds: interview.durationSeconds,
         startedAt: interview.startedAt,
+        expiresAt: interview.expiresAt,
+        remainingSeconds: remainingSecs,
         skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+        answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+        timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
         completionReason: interview.completionReason || null,
         questionGenerationSource: interview.questionGenerationSource,
         modalityAvailability: interview.modalityAvailability,
@@ -402,16 +451,20 @@ const getCurrentQuestion = async (req, res) => {
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
 
     const maxAllowedQuestions = interview.configuredQuestionCount || interview.totalQuestions || 5;
+    const durationSeconds = interview.durationSeconds || (interview.durationMinutes || 30) * 60;
+    const now = Date.now();
+    const isTimeExpired = interview.expiresAt && now >= new Date(interview.expiresAt).getTime();
 
-    if (interview.status === 'completed' || interview.currentQuestionIndex >= maxAllowedQuestions) {
+    if (interview.status === 'completed' || interview.currentQuestionIndex >= maxAllowedQuestions || isTimeExpired) {
       if (interview.status !== 'completed') {
         interview.status = 'completed';
         interview.completedAt = interview.completedAt || new Date();
-        interview.completionReason = interview.completionReason || 'all_questions_completed';
+        interview.completionReason = isTimeExpired ? 'time_expired' : (interview.completionReason || 'all_questions_completed');
         await interview.save();
+        await saveProgress(interview, req.clerkUserId);
       }
       return sendSuccess(res, {
-        message: 'Interview completed.',
+        message: isTimeExpired ? 'Interview duration expired.' : 'Interview completed.',
         isComplete: true,
         currentQuestion: null,
         interview: {
@@ -419,8 +472,13 @@ const getCurrentQuestion = async (req, res) => {
           status: interview.status,
           completionReason: interview.completionReason,
           durationMinutes: interview.durationMinutes || 30,
+          durationSeconds,
           startedAt: interview.startedAt,
+          expiresAt: interview.expiresAt,
+          remainingSeconds: 0,
           skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+          answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+          timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
           totalQuestions: maxAllowedQuestions,
           configuredQuestionCount: maxAllowedQuestions,
           videoModeEnabled: interview.videoModeEnabled || false,
@@ -455,7 +513,12 @@ const getCurrentQuestion = async (req, res) => {
       interview.completedAt = new Date();
       interview.completionReason = 'all_questions_completed';
       await interview.save();
+      await saveProgress(interview, req.clerkUserId);
     }
+
+    const remainingSecs = interview.expiresAt
+      ? Math.max(0, Math.floor((new Date(interview.expiresAt).getTime() - now) / 1000))
+      : durationSeconds;
 
     return sendSuccess(res, {
       currentQuestion: question ? formatQuestion(question) : null,
@@ -463,8 +526,13 @@ const getCurrentQuestion = async (req, res) => {
       totalQuestions: maxAllowedQuestions,
       configuredQuestionCount: maxAllowedQuestions,
       skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+      answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+      timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
       durationMinutes: interview.durationMinutes || 30,
+      durationSeconds,
       startedAt: interview.startedAt,
+      expiresAt: interview.expiresAt,
+      remainingSeconds: remainingSecs,
       isComplete,
       interview: {
         id: interview._id,
@@ -473,8 +541,13 @@ const getCurrentQuestion = async (req, res) => {
         totalQuestions: maxAllowedQuestions,
         configuredQuestionCount: maxAllowedQuestions,
         durationMinutes: interview.durationMinutes || 30,
+        durationSeconds,
         startedAt: interview.startedAt,
+        expiresAt: interview.expiresAt,
+        remainingSeconds: remainingSecs,
         skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+        answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+        timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
         videoModeEnabled: interview.videoModeEnabled || false,
         videoRecorded: interview.videoRecorded || false,
         videoUploaded: interview.videoUploaded || false,
@@ -499,12 +572,28 @@ const submitResponse = async (req, res) => {
 
     const interview = await Interview.findOne({ _id: req.params.id, clerkUserId });
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
+
+    // Enforce interview completed check
     if (interview.status === 'completed') {
       return sendError(res, 400, 'INTERVIEW_COMPLETED', 'This interview is already completed.');
     }
 
+    // Enforce server-side expiration check (+ 15s latency buffer)
+    if (interview.expiresAt && Date.now() > new Date(interview.expiresAt).getTime() + 15000) {
+      interview.status = 'completed';
+      interview.completionReason = 'time_expired';
+      interview.completedAt = interview.completedAt || new Date();
+      await interview.save();
+      await saveProgress(interview, clerkUserId);
+      return sendError(res, 400, 'INTERVIEW_EXPIRED', 'The interview duration has expired. Submissions are no longer accepted.');
+    }
+
     const question = await Question.findOne({ _id: questionId, interviewId: interview._id });
     if (!question) return sendError(res, 404, 'QUESTION_NOT_FOUND', 'Question not found in this interview.');
+
+    if (question.status === 'answered' || question.status === 'skipped') {
+      return sendError(res, 409, 'RESPONSE_EXISTS', `This question has already been marked as ${question.status}.`);
+    }
 
     const existingResponse = await Response.findOne({ interviewId: interview._id, questionId, clerkUserId });
     if (existingResponse) return sendError(res, 409, 'RESPONSE_EXISTS', 'Answer already submitted for this question.');
@@ -515,7 +604,7 @@ const submitResponse = async (req, res) => {
       : (code || '').trim();
 
     // ── SBERT evaluation ────────────────────────────────────────────
-    const expectedConcepts = question.expectedConcepts || question.expectedKeyPoints || [];
+    const expectedConcepts = question.expectedConcepts || question.expectedTopics || question.expectedKeyPoints || [];
     const { textEvaluation, evaluation } = await evaluateResponse(
       question.text,
       textToEvaluate,
@@ -538,13 +627,16 @@ const submitResponse = async (req, res) => {
       status: 'submitted',
       textEvaluation,
       multimodalEvaluation: multimodalEval,
-      evaluation, // legacy
+      evaluation,
       submittedAt: new Date(),
     });
 
     // Mark question as answered
     question.status = 'answered';
     await question.save();
+
+    // Track answered count
+    interview.answeredQuestionsCount = (interview.answeredQuestionsCount || 0) + 1;
 
     // ── Adaptive engine ─────────────────────────────────────────────
     const responseScore = textEvaluation.textScore || evaluation.score || 0;
@@ -578,7 +670,7 @@ const submitResponse = async (req, res) => {
     let nextQuestion = null;
     if (!isComplete && shouldFollowUp && missingConcepts.length > 0 && interview.totalQuestions < maxAllowedQuestions) {
       const followUpData = generateFollowUpQuestion(question, textToEvaluate, missingConcepts);
-      const followUpOrder = interview.totalQuestions; // append after existing
+      const followUpOrder = interview.totalQuestions;
       const followUp = await Question.create({
         interviewId: interview._id,
         clerkUserId,
@@ -594,9 +686,11 @@ const submitResponse = async (req, res) => {
       interview.status = 'completed';
       interview.completionReason = interview.completionReason || 'completed';
       interview.completedAt = new Date();
+      await interview.save();
+      await saveProgress(interview, clerkUserId);
+    } else {
+      await interview.save();
     }
-
-    await interview.save();
 
     // Get next question if not follow-up and not complete
     if (!nextQuestion && !isComplete) {
@@ -622,7 +716,6 @@ const submitResponse = async (req, res) => {
       if (nextQuestionDoc && interview.currentQuestionIndex < maxAllowedQuestions) {
         nextQuestion = formatQuestion(nextQuestionDoc);
       } else {
-        // All remaining questions completed or limit reached
         isComplete = true;
         interview.status = 'completed';
         interview.completionReason = interview.completionReason || 'all_questions_completed';
@@ -631,6 +724,11 @@ const submitResponse = async (req, res) => {
         await saveProgress(interview, clerkUserId);
       }
     }
+
+    const durationSeconds = interview.durationSeconds || (interview.durationMinutes || 30) * 60;
+    const remainingSecs = interview.expiresAt
+      ? Math.max(0, Math.floor((new Date(interview.expiresAt).getTime() - Date.now()) / 1000))
+      : durationSeconds;
 
     return sendSuccess(res, {
       message: 'Answer submitted successfully.',
@@ -646,8 +744,13 @@ const submitResponse = async (req, res) => {
         totalQuestions: maxAllowedQuestions,
         configuredQuestionCount: maxAllowedQuestions,
         skippedQuestionsCount: interview.skippedQuestionsCount || 0,
+        answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+        timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
         durationMinutes: interview.durationMinutes || 30,
+        durationSeconds,
         startedAt: interview.startedAt,
+        expiresAt: interview.expiresAt,
+        remainingSeconds: remainingSecs,
         status: interview.status,
         isComplete,
         completionReason: interview.completionReason,
@@ -678,8 +781,21 @@ const skipQuestion = async (req, res) => {
 
     const interview = await Interview.findOne({ _id: interviewId, clerkUserId });
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
+
+    // Check expiration (+ 15s grace)
+    if (interview.expiresAt && Date.now() > new Date(interview.expiresAt).getTime() + 15000) {
+      interview.status = 'completed';
+      interview.completionReason = 'time_expired';
+      interview.completedAt = interview.completedAt || new Date();
+      await interview.save();
+      await saveProgress(interview, clerkUserId);
+      return sendError(res, 400, 'INTERVIEW_EXPIRED', 'The interview duration has expired.');
+    }
+
     const maxAllowedQuestions = interview.configuredQuestionCount || interview.totalQuestions || 5;
+    const durationSeconds = interview.durationSeconds || (interview.durationMinutes || 30) * 60;
     const isAlreadyAtEnd = interview.currentQuestionIndex >= maxAllowedQuestions;
+
     if (interview.status === 'completed' || isAlreadyAtEnd) {
       if (interview.status !== 'completed') {
         interview.status = 'completed';
@@ -698,8 +814,13 @@ const skipQuestion = async (req, res) => {
           totalQuestions: maxAllowedQuestions,
           configuredQuestionCount: maxAllowedQuestions,
           skippedQuestionsCount: interview.skippedQuestionsCount || maxAllowedQuestions,
+          answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+          timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
           durationMinutes: interview.durationMinutes || 30,
+          durationSeconds,
           startedAt: interview.startedAt,
+          expiresAt: interview.expiresAt,
+          remainingSeconds: 0,
           status: 'completed',
           isComplete: true,
           completionReason: interview.completionReason,
@@ -718,12 +839,10 @@ const skipQuestion = async (req, res) => {
       question = await Question.findOne({ interviewId: interview._id, order: interview.currentQuestionIndex });
     }
     if (!question) {
-      // If question wasn't found by order, check if any pending question exists within range
       question = await Question.findOne({ interviewId: interview._id, status: 'pending', order: { $lt: maxAllowedQuestions } }).sort({ order: 1 });
     }
 
     if (!question) {
-      // No question found at all — interview is completed
       interview.status = 'completed';
       interview.completedAt = interview.completedAt || new Date();
       interview.completionReason = 'all_questions_completed';
@@ -740,8 +859,13 @@ const skipQuestion = async (req, res) => {
           totalQuestions: maxAllowedQuestions,
           configuredQuestionCount: maxAllowedQuestions,
           skippedQuestionsCount: interview.skippedQuestionsCount,
+          answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+          timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
           durationMinutes: interview.durationMinutes || 30,
+          durationSeconds,
           startedAt: interview.startedAt,
+          expiresAt: interview.expiresAt,
+          remainingSeconds: 0,
           status: 'completed',
           isComplete: true,
           completionReason: interview.completionReason,
@@ -754,11 +878,11 @@ const skipQuestion = async (req, res) => {
     }
 
     if (question.status === 'answered') {
-      return sendError(res, 409, 'ALREADY_ANSWERED', 'This question has already been answered.');
+      return sendError(res, 409, 'ALREADY_ANSWERED', 'This question has already been answered and cannot be skipped.');
     }
 
     if (question.status === 'skipped') {
-      // If question was already skipped, do not error out! Advance to next pending question or complete
+      // Advance to next pending question
       const nextPending = await Question.findOne({
         interviewId: interview._id,
         status: 'pending',
@@ -782,8 +906,13 @@ const skipQuestion = async (req, res) => {
             totalQuestions: maxAllowedQuestions,
             configuredQuestionCount: maxAllowedQuestions,
             skippedQuestionsCount: interview.skippedQuestionsCount || maxAllowedQuestions,
+            answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+            timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
             durationMinutes: interview.durationMinutes || 30,
+            durationSeconds,
             startedAt: interview.startedAt,
+            expiresAt: interview.expiresAt,
+            remainingSeconds: 0,
             status: 'completed',
             isComplete: true,
             completionReason: interview.completionReason,
@@ -798,6 +927,10 @@ const skipQuestion = async (req, res) => {
       interview.currentQuestionIndex = nextPending.order;
       await interview.save();
 
+      const remainingSecs = interview.expiresAt
+        ? Math.max(0, Math.floor((new Date(interview.expiresAt).getTime() - Date.now()) / 1000))
+        : durationSeconds;
+
       return sendSuccess(res, {
         message: 'Question already skipped. Proceeding to next question.',
         status: 'skipped',
@@ -807,8 +940,13 @@ const skipQuestion = async (req, res) => {
           totalQuestions: maxAllowedQuestions,
           configuredQuestionCount: maxAllowedQuestions,
           skippedQuestionsCount: interview.skippedQuestionsCount,
+          answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+          timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
           durationMinutes: interview.durationMinutes || 30,
+          durationSeconds,
           startedAt: interview.startedAt,
+          expiresAt: interview.expiresAt,
+          remainingSeconds: remainingSecs,
           status: interview.status,
           isComplete: false,
           completionReason: interview.completionReason,
@@ -826,11 +964,10 @@ const skipQuestion = async (req, res) => {
     question.skipReason = reason;
     await question.save();
 
-    // Advance question index
+    // Advance question index and increment skip count without deflating performance score
     interview.currentQuestionIndex += 1;
     interview.skippedQuestionsCount = (interview.skippedQuestionsCount || 0) + 1;
 
-    // Check if more questions exist within max allowed
     let nextQuestionDoc = null;
     if (interview.currentQuestionIndex < maxAllowedQuestions) {
       nextQuestionDoc = await Question.findOne({
@@ -865,6 +1002,10 @@ const skipQuestion = async (req, res) => {
       await interview.save();
     }
 
+    const remainingSecs = interview.expiresAt
+      ? Math.max(0, Math.floor((new Date(interview.expiresAt).getTime() - Date.now()) / 1000))
+      : durationSeconds;
+
     return sendSuccess(res, {
       message: isComplete ? 'All questions finished. Interview completed.' : 'Question skipped successfully.',
       status: isComplete ? 'completed' : 'skipped',
@@ -875,8 +1016,13 @@ const skipQuestion = async (req, res) => {
         totalQuestions: maxAllowedQuestions,
         configuredQuestionCount: maxAllowedQuestions,
         skippedQuestionsCount: interview.skippedQuestionsCount,
+        answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+        timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
         durationMinutes: interview.durationMinutes || 30,
+        durationSeconds,
         startedAt: interview.startedAt,
+        expiresAt: interview.expiresAt,
+        remainingSeconds: remainingSecs,
         status: interview.status,
         isComplete,
         completionReason: interview.completionReason,
@@ -1179,12 +1325,80 @@ const getResults = async (req, res) => {
       });
     } catch (e) { /* not critical */ }
 
+    const timedOutCount = allQuestions.filter((q) => q.status === 'timeout').length ||
+      (interview.completionReason === 'time_expired' ? Math.max(0, totalCount - answeredCount - skippedCount) : 0);
+
+    // Compute empirical sub-pillar scores
+    const avgSemantic = scoredResponses.length > 0
+      ? scoredResponses.reduce((sum, r) => sum + (r.textEvaluation?.semanticScore ?? 0.75), 0) / scoredResponses.length
+      : 0.7;
+    const avgConceptCoverage = scoredResponses.length > 0
+      ? scoredResponses.reduce((sum, r) => sum + (r.textEvaluation?.conceptCoverage ?? 0.7), 0) / scoredResponses.length
+      : 0.65;
+    const technicalAccuracy = Math.round(fusion.technicalScore || (avgSemantic * 100));
+    const relevance = Math.round(Math.min(100, Math.max(30, (avgSemantic * 0.6 + avgConceptCoverage * 0.4) * 100)));
+    const completeness = Math.round(Math.min(100, Math.max(25, avgConceptCoverage * 100)));
+
+    // Communication score from voice/fluency or fallback
+    const voiceWpm = voiceBehaviorAnalysis?.voiceMetrics?.wpm || 140;
+    const fillerDensity = voiceBehaviorAnalysis?.voiceMetrics?.fillerDensity || 1.5;
+    const wpmScore = voiceWpm >= 120 && voiceWpm <= 165 ? 90 : (voiceWpm >= 100 && voiceWpm <= 180 ? 75 : 60);
+    const fillerScore = Math.max(40, 100 - Math.round(fillerDensity * 12));
+    const communication = Math.round((wpmScore * 0.5 + fillerScore * 0.5));
+
+    // Depth & Evidence from word counts, code presence, and STAR breakdown
+    const totalWords = voiceBehaviorAnalysis?.voiceMetrics?.totalWords || 100;
+    const avgWordsPerAnswer = answeredCount > 0 ? totalWords / answeredCount : 50;
+    const hasCodeOrArchitecture = scoredResponses.some(r => r.code || (r.answerText && r.answerText.length > 250));
+    const depth = Math.round(Math.min(100, Math.max(35, (avgWordsPerAnswer > 80 ? 85 : avgWordsPerAnswer > 40 ? 70 : 50) + (hasCodeOrArchitecture ? 10 : 0))));
+
+    const starDetectedCount = enhancedQuestionBreakdown.filter(q => q.starAnalysis?.situation?.status === 'detected' || q.starAnalysis?.action?.status === 'detected').length;
+    const evidence = Math.round(Math.min(100, Math.max(40, 60 + (starDetectedCount * 12) + (hasCodeOrArchitecture ? 10 : 0))));
+
+    // Actionable Strengths, Improvements, and Recommended Practice
+    const strengths = [];
+    if (technicalAccuracy >= 70) strengths.push('Strong technical explanation of core principles');
+    if (evidence >= 70) strengths.push('Good use of project examples and concrete implementation context');
+    if (communication >= 70) strengths.push('Clear, structured communication with optimal conversational pacing');
+    if (strengths.length === 0) strengths.push('Completed practice interview with consistent engagement across questions');
+
+    const improvements = [];
+    if (completeness < 75) improvements.push('Explain implementation details more deeply and cover all technical concepts');
+    if (evidence < 75) improvements.push('Provide measurable metrics and concrete real-world project examples in answers');
+    if (depth < 70) improvements.push('Improve answer structure using Situation-Task-Action-Result (STAR) framing');
+    if (improvements.length === 0) improvements.push('Continue refining edge-case analysis and architectural trade-off discussions');
+
+    // Actionable recommended practice based on actual detected weaknesses
+    const weakSkills = interview.interviewState?.weakAreas || skillAnalysisData.missingSkills || [];
+    const recommendedPractice = [];
+    if (weakSkills.length > 0) {
+      recommendedPractice.push(`Practice deep-dive architectural drills focusing on ${weakSkills.slice(0, 3).join(', ')}`);
+    }
+    if (communication < 75) {
+      recommendedPractice.push('Practice mock answers with intentional 1.5s silent pauses to eliminate filler words');
+    }
+    if (completeness < 75) {
+      recommendedPractice.push('Review system design trade-offs and key concept checklists before next practice interview');
+    }
+    if (recommendedPractice.length === 0) {
+      recommendedPractice.push(`Try a Hard difficulty technical interview for ${interview.targetRole} to challenge advanced topics`);
+    }
+
     // Build final evaluation
     const finalEval = {
       overallScore: fusion.overallScore,
       technicalScore: fusion.technicalScore,
       audioScore: fusion.audioScore,
       videoScore: fusion.videoScore,
+      technicalAccuracy,
+      relevance,
+      completeness,
+      communication,
+      depth,
+      evidence,
+      strengths,
+      improvements,
+      recommendedPractice,
       modalitiesUsed: fusion.modalitiesUsed,
       skillScores: skillPerformance,
       strongAreas: interview.interviewState?.strongAreas || [],
@@ -1192,6 +1406,7 @@ const getResults = async (req, res) => {
       skillGaps: skillAnalysisData.missingSkills || [],
       questionsAnswered: answeredCount,
       questionsSkipped: skippedCount,
+      questionsTimedOut: timedOutCount,
       totalQuestions: totalCount,
       completionReason: interview.completionReason,
       isDevelopmentEvaluation: aggregated.isDevelopmentEvaluation,

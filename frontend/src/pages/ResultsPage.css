@@ -330,6 +330,176 @@
 }
 
 /* --------------------------------------------------------------------------
+   Empirical Sub-Pillars Card & Grid
+   -------------------------------------------------------------------------- */
+.sub-pillars-card {
+  margin-top: 28px;
+  padding: 24px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sub-pillars-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.sub-pillars-title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.sub-pillars-title-wrap h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 4px 0;
+}
+
+.sub-pillars-title-wrap p {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.session-counts-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.count-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.count-chip.answered {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.count-chip.skipped {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.count-chip.timedout {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.sub-pillars-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .sub-pillars-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .sub-pillars-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sub-pillar-item {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sub-pillar-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sub-pillar-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.sub-pillar-score {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.sub-pillar-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.fill-cyan { background: #06b6d4; }
+.fill-purple { background: #a855f7; }
+.fill-emerald { background: #10b981; }
+.fill-blue { background: #3b82f6; }
+.fill-indigo { background: #6366f1; }
+.fill-amber { background: #f59e0b; }
+
+.sub-pillars-footer {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .sub-pillars-footer {
+    grid-template-columns: 1fr;
+  }
+}
+
+.footer-col-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.footer-bullet-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.6;
+}
+
+.footer-bullet-list li {
+  margin-bottom: 6px;
+}
+
+/* --------------------------------------------------------------------------
    Score Ring Component
    -------------------------------------------------------------------------- */
 .score-ring-wrap {

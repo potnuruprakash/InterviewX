@@ -38,7 +38,7 @@ const interviewSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['created', 'in_progress', 'completed', 'abandoned'],
+      enum: ['created', 'ready', 'in_progress', 'paused', 'completed', 'evaluating', 'results', 'abandoned'],
       default: 'created',
     },
     currentQuestionIndex: {
@@ -56,6 +56,14 @@ const interviewSchema = new mongoose.Schema(
     durationMinutes: {
       type: Number,
       default: 30,
+    },
+    durationSeconds: {
+      type: Number,
+      default: 1800,
+    },
+    expiresAt: {
+      type: Date,
+      default: null,
     },
     videoModeEnabled: {
       type: Boolean,
@@ -87,6 +95,14 @@ const interviewSchema = new mongoose.Schema(
       default: null,
     },
     skippedQuestionsCount: {
+      type: Number,
+      default: 0,
+    },
+    answeredQuestionsCount: {
+      type: Number,
+      default: 0,
+    },
+    timedOutQuestionsCount: {
       type: Number,
       default: 0,
     },

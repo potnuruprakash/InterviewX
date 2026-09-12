@@ -37,7 +37,7 @@ const getUserProgress = async (req, res) => {
     return sendSuccess(res, {
       progress: progress.map((p) => ({
         id: p._id,
-        interviewId: p.interviewId?._id,
+        interviewId: p.interviewId?._id || p.interviewId,
         targetRole: p.targetRole,
         overallScore: p.overallScore,
         technicalScore: p.technicalScore,

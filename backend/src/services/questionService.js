@@ -625,8 +625,202 @@ const generateTechnicalQuestions = (matchedSkills = [], difficulty = 'medium', m
   return questions;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ROLE-SPECIFIC QUESTIONS BANK (8 Role Modes)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ROLE_SPECIFIC_QUESTIONS = {
+  'frontend developer': [
+    {
+      text: 'Explain how the browser renders a web page from HTML parsing to pixel painting. How does virtual DOM reconciliation optimize this pipeline?',
+      difficulty: 'medium',
+      targetSkill: 'frontend-architecture',
+      expectedConcepts: ['DOM tree', 'CSSOM', 'render tree', 'reflow/layout', 'repaint', 'virtual DOM diffing'],
+    },
+    {
+      text: 'How do you optimize Core Web Vitals (LCP, FID/INP, CLS) in a modern single-page application? What specific techniques have you implemented?',
+      difficulty: 'hard',
+      targetSkill: 'web-performance',
+      expectedConcepts: ['LCP optimization', 'code splitting', 'lazy loading', 'CLS stabilization', 'image optimization'],
+    },
+    {
+      text: 'Compare client-side rendering (CSR), server-side rendering (SSR), and static site generation (SSG). How do you decide which rendering strategy to adopt?',
+      difficulty: 'medium',
+      targetSkill: 'rendering-strategies',
+      expectedConcepts: ['hydration', 'SEO considerations', 'time to interactive', 'caching strategies', 'server overhead'],
+    },
+    {
+      text: 'How do you manage complex application state across deeply nested components while preventing unnecessary re-renders?',
+      difficulty: 'medium',
+      targetSkill: 'state-management',
+      expectedConcepts: ['selectors', 'memoization', 'context API trade-offs', 'immutability', 'render optimization'],
+    },
+  ],
+  'backend developer': [
+    {
+      text: 'How do you design a high-throughput RESTful or gRPC microservice that guarantees idempotency and graceful error handling under heavy load?',
+      difficulty: 'hard',
+      targetSkill: 'api-architecture',
+      expectedConcepts: ['idempotency keys', 'retry mechanisms', 'circuit breaker pattern', 'rate limiting', 'distributed tracing'],
+    },
+    {
+      text: 'Explain the trade-offs between SQL relational databases (e.g., PostgreSQL) and NoSQL document stores (e.g., MongoDB) when architecting transactional systems.',
+      difficulty: 'medium',
+      targetSkill: 'database-design',
+      expectedConcepts: ['ACID compliance', 'schema flexibility', 'horizontal scaling', 'read/write patterns', 'indexing strategies'],
+    },
+    {
+      text: 'How would you architect a distributed caching layer using Redis to avoid cache stampede, cache penetration, and cache avalanche?',
+      difficulty: 'hard',
+      targetSkill: 'caching-strategies',
+      expectedConcepts: ['cache invalidation', 'TTL jitter', 'mutex locks', 'bloom filters', 'cache-aside pattern'],
+    },
+    {
+      text: 'How do you handle background asynchronous processing and message delivery guarantees using queueing systems like RabbitMQ or Kafka?',
+      difficulty: 'medium',
+      targetSkill: 'message-queues',
+      expectedConcepts: ['at-least-once delivery', 'dead-letter exchanges', 'worker pools', 'backpressure', 'consumer idempotency'],
+    },
+  ],
+  'full stack developer': [
+    {
+      text: 'Walk me through how you design an end-to-end feature from the database schema and backend API layer up to the client state management and UI presentation.',
+      difficulty: 'medium',
+      targetSkill: 'full-stack-architecture',
+      expectedConcepts: ['schema modeling', 'API contract', 'authentication flow', 'state management', 'error boundaries'],
+    },
+    {
+      text: 'How do you structure client-server communication for real-time collaborative applications? Compare WebSockets, Server-Sent Events (SSE), and long-polling.',
+      difficulty: 'hard',
+      targetSkill: 'realtime-systems',
+      expectedConcepts: ['bidirectional vs unidirectional', 'heartbeats', 'connection re-establishment', 'scalability across instances', 'state synchronization'],
+    },
+    {
+      text: 'What security vulnerabilities do you proactively defend against in a full-stack application (e.g., XSS, CSRF, SQL Injection, SSRF)?',
+      difficulty: 'medium',
+      targetSkill: 'application-security',
+      expectedConcepts: ['input sanitization', 'parameterized queries', 'CORS & CSP', 'httpOnly cookies', 'rate limiting'],
+    },
+  ],
+  'data analyst': [
+    {
+      text: 'Describe how you use advanced SQL window functions (e.g., ROW_NUMBER, RANK, LAG/LEAD) to perform cohort retention and time-series trend analysis.',
+      difficulty: 'medium',
+      targetSkill: 'sql-analysis',
+      expectedConcepts: ['partition by', 'order by', 'lag/lead offsets', 'cohort definitions', 'aggregation logic'],
+    },
+    {
+      text: 'How do you validate data integrity and diagnose pipeline anomalies when reporting critical business KPIs to executive stakeholders?',
+      difficulty: 'medium',
+      targetSkill: 'data-quality',
+      expectedConcepts: ['null handling', 'outlier detection', 'reconciliation checks', 'statistical thresholds', 'data lineage'],
+    },
+    {
+      text: 'How do you design an A/B test analysis framework to establish statistical significance without falling into common p-hacking pitfalls?',
+      difficulty: 'hard',
+      targetSkill: 'experimentation',
+      expectedConcepts: ['sample size calculation', 'confidence intervals', 'p-value interpretation', 'type I and II errors', 'practical significance'],
+    },
+  ],
+  'data scientist': [
+    {
+      text: 'How do you evaluate and address high bias versus high variance in predictive machine learning models? Walk through your regularization and validation strategy.',
+      difficulty: 'medium',
+      targetSkill: 'machine-learning',
+      expectedConcepts: ['L1/L2 regularization', 'cross-validation', 'learning curves', 'feature selection', 'ensemble techniques'],
+    },
+    {
+      text: 'In an imbalanced classification scenario (e.g., fraud detection at 0.1% incidence), which evaluation metrics and sampling strategies do you employ?',
+      difficulty: 'hard',
+      targetSkill: 'model-evaluation',
+      expectedConcepts: ['precision-recall curve', 'PR-AUC / ROC-AUC', 'F1-score', 'SMOTE or undersampling', 'cost-sensitive learning'],
+    },
+    {
+      text: 'How do you detect and mitigate data drift and concept drift once a machine learning model is actively deployed in production?',
+      difficulty: 'hard',
+      targetSkill: 'mlops',
+      expectedConcepts: ['statistical distribution tests', 'KS-test / PSI', 'monitoring prediction latency', 'automated retraining', 'feature store monitoring'],
+    },
+  ],
+  'devops engineer': [
+    {
+      text: 'How do you design a zero-downtime deployment strategy (e.g., Blue-Green or Canary) in a Kubernetes-orchestrated production environment?',
+      difficulty: 'hard',
+      targetSkill: 'kubernetes-deployments',
+      expectedConcepts: ['readiness and liveness probes', 'traffic splitting', 'automated rollbacks', 'ingress routing', 'database migration safety'],
+    },
+    {
+      text: 'Explain how you structure modular, testable Infrastructure as Code (IaC) using Terraform, including state management and secret isolation.',
+      difficulty: 'medium',
+      targetSkill: 'infrastructure-as-code',
+      expectedConcepts: ['remote state locks', 'module encapsulation', 'workspace separation', 'drift detection', 'secret management'],
+    },
+    {
+      text: 'What observability pillars (metrics, logs, traces) do you establish to achieve sub-minute mean-time-to-detection (MTTD) during major outages?',
+      difficulty: 'medium',
+      targetSkill: 'observability',
+      expectedConcepts: ['distributed tracing', 'log aggregation', 'SLIs/SLOs', 'synthetic monitoring', 'alert fatigue reduction'],
+    },
+  ],
+  'software engineer': [
+    {
+      text: 'How do you apply SOLID design principles and clean architectural patterns to prevent technical debt in a rapidly evolving codebase?',
+      difficulty: 'medium',
+      targetSkill: 'software-architecture',
+      expectedConcepts: ['single responsibility', 'dependency inversion', 'coupling vs cohesion', 'interface segregation', 'refactoring'],
+    },
+    {
+      text: 'How do you diagnose and resolve performance bottlenecks, memory leaks, and concurrency race conditions in a distributed system?',
+      difficulty: 'hard',
+      targetSkill: 'system-troubleshooting',
+      expectedConcepts: ['profiling tools', 'heap dump analysis', 'thread contention', 'lock contention', 'horizontal vs vertical scaling'],
+    },
+  ],
+  'behavioral/hr': [
+    {
+      text: 'Describe a situation where you had to manage competing priorities across different cross-functional stakeholders with conflicting deadlines.',
+      difficulty: 'medium',
+      targetSkill: 'stakeholder-management',
+      expectedConcepts: ['prioritization framework', 'transparent communication', 'expectation setting', 'compromise', 'business outcome'],
+    },
+    {
+      text: 'Tell me about a time when a critical bug or outage occurred under your watch. How did you coordinate the response and conduct the post-mortem?',
+      difficulty: 'medium',
+      targetSkill: 'incident-management',
+      expectedConcepts: ['triage under pressure', 'clear status updates', 'blameless post-mortem', 'root cause analysis', 'prevention action items'],
+    },
+  ],
+};
+
+/**
+ * Generate introduction / warm-up question tailored to candidate profile and target role.
+ */
+const generateIntroductionQuestions = (targetRole = 'Software Engineer', candidateProfile = {}) => {
+  const name = candidateProfile.basicInfo?.name;
+  return [
+    {
+      text: name
+        ? `Welcome, ${name}. To start our conversation, please introduce yourself, walk me through your background in technology, and share what specifically drew you to this ${targetRole} role.`
+        : `To start our interview, please introduce yourself, summarize your technical background, and share what specifically drew you to this ${targetRole} role.`,
+      type: 'introduction',
+      category: 'introduction',
+      difficulty: 'easy',
+      targetSkill: 'communication',
+      skill: 'communication',
+      source: 'general_pool',
+      sourceProject: null,
+      expectedConcepts: ['background summary', 'relevant experience', 'motivation for role', 'clear communication'],
+      expectedTopics: ['background summary', 'relevant experience', 'motivation for role', 'clear communication'],
+      expectedKeyPoints: ['background summary', 'relevant experience', 'motivation for role', 'clear communication'],
+      followUpAllowed: true,
+      contextNote: 'Introduction question to establish communication cadence and technical background.',
+    },
+  ];
+};
+
 /**
  * Generate questions based on resume projects.
+ * Explicitly references project titles, technology stack, and architectural decisions.
  */
 const generateProjectQuestions = (projects = [], skills = [], difficulty = 'medium') => {
   if (!projects.length) return [];
@@ -637,34 +831,31 @@ const generateProjectQuestions = (projects = [], skills = [], difficulty = 'medi
     const name = typeof project === 'string' ? project : (project.name || project.title || project);
     if (!name) continue;
 
-    // Identify skills related to this project
+    // Identify skills / technologies related to this project
     const projectSkillsRaw = typeof project === 'object'
       ? (project.technologies || project.skills || project.tech || [])
       : skills.slice(0, 3);
     const projectSkills = Array.isArray(projectSkillsRaw) ? projectSkillsRaw : [];
+    const techStr = projectSkills.length > 0 ? projectSkills.slice(0, 3).join(', ') : '';
 
     const templates = [
       {
-        text: `Walk me through your ${name} project. What was the core problem it solved, and what architecture decisions did you make?`,
-        expectedConcepts: ['problem statement', 'architecture', 'technology choices', 'outcome', 'challenges'],
+        text: techStr
+          ? `You mentioned building "${name}" using ${techStr}. What architectural decisions did you make when structuring the system, and how did you separate responsibilities across components?`
+          : `You mentioned building "${name}" on your resume. Walk me through the core architecture, key design decisions, and how you approached component separation.`,
+        expectedConcepts: ['architecture decisions', 'component separation', 'tech stack justification', 'state management', 'trade-offs'],
       },
       {
-        text: `What was the most challenging technical decision you made while building ${name}? What were the trade-offs?`,
-        expectedConcepts: ['trade-offs', 'alternatives considered', 'decision rationale', 'outcome', 'learning'],
+        text: techStr
+          ? `In your "${name}" project built with ${techStr}, what was the most challenging technical roadblock or bug you ran into, and how did you diagnose and solve it?`
+          : `While developing "${name}", what was the most challenging technical roadblock you encountered, and what specific steps did you take to resolve it?`,
+        expectedConcepts: ['technical obstacle', 'debugging strategy', 'solution implementation', 'trade-offs', 'lessons learned'],
       },
       {
-        text: `How did you handle testing and quality assurance in the ${name} project?`,
-        expectedConcepts: ['unit tests', 'integration tests', 'QA process', 'coverage', 'CI/CD'],
+        text: `How did you validate the performance, scalability, and test reliability of the "${name}" project before deployment?`,
+        expectedConcepts: ['unit and integration tests', 'benchmarking', 'caching or optimization', 'CI/CD pipeline', 'monitoring'],
       },
     ];
-
-    if (projectSkills.length > 0) {
-      const skillStr = projectSkills.slice(0, 2).join(' and ');
-      templates.push({
-        text: `In your ${name} project, you used ${skillStr}. How did you leverage these technologies, and what specific challenges did you encounter?`,
-        expectedConcepts: ['implementation details', 'specific challenges', 'solutions', 'learnings', 'performance'],
-      });
-    }
 
     const selected = shuffle(templates).slice(0, 2);
     for (const t of selected) {
@@ -675,14 +866,15 @@ const generateProjectQuestions = (projects = [], skills = [], difficulty = 'medi
         type: 'project',
         category: 'project',
         difficulty,
-        targetSkill: projectSkills[0] || 'project-experience',
-        skill: projectSkills[0] || 'project-experience',
-        source: 'resume',
+        targetSkill: projectSkills[0] || 'software-architecture',
+        skill: projectSkills[0] || 'software-architecture',
+        source: 'project',
         sourceProject: name,
         expectedConcepts: t.expectedConcepts,
+        expectedTopics: t.expectedConcepts,
         expectedKeyPoints: t.expectedConcepts,
         followUpAllowed: true,
-        contextNote: null,
+        contextNote: `Generated directly from resume project: ${name}`,
       });
     }
   }
@@ -695,29 +887,41 @@ const generateProjectQuestions = (projects = [], skills = [], difficulty = 'medi
  */
 const generateExperienceQuestions = (experience = [], difficulty = 'medium') => {
   if (!experience.length) {
-    return shuffle(EXPERIENCE_TEMPLATES).slice(0, 1);
+    return shuffle(EXPERIENCE_TEMPLATES).slice(0, 1).map((q) => ({
+      ...q,
+      category: 'resume',
+      type: 'resume',
+      source: 'resume',
+      expectedTopics: q.expectedConcepts || [],
+    }));
   }
 
   const questions = [];
   const positions = experience.slice(0, 2);
 
   for (const pos of positions) {
-    const company = typeof pos === 'string' ? pos : (pos.company || pos.employer || 'your previous role');
-    const title = typeof pos === 'object' ? (pos.title || pos.role || 'software engineer') : 'software engineer';
+    const company = typeof pos === 'string' ? pos : (pos.company || pos.organization || pos.employer || 'your previous company');
+    const title = typeof pos === 'object' ? (pos.title || pos.jobTitle || pos.role || 'Software Engineer') : 'Software Engineer';
+    const tech = typeof pos === 'object' && Array.isArray(pos.technologies) ? pos.technologies.slice(0, 2).join(' and ') : '';
+
+    const qText = tech
+      ? `During your time as ${title} at ${company}, you worked with ${tech}. What was your most significant engineering contribution, and what measurable impact did it have?`
+      : `In your role as ${title} at ${company}, what was your most significant technical contribution, and how did it influence team velocity or product quality?`;
 
     questions.push({
-      text: `In your role as ${title} at ${company}, what was your most significant contribution, and how did it impact the team or product?`,
-      type: 'experience',
-      category: 'experience',
+      text: qText,
+      type: 'resume',
+      category: 'resume',
       difficulty,
       targetSkill: 'professional-experience',
       skill: 'professional-experience',
-      source: 'experience',
+      source: 'resume',
       sourceProject: null,
-      expectedConcepts: ['specific contribution', 'measurable impact', 'skills used', 'collaboration', 'outcome'],
-      expectedKeyPoints: ['specific contribution', 'measurable impact', 'skills used', 'collaboration', 'outcome'],
+      expectedConcepts: ['specific contribution', 'measurable impact', 'technologies used', 'collaboration', 'outcome'],
+      expectedTopics: ['specific contribution', 'measurable impact', 'technologies used', 'collaboration', 'outcome'],
+      expectedKeyPoints: ['specific contribution', 'measurable impact', 'technologies used', 'collaboration', 'outcome'],
       followUpAllowed: true,
-      contextNote: null,
+      contextNote: `Generated from candidate work experience at ${company}`,
     });
   }
 
@@ -729,11 +933,15 @@ const generateExperienceQuestions = (experience = [], difficulty = 'medium') => 
  */
 const generateBehavioralQuestions = (count = 2, difficulty = 'medium') => {
   const filtered = BEHAVIORAL_TEMPLATES.filter((t) => t.difficulty === difficulty || t.difficulty === 'medium');
-  return shuffle(filtered).slice(0, count);
+  return shuffle(filtered).slice(0, count).map((q) => ({
+    ...q,
+    source: 'general_pool',
+    expectedTopics: q.expectedConcepts || [],
+  }));
 };
 
 /**
- * Generate skill-gap questions for missing required skills.
+ * Generate skill-gap questions for missing or weak required skills.
  */
 const generateSkillGapQuestions = (missingSkills = [], difficulty = 'medium') => {
   if (!missingSkills.length) return [];
@@ -748,7 +956,7 @@ const generateSkillGapQuestions = (missingSkills = [], difficulty = 'medium') =>
       if (seen.has(t.text)) continue;
       seen.add(t.text);
 
-      const note = `${skill} was not identified in the provided resume, so this question assesses the candidate's familiarity with it.`;
+      const note = `${skill} was identified in the job description requirements but not explicitly in your resume.`;
       questions.push({
         text: t.text,
         type: 'skill_gap',
@@ -759,17 +967,17 @@ const generateSkillGapQuestions = (missingSkills = [], difficulty = 'medium') =>
         source: 'skill_gap',
         sourceProject: null,
         expectedConcepts: t.expectedConcepts || [],
+        expectedTopics: t.expectedConcepts || [],
         expectedKeyPoints: t.expectedConcepts || [],
         followUpAllowed: true,
         contextNote: note,
       });
     } else {
-      // No template — generic skill gap question
-      const text = `The role requires experience with ${skill}. Could you describe your familiarity with ${skill}, any exposure you have had to it, or how you would approach learning it?`;
+      const text = `The job description emphasizes hands-on experience with ${skill}. Could you describe your familiarity with ${skill}, any related tools you have used, or how you would ramp up on it rapidly?`;
       if (seen.has(text)) continue;
       seen.add(text);
 
-      const note = `${skill} was not identified in the provided resume, so this question assesses the candidate's familiarity with it.`;
+      const note = `${skill} was identified in the job description requirements but not explicitly in your resume.`;
       questions.push({
         text,
         type: 'skill_gap',
@@ -779,8 +987,9 @@ const generateSkillGapQuestions = (missingSkills = [], difficulty = 'medium') =>
         skill: skill,
         source: 'skill_gap',
         sourceProject: null,
-        expectedConcepts: [`${skill} basics`, `${skill} use cases`, 'learning approach'],
-        expectedKeyPoints: [`${skill} basics`, `${skill} use cases`, 'learning approach'],
+        expectedConcepts: [`${skill} fundamentals`, 'analogous technologies', 'learning methodology', 'practical application'],
+        expectedTopics: [`${skill} fundamentals`, 'analogous technologies', 'learning methodology', 'practical application'],
+        expectedKeyPoints: [`${skill} fundamentals`, 'analogous technologies', 'learning methodology', 'practical application'],
         followUpAllowed: true,
         contextNote: note,
       });
@@ -799,20 +1008,21 @@ const generateJobSpecificQuestions = (responsibilities = [], requiredSkills = []
 
   if (responsibilities.length > 0) {
     const resp = responsibilities[0];
-    const respText = typeof resp === 'string' ? resp : JSON.stringify(resp);
+    const respText = typeof resp === 'string' ? resp : (resp.text || JSON.stringify(resp));
     questions.push({
-      text: `The role involves: "${respText.substring(0, 150)}". Can you describe how your experience has prepared you for this responsibility?`,
+      text: `One key responsibility highlighted in this job is: "${respText.substring(0, 160).trim()}". How has your past engineering experience prepared you to handle this effectively?`,
       type: 'job_specific',
-      category: 'conceptual',
+      category: 'job_description',
       difficulty,
       targetSkill: 'job-fit',
       skill: 'job-fit',
       source: 'job_description',
       sourceProject: null,
-      expectedConcepts: ['relevant experience', 'specific examples', 'alignment', 'impact', 'skills'],
-      expectedKeyPoints: ['relevant experience', 'specific examples', 'alignment', 'impact', 'skills'],
+      expectedConcepts: ['relevant experience', 'methodological approach', 'impact', 'alignment with role'],
+      expectedTopics: ['relevant experience', 'methodological approach', 'impact', 'alignment with role'],
+      expectedKeyPoints: ['relevant experience', 'methodological approach', 'impact', 'alignment with role'],
       followUpAllowed: true,
-      contextNote: null,
+      contextNote: 'Directly derived from the job description responsibilities.',
     });
   }
 
@@ -821,13 +1031,13 @@ const generateJobSpecificQuestions = (responsibilities = [], requiredSkills = []
 
 /**
  * Generate a follow-up question based on a previous question and answer.
- * Called by the adaptive engine when an answer is incomplete.
+ * Called by the adaptive engine when an answer is incomplete or strong.
  */
 const generateFollowUpQuestion = (originalQuestion, originalAnswer, missingConcepts = []) => {
   const conceptList = missingConcepts.slice(0, 2).join(' and ');
   const followUpText = conceptList
-    ? `Your previous answer covered some aspects, but could you elaborate on ${conceptList} in more detail?`
-    : `Could you expand on your previous answer? Please provide more specific examples or technical details.`;
+    ? `Your previous answer touched on several good points, but could you elaborate more deeply on ${conceptList} in this context?`
+    : `Could you expand on your previous answer with a concrete technical implementation detail or trade-off analysis?`;
 
   return {
     text: followUpText,
@@ -836,137 +1046,154 @@ const generateFollowUpQuestion = (originalQuestion, originalAnswer, missingConce
     difficulty: originalQuestion.difficulty || 'medium',
     targetSkill: originalQuestion.targetSkill || originalQuestion.skill || 'general',
     skill: originalQuestion.targetSkill || originalQuestion.skill || 'general',
-    source: 'behavioral',
+    source: 'previous_answer',
     sourceProject: originalQuestion.sourceProject || null,
-    expectedConcepts: missingConcepts,
+    expectedConcepts: missingConcepts.length > 0 ? missingConcepts : ['depth', 'architectural trade-offs', 'concrete implementation'],
+    expectedTopics: missingConcepts.length > 0 ? missingConcepts : ['depth', 'architectural trade-offs', 'concrete implementation'],
     expectedKeyPoints: missingConcepts,
     followUpAllowed: false,
-    contextNote: `Follow-up to: "${(originalQuestion.text || '').substring(0, 80)}..."`,
+    contextNote: `Adaptive follow-up to: "${(originalQuestion.text || '').substring(0, 80)}..."`,
     isAdaptive: true,
   };
 };
 
+/**
+ * Match role-specific questions for a target role.
+ */
+const getRoleSpecificQuestions = (targetRole = '', difficulty = 'medium') => {
+  const normalized = (targetRole || '').toLowerCase().trim();
+  for (const [roleKey, roleQuestions] of Object.entries(ROLE_SPECIFIC_QUESTIONS)) {
+    if (normalized.includes(roleKey) || roleKey.includes(normalized)) {
+      return roleQuestions.map((q) => ({
+        text: q.text,
+        type: 'technical',
+        category: 'technical',
+        difficulty: q.difficulty || difficulty,
+        targetSkill: q.targetSkill,
+        skill: q.targetSkill,
+        source: 'job_description',
+        sourceProject: null,
+        expectedConcepts: q.expectedConcepts,
+        expectedTopics: q.expectedConcepts,
+        expectedKeyPoints: q.expectedConcepts,
+        followUpAllowed: true,
+        contextNote: `Role-specific technical question for ${targetRole}`,
+      }));
+    }
+  }
+  return [];
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN GENERATOR
+// MAIN GENERATOR — PROGRESSIVE & PERSONALIZED
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Generate a full personalized interview question set.
- *
- * @param {Object} params
- * @param {Object} params.candidateProfile   Resume analysis result
- * @param {Object} params.jobProfile         JD analysis result
- * @param {Object} params.skillAnalysis      Skill gap analysis result
- * @param {string} params.interviewType      'mixed'|'technical'|'behavioral'|'hr'
- * @param {string} params.difficulty         'easy'|'medium'|'hard'
- * @param {number} params.totalQuestions     Target count (max 15)
- * @returns {Array} Array of question objects ready for DB insertion
+ * Generate a full personalized interview question set with progressive flow:
+ * Introduction → Resume Experience → Projects → Technical Skills → JD / Skill Gap → Behavioral
  */
 const generateInterviewQuestions = ({
   candidateProfile = {},
   jobProfile = {},
   skillAnalysis = {},
+  targetRole = 'Software Engineer',
   interviewType = 'mixed',
   difficulty = 'medium',
   totalQuestions = 10,
 }) => {
-  const max = Math.min(totalQuestions, 15);
+  const max = Math.max(3, Math.min(totalQuestions, 15));
   const questions = [];
 
-  // Extract candidate data safely
-  const candidateSkills = candidateProfile.skills || candidateProfile.extractedSkills || [];
+  // 1. Extract candidate profile data safely
+  const candidateSkills = (candidateProfile.skills || candidateProfile.extractedSkills || []).map(
+    (s) => (typeof s === 'string' ? s : (s.canonicalName || s.name || ''))
+  ).filter(Boolean);
   const candidateProjects = candidateProfile.projects || [];
   const candidateExperience = candidateProfile.experience || candidateProfile.workExperience || [];
 
-  // Extract job data safely
-  const requiredSkills = jobProfile.requiredSkills || skillAnalysis.notIdentifiedRequiredSkills
-    ? [...(skillAnalysis.matchedRequiredSkills || []), ...(skillAnalysis.notIdentifiedRequiredSkills || [])]
-    : [];
+  // 2. Extract job and skill gap data safely
+  const matchedSkills = (skillAnalysis.matchedSkills || skillAnalysis.matchedRequiredSkills || []);
+  const missingSkills = (skillAnalysis.missingSkills || skillAnalysis.notIdentifiedRequiredSkills || []);
   const responsibilities = jobProfile.responsibilities || [];
+  const requiredSkills = jobProfile.requiredSkills || [];
 
-  // Extract skill gap data
-  const matchedSkills = skillAnalysis.matchedRequiredSkills || [];
-  const missingSkills = skillAnalysis.notIdentifiedRequiredSkills || [];
+  // ── Stage 1: Introduction (Always first) ──────────────────────────────────
+  const introQuestions = generateIntroductionQuestions(targetRole, candidateProfile);
+  questions.push(...introQuestions);
 
-  // Determine allocation based on interview type
-  let allocation;
-  if (interviewType === 'technical') {
-    allocation = { technical: 0.6, project: 0.2, experience: 0.1, behavioral: 0.1, skillGap: 0.2 };
-  } else if (interviewType === 'behavioral') {
-    allocation = { technical: 0.2, project: 0.1, experience: 0.2, behavioral: 0.5, skillGap: 0.1 };
-  } else if (interviewType === 'hr') {
-    allocation = { technical: 0.1, project: 0.1, experience: 0.2, behavioral: 0.4, skillGap: 0.2 };
-  } else {
-    // mixed
-    allocation = { technical: 0.35, project: 0.2, experience: 0.1, behavioral: 0.2, skillGap: 0.15 };
-  }
-
-  // Generate each type
-  const techCount = Math.max(1, Math.round(max * allocation.technical));
-  const projCount = Math.max(0, Math.round(max * allocation.project));
-  const expCount = Math.max(0, Math.round(max * allocation.experience));
-  const behCount = Math.max(1, Math.round(max * allocation.behavioral));
-  const gapCount = Math.max(0, Math.round(max * allocation.skillGap));
-
-  // Technical — from matched skills
-  if (matchedSkills.length > 0) {
-    const techQuestions = generateTechnicalQuestions(matchedSkills, difficulty, Math.ceil(techCount / Math.max(matchedSkills.length, 1)));
-    questions.push(...techQuestions.slice(0, techCount));
-  }
-
-  // Project — from resume projects
-  if (projCount > 0 && candidateProjects.length > 0) {
-    const projQuestions = generateProjectQuestions(candidateProjects, candidateSkills, difficulty);
-    questions.push(...projQuestions.slice(0, projCount));
-  }
-
-  // Experience — from resume experience
-  if (expCount > 0) {
+  // ── Stage 2: Resume Experience (if available) ──────────────────────────────
+  if (candidateExperience.length > 0 && max >= 4) {
     const expQuestions = generateExperienceQuestions(candidateExperience, difficulty);
-    questions.push(...expQuestions.slice(0, expCount));
+    if (expQuestions.length > 0) {
+      questions.push(expQuestions[0]);
+    }
   }
 
-  // Behavioral
-  const behQuestions = generateBehavioralQuestions(behCount, difficulty);
-  questions.push(...behQuestions.slice(0, behCount));
-
-  // No coding implementation questions: Interview questions focus on technical reasoning,
-  // concepts, architecture, system design, and role-specific knowledge.
-  const extraTechNeeded = (interviewType === 'technical' || interviewType === 'mixed') && questions.length < max;
-  if (extraTechNeeded && matchedSkills.length > 0) {
-    const conceptualQuestions = generateTechnicalQuestions(
-      [...matchedSkills, ...candidateSkills],
-      difficulty,
-      Math.min(2, max - questions.length)
-    );
-    questions.push(...conceptualQuestions);
+  // ── Stage 3: Resume Project Questions (Referencing specific projects) ──────
+  if (candidateProjects.length > 0) {
+    const projQuestions = generateProjectQuestions(candidateProjects, candidateSkills, difficulty);
+    const maxProjectsToInclude = max >= 10 ? 2 : 1;
+    questions.push(...projQuestions.slice(0, maxProjectsToInclude));
   }
 
-  // Skill gap — from missing required skills
-  if (gapCount > 0 && missingSkills.length > 0) {
+  // ── Stage 4: Role-Specific & Matched Technical Questions ───────────────────
+  const roleQuestions = getRoleSpecificQuestions(targetRole, difficulty);
+  if (roleQuestions.length > 0) {
+    questions.push(roleQuestions[0]);
+  }
+
+  // Technical questions for candidate's matched skills (Python, React, Node.js, etc.)
+  const skillsToAssess = matchedSkills.length > 0 ? matchedSkills : candidateSkills;
+  if (skillsToAssess.length > 0) {
+    const neededTechCount = Math.max(1, Math.floor((max - questions.length) * 0.5));
+    const techQuestions = generateTechnicalQuestions(skillsToAssess, difficulty, 1);
+    questions.push(...techQuestions.slice(0, neededTechCount));
+  }
+
+  // ── Stage 5: Job Description & Skill Gap Questions ────────────────────────
+  if (missingSkills.length > 0 && questions.length < max - 1) {
     const gapQuestions = generateSkillGapQuestions(missingSkills, difficulty);
-    questions.push(...gapQuestions.slice(0, gapCount));
+    if (gapQuestions.length > 0) {
+      questions.push(gapQuestions[0]);
+    }
   }
 
-  // Job-specific — fill remaining slots
-  const remaining = max - questions.length;
-  if (remaining > 0) {
+  if (responsibilities.length > 0 && questions.length < max - 1) {
     const jobQs = generateJobSpecificQuestions(responsibilities, requiredSkills, difficulty);
-    questions.push(...jobQs.slice(0, remaining));
+    if (jobQs.length > 0) {
+      questions.push(jobQs[0]);
+    }
   }
 
-  // Deduplicate and trim to max
+  // ── Stage 6: Behavioral STAR Questions ─────────────────────────────────────
+  if (questions.length < max) {
+    const behCount = Math.max(1, Math.min(2, max - questions.length));
+    const behQuestions = generateBehavioralQuestions(behCount, difficulty);
+    questions.push(...behQuestions);
+  }
+
+  // ── Fallback Fillers if below max ──────────────────────────────────────────
+  if (questions.length < max) {
+    if (roleQuestions.length > 1) {
+      questions.push(...roleQuestions.slice(1, max - questions.length + 1));
+    }
+  }
+
+  // Deduplicate strictly by question text
   const deduped = [];
   const texts = new Set();
-  for (const q of shuffle(questions)) {
+  for (const q of questions) {
     if (!texts.has(q.text)) {
       texts.add(q.text);
-      deduped.push(q);
+      deduped.push({
+        ...q,
+        expectedTopics: q.expectedTopics || q.expectedConcepts || [],
+      });
     }
     if (deduped.length >= max) break;
   }
 
-  // Assign order
+  // Assign sequential order: 0, 1, 2...
   return deduped.map((q, i) => ({ ...q, order: i }));
 };
 
