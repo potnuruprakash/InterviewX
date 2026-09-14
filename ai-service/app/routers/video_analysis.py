@@ -45,3 +45,14 @@ async def video_analyze(video: UploadFile = File(...)):
                 os.unlink(tmp_path)
             except Exception:
                 pass
+
+
+@router.get("/video-model-info")
+async def video_model_info():
+    """
+    Returns empirical model performance, verified dataset audit,
+    and capability specifications for the Video Analysis pipeline.
+    """
+    audit = video_service.get_model_audit_report()
+    return {"success": True, "data": audit}
+

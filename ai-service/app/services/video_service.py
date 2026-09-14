@@ -29,6 +29,7 @@ FRAME_SAMPLE_FPS = int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "1"))
 
 _yolo_model = None
 _yolo_model_status = "not_loaded"
+from app.video import get_video_pipeline
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -37,30 +38,22 @@ _yolo_model_status = "not_loaded"
 
 def load_yolo_model():
     """Load YOLOv8 model. Called once at startup."""
-    global _yolo_model, _yolo_model_status
-    if _yolo_model is not None:
-        return
-
-    try:
-        from ultralytics import YOLO
-        logger.info(f"[Video] Loading YOLO model: {YOLO_MODEL_PATH}")
-        _yolo_model = YOLO(YOLO_MODEL_PATH)
-        _yolo_model_status = "pretrained_loaded"
-        logger.info("[Video] YOLO model loaded successfully.")
-    except ImportError:
-        _yolo_model_status = "ultralytics_not_installed"
-        logger.warning("[Video] ultralytics not installed. Run: pip install ultralytics")
-    except Exception as e:
-        _yolo_model_status = f"load_error: {str(e)}"
-        logger.error(f"[Video] YOLO model load failed: {e}")
+    pipeline = get_video_pipeline()
+    logger.info(f"[VideoService] Pipeline initialized with YOLO status: {pipeline.yolo_detector.status}")
 
 
 def get_yolo_status() -> str:
-    return _yolo_model_status
+    pipeline = get_video_pipeline()
+    return pipeline.yolo_detector.status
+
+
+def get_model_audit_report() -> dict:
+    pipeline = get_video_pipeline()
+    return pipeline.get_audit_report()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FRAME EXTRACTION
+# FRAME EXTRACTION (Legacy Helper)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def extract_frames(video_path: str, fps: int = FRAME_SAMPLE_FPS) -> List:
@@ -101,82 +94,15 @@ def extract_frames(video_path: str, fps: int = FRAME_SAMPLE_FPS) -> List:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# YOLO INFERENCE
+# VIDEO ANALYSIS
 # ─────────────────────────────────────────────────────────────────────────────
 
 def analyze_video(video_path: str) -> dict:
     """
-    Analyze video for person detection using YOLOv8.
-
-    Returns measurable frame-level statistics only.
-    No psychological inferences are made.
+    Analyzes candidate video using the verified VideoAnalysisPipeline.
+    Returns measurable presence, framing, and facial expression statistics.
+    No psychological inferences or candidate confidence assertions are made.
     """
-    if not os.path.exists(video_path):
-        return _unavailable_result("Video file not found.")
+    pipeline = get_video_pipeline()
+    return pipeline.process_video(video_path, fps=FRAME_SAMPLE_FPS)
 
-    if _yolo_model is None:
-        return {
-            "framesProcessed": 0,
-            "personDetectionRatio": None,
-            "faceVisibilityRatio": None,
-            "videoQualityIndicator": None,
-            "modelStatus": _yolo_model_status,
-            "processingConfidence": None,
-            "note": "YOLO model not loaded. Cannot perform video analysis.",
-        }
-
-    frames = extract_frames(video_path, fps=FRAME_SAMPLE_FPS)
-    if not frames:
-        return _unavailable_result("Could not extract frames from video.")
-
-    person_detected_frames = 0
-    total_person_confidence = []
-
-    try:
-        for frame_idx, frame in frames:
-            results = _yolo_model(frame, verbose=False, classes=[0])  # class 0 = person
-            for result in results:
-                if result.boxes and len(result.boxes) > 0:
-                    person_detected_frames += 1
-                    confs = result.boxes.conf.cpu().numpy().tolist()
-                    total_person_confidence.extend(confs)
-                    break  # count frame as person-detected
-
-        frames_processed = len(frames)
-        person_ratio = person_detected_frames / frames_processed if frames_processed > 0 else 0
-
-        avg_confidence = (
-            sum(total_person_confidence) / len(total_person_confidence)
-            if total_person_confidence else None
-        )
-
-        # Video quality indicator (basic heuristic)
-        quality = "good" if person_ratio >= 0.7 else "fair" if person_ratio >= 0.4 else "poor"
-
-        return {
-            "framesProcessed": frames_processed,
-            "personDetectedFrames": person_detected_frames,
-            "personDetectionRatio": round(person_ratio, 3),
-            "faceVisibilityRatio": None,  # face keypoints need separate model
-            "videoQualityIndicator": quality,
-            "modelStatus": _yolo_model_status,
-            "processingConfidence": round(avg_confidence, 3) if avg_confidence else None,
-            "modelName": YOLO_MODEL_PATH,
-            "note": "Person detection results only. No psychological inferences made.",
-        }
-
-    except Exception as e:
-        logger.error(f"[Video] YOLO inference error: {e}")
-        return _unavailable_result(f"YOLO inference failed: {str(e)}")
-
-
-def _unavailable_result(reason: str) -> dict:
-    return {
-        "framesProcessed": 0,
-        "personDetectionRatio": None,
-        "faceVisibilityRatio": None,
-        "videoQualityIndicator": None,
-        "modelStatus": "unavailable",
-        "processingConfidence": None,
-        "reason": reason,
-    }

@@ -136,7 +136,64 @@ npm run dev
 
 ---
 
+## 🎥 Video & Expression Analysis Model Audit (RAVDESS & YOLOv8)
+
+### Verification Statement
+> **"RAVDESS is being used as the dataset, but the current implementation does not prove that the RAVDESS data was trained using YOLOv8."**
+
+### Architectural Audit & Facts
+1. **Dataset (`RAVDESS`)**:
+   - The Ryerson Audio-Visual Database of Emotional Speech and Song (RAVDESS) is a controlled laboratory dataset of 24 professional actors speaking with specified emotional expressions.
+   - RAVDESS is referenced as a target dataset domain; however, **no custom RAVDESS-trained model weights are bundled in the repository**.
+   - RAVDESS consists of acted emotional performances. It is **not** an interview behavior dataset and cannot be used to determine candidate personality, competence, honesty, or anxiety.
+2. **Model Framework (`YOLOv8`)**:
+   - The active YOLO checkpoint in `ai-service/yolov8n.pt` was verified via Ultralytics inspection.
+   - **Task**: `detect` (Object Detection trained on COCO 80 classes, where class 0 = `person`).
+   - **Current Role**: YOLOv8 is used strictly for its verified capability:
+     - Person presence detection (`person_visibility`)
+     - Candidate framing analysis (`good_framing`)
+     - Multi-person detection flags (`multiple_person_frames`)
+     - Bounding box stability tracking
+3. **Physical Expression & Head Pose**:
+   - Bounding-box regions from YOLO detection are forwarded to the modular video analysis pipeline (`app/video/`).
+   - Head orientation is estimated into observable spatial angles (`centered`, `left`, `right`, `up`, `down`).
+   - Facial movements are tracked as physical observable cues (e.g. smile curvature, expressive transitions).
+   - If custom-trained classification weights (`yolov8-cls` or custom CNN) are configured via `EXPRESSION_MODEL_PATH`, the classifier loads them plug-and-play. In their absence, the system never fabricates psychological conclusions.
+4. **Model Confidence vs. Candidate Confidence**:
+   - `model_confidence` represents the statistical certainty of the convolutional network on image features.
+   - **It is NEVER mapped to "Candidate Confidence"**. InterviewX strictly reports "Expression Classification Confidence".
+5. **Generalization Warning**:
+   - Acted laboratory datasets (RAVDESS) exhibit a domain shift when applied to natural webcam interview footage. Performance on laboratory benchmarks does not translate to natural interviews without actor-independent cross-validation.
+
+### Video Pipeline Architecture
+```
+Interview Video (.webm / .mp4)
+      │
+      ▼
+Video Decoding & Frame Sampling (app/video/preprocessing/frame_sampler.py @ 2-5 FPS)
+      │
+      ▼
+YOLOv8 Object Detection & Tracking (app/video/detector/yolo_detector.py)
+      │
+      ├─► Person Visibility & Framing Metrics
+      │
+      ▼
+Face Region Extraction & Head Orientation (app/video/landmarks/face_analyzer.py)
+      │
+      ▼
+Expression Analysis & Temporal Aggregation (app/video/metrics/temporal_metrics.py)
+      │
+      ▼
+Empirical Video Analysis JSON
+      │
+      ▼
+InterviewX Report UI (ResultsPage.jsx: Video & Presence Table)
+```
+
+---
+
 ## 🔒 Security & Data Privacy
-- **Zero Secret Leakage**: No secret keys are included in client bundles.
+- **Zero Secret Leakage**: No secret keys or model credentials are included in client bundles.
 - **Multi-Tenant Isolation**: Every database query is scoped strictly by `clerkUserId`.
 - **Honest AI Fallbacks**: Clear visual badges differentiate real SBERT inference from heuristic development placeholders. No fabricated ML confidence metrics or psychological claims.
+- **Privacy-Compliant Video Handling**: Candidate interview recordings are processed locally for analysis and temporary storage without unauthorized third-party persistence.

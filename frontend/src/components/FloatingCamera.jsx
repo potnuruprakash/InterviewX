@@ -24,7 +24,9 @@ export default function FloatingCamera({
   videoEnabled = true,
   onToggleVideo,
   isRecording = false,
+  isMediaRecording = false,
   onRecordingComplete,
+  onVideoBlob,
   isListening = false,
   speechError = null,
   isSpeechSupported = true,
@@ -32,6 +34,8 @@ export default function FloatingCamera({
   containerRef,
   disabled = false,
 }) {
+  const activeRecording = isRecording || isMediaRecording
+  const handleRecordingComplete = onRecordingComplete || onVideoBlob
   // Dimensions for compact vs normal modes
   const [sizeMode, setSizeMode] = useState('compact') // 'compact' | 'normal'
   const [isMinimized, setIsMinimized] = useState(false)
@@ -253,8 +257,8 @@ export default function FloatingCamera({
           {videoEnabled ? (
             <VideoRecorder
               ref={videoRecorderRef}
-              isRecording={isRecording && videoEnabled}
-              onRecordingComplete={onRecordingComplete}
+              isRecording={activeRecording && videoEnabled}
+              onRecordingComplete={handleRecordingComplete}
               disabled={disabled}
               autoStartStream={true}
             />

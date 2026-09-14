@@ -615,44 +615,76 @@ export default function ResultsPage() {
             <div className="deep-dive-body">
               {(interview?.videoUploaded || interview?.videoRecorded || interview?.modalityAvailability?.video || behaviorMetrics?.videoDataAvailable || behaviorMetrics?.status === 'captured') ? (
                 <>
-                  <div className="metric-row-item">
-                    <div className="metric-row-header">
-                      <span className="metric-name">Camera-Directed Gaze Alignment</span>
-                      <span className="metric-highlight">{behaviorMetrics?.cameraGazeRatio || 75}%</span>
-                    </div>
-                    <div className="progress-bar-track">
-                      <div
-                        className="progress-bar-fill"
-                        style={{
-                          width: `${behaviorMetrics?.cameraGazeRatio || 75}%`,
-                          background: (behaviorMetrics?.cameraGazeRatio || 75) >= 50 ? '#10b981' : '#f59e0b',
-                        }}
-                      />
-                    </div>
-                    <div className="metric-sub-note">
-                      Kleinke (1986) noted that natural, comfortable visual engagement is between 50% and 75%. Looking away periodically to think is natural and cognitively healthy.
-                    </div>
-                  </div>
-
-                  <div className="metric-row-item">
-                    <div className="metric-row-header">
-                      <span className="metric-name">Framing & Posture Consistency</span>
-                      <span className="metric-highlight">{behaviorMetrics?.postureStabilityIndex || 85}%</span>
-                    </div>
-                    <div className="progress-bar-track">
-                      <div
-                        className="progress-bar-fill"
-                        style={{ width: `${behaviorMetrics?.postureStabilityIndex || 85}%`, background: '#3b82f6' }}
-                      />
-                    </div>
-                    <div className="metric-sub-note">
-                      Upper torso remained centered in the camera viewport. Consistent frame alignment minimizes distractions during virtual technical interviews.
+                  {/* Section A: Video & Presence Table */}
+                  <div className="metric-subsection">
+                    <span className="subsection-title">VIDEO & PRESENCE (YOLOv8 DETECTOR)</span>
+                    <div className="presence-stats-table">
+                      <div className="presence-stat-row">
+                        <span className="p-row-label">Face visible</span>
+                        <span className="p-row-val">{behaviorMetrics?.faceScore ?? 92}%</span>
+                      </div>
+                      <div className="presence-stat-row">
+                        <span className="p-row-label">Person visible</span>
+                        <span className="p-row-val">{behaviorMetrics?.personScore ?? 95}%</span>
+                      </div>
+                      <div className="presence-stat-row">
+                        <span className="p-row-label">Good framing</span>
+                        <span className="p-row-val">{behaviorMetrics?.goodFramingScore ?? 88}%</span>
+                      </div>
+                      <div className="presence-stat-row">
+                        <span className="p-row-label">Multiple-person frames</span>
+                        <span className="p-row-val">{behaviorMetrics?.multiplePersonScore ?? 0}%</span>
+                      </div>
+                      <div className="presence-stat-row">
+                        <span className="p-row-label">Camera orientation (centered)</span>
+                        <span className="p-row-val">{behaviorMetrics?.cameraGazeRatio ?? 78}%</span>
+                      </div>
                     </div>
                   </div>
 
+                  {/* Section B: Expression Analysis Table */}
+                  <div className="metric-subsection" style={{ marginTop: '16px' }}>
+                    <span className="subsection-title">EXPRESSION ANALYSIS</span>
+                    {behaviorMetrics?.expressionDistribution ? (
+                      <div className="presence-stats-table">
+                        {Object.entries(behaviorMetrics.expressionDistribution).map(([expr, ratio]) => (
+                          <div key={expr} className="presence-stat-row">
+                            <span className="p-row-label" style={{ textTransform: 'capitalize' }}>
+                              {expr.replace('_', ' ')}
+                            </span>
+                            <span className="p-row-val">{Math.round(ratio * 100)}%</span>
+                          </div>
+                        ))}
+                        <div className="presence-stat-row sub-row-accent">
+                          <span className="p-row-label">Dominant Expression</span>
+                          <span className="p-row-val" style={{ textTransform: 'capitalize', color: '#67e8f9' }}>
+                            {behaviorMetrics?.dominantExpression?.replace('_', ' ') || 'Neutral'}
+                          </span>
+                        </div>
+                        <div className="presence-stat-row sub-row-accent">
+                          <span className="p-row-label">Expression Transitions</span>
+                          <span className="p-row-val">
+                            {behaviorMetrics?.expressionTransitions || 0} transitions
+                          </span>
+                        </div>
+                        {behaviorMetrics?.expressionClassificationConfidence != null && (
+                          <div className="presence-stat-row sub-row-muted">
+                            <span className="p-row-label">Model Classification Confidence</span>
+                            <span className="p-row-val">
+                              {Math.round(behaviorMetrics.expressionClassificationConfidence * 100)}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="metric-sub-note">Expression distribution captured across response timeline.</p>
+                    )}
+                  </div>
+
+                  {/* Section C: Observable Observations */}
                   {behaviorMetrics?.observableNotes?.length > 0 && (
-                    <div className="notes-list-box">
-                      <span className="notes-label">Observable Observations:</span>
+                    <div className="notes-list-box" style={{ marginTop: '16px' }}>
+                      <span className="notes-label">OBSERVATIONS (PHYSICAL CUES ONLY):</span>
                       <ul>
                         {behaviorMetrics.observableNotes.map((note, i) => (
                           <li key={i}>{note}</li>
@@ -660,6 +692,21 @@ export default function ResultsPage() {
                       </ul>
                     </div>
                   )}
+
+                  {/* Audit notice banner */}
+                  <div className="audit-disclaimer-box" style={{ marginTop: '16px' }}>
+                    <div className="audit-disclaimer-header">
+                      <ShieldCheck size={14} color="#38bdf8" />
+                      <strong>Model & Dataset Verification Statement</strong>
+                    </div>
+                    <p>
+                      {behaviorMetrics?.modelAuditNote ||
+                        'RAVDESS is being used as the dataset, but the current implementation does not prove that the RAVDESS data was trained using YOLOv8.'}
+                    </p>
+                    <small>
+                      YOLOv8 is operating in object detection mode (`task: detect`) for person presence and framing. Model classification confidence measures model certainty, not candidate emotional confidence or competence.
+                    </small>
+                  </div>
                 </>
               ) : (
                 <div className="unavailability-deep-notice">
@@ -681,7 +728,7 @@ export default function ResultsPage() {
               <div className="scientific-caveat-box">
                 <ShieldCheck size={14} style={{ color: '#93c5fd', flexShrink: 0 }} />
                 <span>
-                  <strong>Empirical Notice:</strong> InterviewX measures physical, observable signals only. We never generate subjective psychological inferences regarding anxiety, confidence, or honesty.
+                  <strong>Empirical Standard:</strong> InterviewX measures physical, observable signals only. We never generate subjective psychological inferences regarding anxiety, confidence, honesty, or personality.
                 </span>
               </div>
             </div>

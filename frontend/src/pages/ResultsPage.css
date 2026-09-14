@@ -1889,3 +1889,123 @@
   border-top: 1px solid #E5E7EB;
 }
 
+/* --------------------------------------------------------------------------
+   Presence & Observable Expression Tables (YOLOv8 + Empirical Video Pipeline)
+   -------------------------------------------------------------------------- */
+.presence-stats-table {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.presence-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+}
+
+.presence-stat-row:last-child {
+  border-bottom: none;
+}
+
+.presence-stat-row .p-row-label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.presence-stat-row .p-row-val {
+  color: #f8fafc;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.presence-stat-row.sub-row-accent {
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.presence-stat-row.sub-row-muted {
+  background: rgba(148, 163, 184, 0.04);
+}
+
+.presence-stat-row.sub-row-muted .p-row-label {
+  font-size: 12px;
+  font-style: italic;
+}
+
+.audit-disclaimer-box {
+  background: rgba(56, 189, 248, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.audit-disclaimer-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #38bdf8;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.audit-disclaimer-box p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  margin: 0 0 6px 0;
+}
+
+.audit-disclaimer-box small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+
+/* Light Theme overrides for Presence Table & Audit Box */
+[data-theme='light'] .presence-stats-table {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+[data-theme='light'] .presence-stat-row {
+  border-bottom-color: #e2e8f0;
+}
+
+[data-theme='light'] .presence-stat-row .p-row-label {
+  color: #64748b;
+}
+
+[data-theme='light'] .presence-stat-row .p-row-val {
+  color: #0f172a;
+}
+
+[data-theme='light'] .presence-stat-row.sub-row-accent {
+  background: #f0f9ff;
+}
+
+[data-theme='light'] .presence-stat-row.sub-row-muted {
+  background: #f1f5f9;
+}
+
+[data-theme='light'] .audit-disclaimer-box {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+[data-theme='light'] .audit-disclaimer-box p {
+  color: #334155;
+}
+
+[data-theme='light'] .audit-disclaimer-box small {
+  color: #64748b;
+}
+

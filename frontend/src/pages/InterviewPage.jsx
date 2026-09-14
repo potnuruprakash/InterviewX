@@ -650,6 +650,7 @@ export default function InterviewPage() {
 
       {/* Floating Draggable Candidate Camera Feed */}
       <FloatingCamera
+        interviewId={id}
         containerRef={workspaceRef}
         videoEnabled={videoEnabled}
         onToggleVideo={handleToggleVideo}
