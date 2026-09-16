@@ -7,6 +7,8 @@ import {
 } from 'recharts'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
+import FloatingCoachButton from '../components/coach/FloatingCoachButton'
+import AIAssistantDrawer from '../components/coach/AIAssistantDrawer'
 import './Dashboard.css'
 
 // Custom tooltip for chart
@@ -37,6 +39,7 @@ export default function Dashboard() {
   const [latestResults, setLatestResults] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [coachOpen, setCoachOpen] = useState(false)
 
   const fetchedRef = useRef(false)
 
@@ -511,7 +514,7 @@ export default function Dashboard() {
                               to={`/create-interview?practiceFrom=${invId}`}
                               className="dash-action-btn action-practice"
                             >
-                              Practice
+                              Reattempt with New Questions
                             </Link>
                           </div>
                         ) : isInProgress ? (
@@ -533,6 +536,14 @@ export default function Dashboard() {
         </section>
 
       </div>
+      <FloatingCoachButton
+        isOpen={coachOpen}
+        onClick={() => setCoachOpen((prev) => !prev)}
+      />
+      <AIAssistantDrawer
+        isOpen={coachOpen}
+        onClose={() => setCoachOpen(false)}
+      />
     </div>
   )
 }

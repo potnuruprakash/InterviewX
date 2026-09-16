@@ -1,77 +1,30 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuthApi } from '../services/api'
 import {
-  CheckCircle, AlertCircle, TrendingUp, Home, BarChart2,
-  Target, BookOpen, Mic, Video, VideoOff, Brain, ChevronDown, ChevronUp,
-  Award, Zap, ArrowRight, Info, Sparkles, HelpCircle, FileText, Check,
-  AlertTriangle, RefreshCw, Layers, ShieldCheck, Activity, Eye
+  ArrowLeft, RefreshCw, AlertCircle, Award, Activity, Video, Mic,
+  Layers, FileText, BookOpen, ChevronRight, PlusCircle, Compass, Target, Bot
 } from 'lucide-react'
+
+import { adaptResults } from '../utils/resultsAdapter'
+import AIAssistantDrawer from '../components/coach/AIAssistantDrawer'
+
+// Modular Components
+import ResultsHero from '../components/results/ResultsHero'
+import ScoreSummary from '../components/results/ScoreSummary'
+import StrengthsAndImprovements from '../components/results/StrengthsAndImprovements'
+import ProgressComparison from '../components/results/ProgressComparison'
+import RecommendedPractice from '../components/results/RecommendedPractice'
+import QuestionReview from '../components/results/QuestionReview'
+import CommunicationAnalysis from '../components/results/CommunicationAnalysis'
+import VideoPresenceAnalysis from '../components/results/VideoPresenceAnalysis'
+import DetailedEvaluation from '../components/results/DetailedEvaluation'
+import InterviewTranscript from '../components/results/InterviewTranscript'
+import MethodologyPanel from '../components/results/MethodologyPanel'
+import CollapsibleSection from '../components/results/CollapsibleSection'
+import EvidenceModal from '../components/results/EvidenceModal'
+
 import './ResultsPage.css'
-
-const ScoreRing = ({ score, size = 110, label = '', colorOverride = null }) => {
-  if (score === null || score === undefined) {
-    return (
-      <div className="score-ring-wrap" style={{ width: size, height: size }}>
-        <div className="score-ring-unavailable">
-          <span>N/A</span>
-          {label && <small>{label}</small>}
-        </div>
-      </div>
-    )
-  }
-  const pct = Math.max(0, Math.min(100, score))
-  const color = colorOverride || (pct >= 75 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444')
-  const r = 40
-  const circ = 2 * Math.PI * r
-  const dash = circ * (pct / 100)
-
-  return (
-    <div className="score-ring-wrap" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
-        <circle
-          cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="8"
-          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-          transform="rotate(-90 50 50)"
-          style={{ transition: 'stroke-dasharray 1s ease' }}
-        />
-      </svg>
-      <div className="score-ring-text">
-        <span className="ring-score" style={{ color }}>{Math.round(pct)}</span>
-        {label && <small>{label}</small>}
-      </div>
-    </div>
-  )
-}
-
-const StarBadge = ({ component, data }) => {
-  const status = data?.status || 'not_detected'
-  const isDetected = status === 'detected'
-  const isPartial = status === 'partially_detected'
-
-  const labels = {
-    situation: 'Situation (S)',
-    task: 'Task (T)',
-    action: 'Action (A)',
-    result: 'Result (R)',
-  }
-
-  const badgeClass = isDetected
-    ? 'star-pill-detected'
-    : isPartial
-    ? 'star-pill-partial'
-    : 'star-pill-missed'
-
-  const icon = isDetected ? '✓' : isPartial ? '△' : '✕'
-
-  return (
-    <div className={`star-pill ${badgeClass}`} title={data?.snippet || 'No specific cue detected'}>
-      <span className="star-pill-icon">{icon}</span>
-      <span className="star-pill-name">{labels[component] || component}</span>
-    </div>
-  )
-}
 
 export default function ResultsPage() {
   const { id } = useParams()
@@ -83,10 +36,26 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showEvidenceModal, setShowEvidenceModal] = useState(false)
-  const [activeEvidenceKey, setActiveEvidenceKey] = useState('speech_rate_wpm')
-  const [expandedQuestions, setExpandedQuestions] = useState({})
+  const [coachOpen, setCoachOpen] = useState(false)
   const fetchedRef = useRef(null)
 
+  // Consolidated state for progressive disclosure sections (default closed)
+  const [expandedSections, setExpandedSections] = useState({
+    communication: false,
+    video: false,
+    details: false,
+    transcript: false,
+    methodology: false,
+  })
+
+  const toggleSection = (key) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }))
+  }
+
+  // Load results and roadmap from backend
   useEffect(() => {
     if (!isLoaded || !id) return
     if (!isSignedIn) {
@@ -96,8 +65,9 @@ export default function ResultsPage() {
     if (fetchedRef.current === id) return
     fetchedRef.current = id
 
-    const load = async () => {
+    const loadData = async () => {
       setLoading(true)
+      setError(null)
       try {
         const [resRes, roadRes] = await Promise.all([
           authApi.get(`/api/interviews/${id}/results`),
@@ -105,979 +75,258 @@ export default function ResultsPage() {
         ])
         setResults(resRes.data)
         setRoadmap(roadRes.data?.roadmap || null)
-        // Expand first 2 questions by default
-        setExpandedQuestions({ 0: true, 1: true })
       } catch (err) {
-        setError(err.message)
+        console.error('[ResultsPage] Error fetching results:', err)
+        setError(err.message || 'Could not retrieve interview evaluation data.')
       } finally {
         setLoading(false)
       }
     }
-    load()
+
+    loadData()
   }, [id, isLoaded, isSignedIn])
 
+  // Adapt backend data into presentation structure via pure adapter
+  const adapted = useMemo(() => {
+    if (!results) return null
+    return adaptResults(results, roadmap)
+  }, [results, roadmap])
+
+  // ── LOADING STATE ──────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="results-loading">
-        <div className="spinner" />
-        <p>Analyzing speech, observable behavior, and question responses...</p>
+      <div className="results-page-loading">
+        <div className="results-loading-card glass-card animate-fade-in">
+          <div className="loading-spinner" />
+          <h2 className="loading-title">Generating Assessment Report</h2>
+          <p className="loading-sub">
+            Aggregating technical semantics, communicative pacing, and verified presence metrics...
+          </p>
+        </div>
       </div>
     )
   }
 
-  if (error) {
+  // ── ERROR STATE ────────────────────────────────────────────────────────────
+  if (error || !adapted) {
     return (
-      <div className="results-loading">
-        <AlertCircle size={28} color="#f87171" />
-        <p style={{ color: '#f87171' }}>{error}</p>
-        <Link to="/dashboard" className="btn btn-secondary btn-sm" style={{ marginTop: 12 }}>
-          Return to Dashboard
-        </Link>
+      <div className="results-page-error">
+        <div className="results-error-card glass-card animate-fade-in">
+          <AlertCircle size={36} className="error-icon" />
+          <h2 className="error-title">Assessment Report Unavailable</h2>
+          <p className="error-sub">{error || 'Interview session data could not be loaded.'}</p>
+          <div className="error-actions-row">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                fetchedRef.current = null
+                window.location.reload()
+              }}
+            >
+              <RefreshCw size={14} /> Retry
+            </button>
+            <Link to="/dashboard" className="btn btn-primary">
+              Return to Dashboard
+            </Link>
+          </div>
+        </div>
       </div>
     )
   }
 
   const {
-    interview,
-    finalEvaluation: fe,
-    jobReadiness,
-    skillPerformance,
-    questionBreakdown,
-    resumeSkillAlignment,
-    voiceMetrics,
-    behaviorMetrics,
-    topPriorityImprovements = [],
-    personalizedPracticePlan,
-    comparisonWithPrevious,
-    researchEvidence = {},
-  } = results || {}
+    interviewId,
+    hero,
+    scoreSummary,
+    strengths,
+    topImprovements,
+    progress,
+    recommendedPractice,
+    questions,
+    communication,
+    video,
+    detailedEvaluation,
+    transcript,
+    methodology,
+  } = adapted
 
-  const toggleQuestion = (idx) => {
-    setExpandedQuestions((prev) => ({ ...prev, [idx]: !prev[idx] }))
-  }
-
-  const expandAllQuestions = () => {
-    const all = {}
-    ;(questionBreakdown || []).forEach((_, i) => (all[i] = true))
-    setExpandedQuestions(all)
-  }
-
-  const collapseAllQuestions = () => {
-    setExpandedQuestions({})
-  }
+  const practiceUrl = `/create-interview?practiceFrom=${interviewId}`
 
   return (
     <div className="results-page">
-      <div className="container">
-        {/* Top Breadcrumb & Metadata Bar */}
-        <div className="results-nav-bar">
+      <div className="results-container">
+        {/* ── TOP NAV BAR ─────────────────────────────────────────────────── */}
+        <nav className="results-nav-bar" aria-label="Results Navigation">
           <Link to="/dashboard" className="back-link">
-            ← Dashboard
+            <ArrowLeft size={14} />
+            <span>Dashboard</span>
           </Link>
-          <div className="report-meta-tags">
-            <span className="meta-pill role-pill">{interview?.targetRole || 'Engineering Candidate'}</span>
-            <span className="meta-pill type-pill">{interview?.interviewType}</span>
-            <span className="meta-pill diff-pill">{interview?.difficulty}</span>
-            {interview?.startedAt && interview?.completedAt && (
-              <span className="meta-pill time-pill">
-                ⏱️ {Math.max(1, Math.round((new Date(interview.completedAt) - new Date(interview.startedAt)) / 60000))} mins
-              </span>
-            )}
+          <div className="nav-actions-right">
+            <button
+              type="button"
+              className="btn-nav-action action-train-me"
+              onClick={() => setCoachOpen(true)}
+              title="Targeted AI Coach training based on this interview"
+            >
+              <Target size={13} />
+              <span>🎯 Train Me</span>
+            </button>
+            <Link to={practiceUrl} className="btn-nav-action action-practice">
+              <Compass size={13} />
+              <span>Practice Weak Areas</span>
+            </Link>
+            <Link to="/create-interview" className="btn-nav-action action-new">
+              <PlusCircle size={13} />
+              <span>New Interview</span>
+            </Link>
           </div>
-          <button
-            className="evidence-trigger-btn"
-            onClick={() => setShowEvidenceModal(true)}
-            title="View research evidence and empirical definitions"
+        </nav>
+
+        {/* ── 1. RESULTS HERO ─────────────────────────────────────────────── */}
+        <ResultsHero
+          hero={hero}
+          onOpenEvidence={() => setShowEvidenceModal(true)}
+        />
+
+        {/* ── 2. SCORE SUMMARY (4 KEY CARDS) ──────────────────────────────── */}
+        <ScoreSummary scoreSummary={scoreSummary} />
+
+        {/* ── 3. STRENGTHS & TOP 3 IMPROVEMENTS ───────────────────────────── */}
+        <StrengthsAndImprovements
+          strengths={strengths}
+          topImprovements={topImprovements}
+          interviewId={interviewId}
+        />
+
+        {/* ── 4. PROGRESS VS PREVIOUS INTERVIEW ───────────────────────────── */}
+        <ProgressComparison progress={progress} />
+
+        {/* ── 5. RECOMMENDED PRACTICE ─────────────────────────────────────── */}
+        <RecommendedPractice
+          recommendedPractice={recommendedPractice}
+          interviewId={interviewId}
+        />
+
+        {/* ── 6. QUESTION REVIEW (ACCORDION) ──────────────────────────────── */}
+        <QuestionReview questions={questions} />
+
+        {/* ── PROGRESSIVE DISCLOSURE SECTIONS (DEFAULT COLLAPSED) ─────────── */}
+        <div className="progressive-sections-wrap">
+          <div className="progressive-header">
+            <h2 className="progressive-title">Deep Dive Analysis & Logs</h2>
+            <p className="progressive-sub">Expand sections below to inspect acoustic waveforms, presence tracking, and raw transcripts</p>
+          </div>
+
+          {/* 7. Communication Analysis */}
+          <CollapsibleSection
+            id="communication"
+            title="Communication & Acoustic Fluency"
+            subtitle="Words per minute, verbal filler density, and pause cadence"
+            icon={Mic}
+            badgeText={communication.isAvailable ? `${communication.wpm || '—'} WPM` : 'Not recorded'}
+            badgeType={communication.isAvailable ? 'complete' : 'muted'}
+            isOpen={expandedSections.communication}
+            onToggle={() => toggleSection('communication')}
           >
-            <BookOpen size={14} /> Research Methodology
-          </button>
+            <CommunicationAnalysis communication={communication} />
+          </CollapsibleSection>
+
+          {/* 8. Video & Presence Analysis */}
+          <CollapsibleSection
+            id="video"
+            title="Video & Observable Presence (YOLOv8)"
+            subtitle="Webcam presence, horizontal framing, and observable expressions"
+            icon={Video}
+            badgeText={video.isAvailable ? 'Analysis Complete' : 'Unavailable'}
+            badgeType={video.isAvailable ? 'complete' : 'warning'}
+            isOpen={expandedSections.video}
+            onToggle={() => toggleSection('video')}
+          >
+            <VideoPresenceAnalysis video={video} />
+          </CollapsibleSection>
+
+          {/* 9. Detailed Evaluation */}
+          <CollapsibleSection
+            id="details"
+            title="Detailed Evaluation Sub-Pillars"
+            subtitle="Granular technical accuracy, relevance, completeness, and multimodal weight allocations"
+            icon={Layers}
+            badgeText="6 Sub-Pillars"
+            badgeType="neutral"
+            isOpen={expandedSections.details}
+            onToggle={() => toggleSection('details')}
+          >
+            <DetailedEvaluation detailedEvaluation={detailedEvaluation} />
+          </CollapsibleSection>
+
+          {/* 10. Interview Transcript */}
+          <CollapsibleSection
+            id="transcript"
+            title="Interview Transcript"
+            subtitle="Chronological log of questions, candidate answers, and code submissions"
+            icon={FileText}
+            badgeText={`${transcript.length} Questions`}
+            badgeType="neutral"
+            isOpen={expandedSections.transcript}
+            onToggle={() => toggleSection('transcript')}
+          >
+            <InterviewTranscript transcript={transcript} />
+          </CollapsibleSection>
+
+          {/* 11. Methodology */}
+          <CollapsibleSection
+            id="methodology"
+            title="How Your Interview Was Evaluated"
+            subtitle="Transparent explanation of SBERT, MFCC speech analysis, YOLOv8 framing, and multimodal fusion"
+            icon={BookOpen}
+            badgeText="Methodology"
+            badgeType="neutral"
+            isOpen={expandedSections.methodology}
+            onToggle={() => toggleSection('methodology')}
+          >
+            <MethodologyPanel
+              methodology={methodology}
+              onOpenEvidence={() => setShowEvidenceModal(true)}
+            />
+          </CollapsibleSection>
         </div>
 
-        {/* Header Hero */}
-        <div className="results-header animate-fade-in">
-          <div className="header-badge-row">
-            <span className="eval-status-badge">
-              <ShieldCheck size={14} /> Verified Multi-Dimensional Evaluation
-            </span>
+        {/* ── 12. NEXT ACTION FOOTER ──────────────────────────────────────── */}
+        <div className="results-action-footer glass-card">
+          <div className="footer-left">
+            <span className="footer-callout">Ready for your next mock session?</span>
+            <p className="footer-desc">
+              Practice weak areas directly or challenge yourself with an increased difficulty level.
+            </p>
           </div>
-          <h1 className="results-title">Interview Performance & Behavior Report</h1>
-          <p className="results-subtitle">
-            Empirical evaluation across technical problem-solving, vocal prosody, observable composure, and answer architecture.
-          </p>
-
-          {/* Longitudinal Trend Banner */}
-          {comparisonWithPrevious?.hasPrevious && (
-            <div className="longitudinal-banner animate-fade-in">
-              <TrendingUp size={16} />
-              <span>{comparisonWithPrevious.summary}</span>
-              {comparisonWithPrevious.overallScoreDelta !== null && (
-                <strong className={comparisonWithPrevious.overallScoreDelta >= 0 ? 'delta-pos' : 'delta-neg'}>
-                  {comparisonWithPrevious.overallScoreDelta >= 0 ? `+${comparisonWithPrevious.overallScoreDelta}%` : `${comparisonWithPrevious.overallScoreDelta}%`}
-                </strong>
-              )}
-            </div>
-          )}
-
-          {interview?.completionReason === 'time_expired' && (
-            <div className="timeout-completion-badge animate-fade-in">
-              ⏱️ Session timed out at 00:00. Completed and evaluated answers are documented below.
-            </div>
-          )}
-        </div>
-
-        {/* 4-Pillar Metric Grid */}
-        <div className="score-pillars-grid animate-fade-in">
-          {/* Pillar 1: Overall Evaluation */}
-          <div className="pillar-card glass-card">
-            <div className="pillar-header">
-              <span className="pillar-label">Overall Evaluation</span>
-              <Award size={16} className="pillar-icon" />
-            </div>
-            <div className="pillar-content">
-              <ScoreRing score={fe?.overallScore} size={90} label="Overall" />
-              <div className="pillar-stats">
-                <div className="stat-line">
-                  <span className="stat-name">Answered</span>
-                  <span className="stat-val">{fe?.questionsAnswered ?? 0} / {fe?.totalQuestions ?? 0}</span>
-                </div>
-                <div className="stat-line">
-                  <span className="stat-name">Skipped</span>
-                  <span className="stat-val">{fe?.questionsSkipped ?? 0}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Pillar 2: Technical Competence */}
-          <div className="pillar-card glass-card">
-            <div className="pillar-header">
-              <span className="pillar-label">Technical & Conceptual</span>
-              <Brain size={16} className="pillar-icon" />
-            </div>
-            <div className="pillar-content">
-              <ScoreRing score={fe?.technicalScore} size={90} label="Technical" />
-              <div className="pillar-stats">
-                <div className="stat-line">
-                  <span className="stat-name">Method</span>
-                  <span className="stat-val">Semantic NLP</span>
-                </div>
-                <div className="stat-line">
-                  <span className="stat-name">Skills Assessed</span>
-                  <span className="stat-val">{Object.keys(skillPerformance || {}).length}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Pillar 3: Speech & Vocal Prosody */}
-          <div className="pillar-card glass-card">
-            <div className="pillar-header">
-              <span className="pillar-label">Speech & Vocal Fluency</span>
-              <Mic size={16} className="pillar-icon" />
-            </div>
-            <div className="pillar-content">
-              <div className="metric-callout">
-                <span className="metric-number">{voiceMetrics?.wpm || 0}</span>
-                <span className="metric-unit">WPM</span>
-              </div>
-              <div className="pillar-stats">
-                <div className="stat-line">
-                  <span className="stat-name">Pacing</span>
-                  <span className={`badge-pill pacing-${voiceMetrics?.pacingAssessment || 'optimal'}`}>
-                    {voiceMetrics?.pacingAssessment === 'fast' ? 'Rapid (>160)' : voiceMetrics?.pacingAssessment === 'measured' ? 'Measured (<125)' : 'Optimal (130-160)'}
-                  </span>
-                </div>
-                <div className="stat-line">
-                  <span className="stat-name">Filler Density</span>
-                  <span className="stat-val">{voiceMetrics?.fillerDensity || 0}%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Pillar 4: Observable Visual Composure */}
-          <div className="pillar-card glass-card">
-            <div className="pillar-header">
-              <span className="pillar-label">Observable Presence</span>
-              {(interview?.videoUploaded || interview?.videoRecorded || interview?.modalityAvailability?.video || behaviorMetrics?.videoDataAvailable || behaviorMetrics?.status === 'captured') ? (
-                <Video size={16} className="pillar-icon" style={{ color: '#10b981' }} />
-              ) : (
-                <VideoOff size={16} className="pillar-icon" />
-              )}
-            </div>
-            <div className="pillar-content">
-              {(interview?.videoUploaded || interview?.videoRecorded || interview?.modalityAvailability?.video || behaviorMetrics?.videoDataAvailable || behaviorMetrics?.status === 'captured') ? (
-                <>
-                  <div className="metric-callout">
-                    <span className="metric-number">{behaviorMetrics?.cameraGazeRatio || 75}%</span>
-                    <span className="metric-unit">Camera Gaze</span>
-                  </div>
-                  <div className="pillar-stats">
-                    <div className="stat-line">
-                      <span className="stat-name">Recording</span>
-                      <span className="stat-val" style={{ color: '#10b981', fontWeight: 600 }}>✓ Captured</span>
-                    </div>
-                    <div className="stat-line">
-                      <span className="stat-name">Posture</span>
-                      <span className="stat-val">{behaviorMetrics?.postureAssessment || 'Steady'}</span>
-                    </div>
-                  </div>
-                </>
-              ) : (interview?.videoModeEnabled || behaviorMetrics?.status === 'failed') ? (
-                <div className="pillar-unavailable">
-                  <VideoOff size={24} style={{ opacity: 0.4, marginBottom: 4 }} />
-                  <span className="unavailable-title">Recording Unavailable</span>
-                  <p className="unavailable-sub">Camera stream was active during interview but video recording could not be processed.</p>
-                </div>
-              ) : (
-                <div className="pillar-unavailable">
-                  <VideoOff size={24} style={{ opacity: 0.4, marginBottom: 4 }} />
-                  <span className="unavailable-title">Video Not Used</span>
-                  <p className="unavailable-sub">Video recording was not selected for this practice session.</p>
-                </div>
-              )}
-            </div>
+          <div className="footer-right">
+            <Link to={practiceUrl} className="btn btn-primary">
+              <Compass size={14} /> Practice Weak Areas
+            </Link>
+            <Link to="/create-interview" className="btn btn-secondary">
+              <PlusCircle size={14} /> Start New Interview
+            </Link>
+            <Link to="/dashboard" className="btn btn-ghost">
+              Back to Dashboard
+            </Link>
           </div>
         </div>
 
-        {/* Empirical Evaluation Sub-Pillars */}
-        <div className="sub-pillars-card glass-card animate-fade-in">
-          <div className="sub-pillars-header">
-            <div className="sub-pillars-title-wrap">
-              <Activity size={18} className="icon-glow" />
-              <div>
-                <h2>Empirical Evaluation Breakdown</h2>
-                <p>Granular scoring across technical precision, communicative structure, and supporting evidence.</p>
-              </div>
-            </div>
-            <div className="session-counts-chips">
-              <span className="count-chip answered">✓ {fe?.questionsAnswered ?? 0} Answered</span>
-              <span className="count-chip skipped">↷ {fe?.questionsSkipped ?? 0} Skipped</span>
-              {(fe?.questionsTimedOut > 0) && (
-                <span className="count-chip timedout">⏱ {fe.questionsTimedOut} Timed Out</span>
-              )}
-            </div>
-          </div>
+        {/* ── EVIDENCE MODAL (OPTIONAL POPUP) ─────────────────────────────── */}
+        <EvidenceModal
+          isOpen={showEvidenceModal}
+          onClose={() => setShowEvidenceModal(false)}
+          researchEvidence={methodology.researchEvidence}
+        />
 
-          <div className="sub-pillars-grid">
-            <div className="sub-pillar-item">
-              <div className="sub-pillar-meta">
-                <span className="sub-pillar-name">Technical Accuracy</span>
-                <span className="sub-pillar-score">{fe?.technicalAccuracy ?? fe?.technicalScore ?? 75}%</span>
-              </div>
-              <div className="progress-bar-track">
-                <div className="progress-bar-fill fill-cyan" style={{ width: `${fe?.technicalAccuracy ?? fe?.technicalScore ?? 75}%` }} />
-              </div>
-              <span className="sub-pillar-desc">Correctness of syntax, architecture patterns, and domain concepts.</span>
-            </div>
-
-            <div className="sub-pillar-item">
-              <div className="sub-pillar-meta">
-                <span className="sub-pillar-name">Relevance</span>
-                <span className="sub-pillar-score">{fe?.relevance ?? 80}%</span>
-              </div>
-              <div className="progress-bar-track">
-                <div className="progress-bar-fill fill-purple" style={{ width: `${fe?.relevance ?? 80}%` }} />
-              </div>
-              <span className="sub-pillar-desc">Direct alignment with the interviewer's prompt and core question constraints.</span>
-            </div>
-
-            <div className="sub-pillar-item">
-              <div className="sub-pillar-meta">
-                <span className="sub-pillar-name">Completeness</span>
-                <span className="sub-pillar-score">{fe?.completeness ?? 70}%</span>
-              </div>
-              <div className="progress-bar-track">
-                <div className="progress-bar-fill fill-emerald" style={{ width: `${fe?.completeness ?? 70}%` }} />
-              </div>
-              <span className="sub-pillar-desc">Coverage of key expected concepts, trade-offs, and boundary cases.</span>
-            </div>
-
-            <div className="sub-pillar-item">
-              <div className="sub-pillar-meta">
-                <span className="sub-pillar-name">Communication</span>
-                <span className="sub-pillar-score">{fe?.communication ?? 80}%</span>
-              </div>
-              <div className="progress-bar-track">
-                <div className="progress-bar-fill fill-blue" style={{ width: `${fe?.communication ?? 80}%` }} />
-              </div>
-              <span className="sub-pillar-desc">Structured clarity, optimal pacing (130-160 WPM), and low filler density.</span>
-            </div>
-
-            <div className="sub-pillar-item">
-              <div className="sub-pillar-meta">
-                <span className="sub-pillar-name">Depth</span>
-                <span className="sub-pillar-score">{fe?.depth ?? 75}%</span>
-              </div>
-              <div className="progress-bar-track">
-                <div className="progress-bar-fill fill-indigo" style={{ width: `${fe?.depth ?? 75}%` }} />
-              </div>
-              <span className="sub-pillar-desc">Technical granularity, architectural trade-offs, and internal mechanisms.</span>
-            </div>
-
-            <div className="sub-pillar-item">
-              <div className="sub-pillar-meta">
-                <span className="sub-pillar-name">Evidence & STAR</span>
-                <span className="sub-pillar-score">{fe?.evidence ?? 70}%</span>
-              </div>
-              <div className="progress-bar-track">
-                <div className="progress-bar-fill fill-amber" style={{ width: `${fe?.evidence ?? 70}%` }} />
-              </div>
-              <span className="sub-pillar-desc">Concrete project metrics, situational framing, and measurable outcomes.</span>
-            </div>
-          </div>
-
-          {/* Actionable Strengths & Recommended Practice Roadmap */}
-          {(fe?.strengths?.length > 0 || fe?.recommendedPractice?.length > 0) && (
-            <div className="sub-pillars-footer">
-              {fe?.strengths?.length > 0 && (
-                <div className="strengths-column">
-                  <span className="footer-col-title"><CheckCircle size={14} color="#10b981" /> Demonstrated Strengths</span>
-                  <ul className="footer-bullet-list">
-                    {fe.strengths.map((s, idx) => (
-                      <li key={idx}>{s}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {fe?.recommendedPractice?.length > 0 && (
-                <div className="practice-column">
-                  <span className="footer-col-title"><Target size={14} color="#06b6d4" /> Recommended Practice Roadmap</span>
-                  <ul className="footer-bullet-list">
-                    {fe.recommendedPractice.map((p, idx) => (
-                      <li key={idx}>{p}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* TOP 3 PRIORITIZED IMPROVEMENTS */}
-        {topPriorityImprovements.length > 0 && (
-          <div className="top-priorities-section animate-fade-in">
-            <div className="section-title-wrap">
-              <div className="title-left">
-                <Sparkles size={18} className="icon-glow" />
-                <h2>Top 3 Priority Improvements</h2>
-              </div>
-              <span className="section-subtitle-tag">Ranked by Evaluator Impact</span>
-            </div>
-
-            <div className="priorities-grid">
-              {topPriorityImprovements.map((item, idx) => (
-                <div key={idx} className="priority-card glass-card">
-                  <div className="priority-card-top">
-                    <span className="priority-number">{item.priority}</span>
-                    <span className="priority-category-badge">{item.category}</span>
-                  </div>
-
-                  <h3 className="priority-card-title">{item.title}</h3>
-
-                  <div className="priority-block observation-block">
-                    <span className="block-label">Observed Signal</span>
-                    <p className="block-text">{item.observation}</p>
-                  </div>
-
-                  <div className="priority-block impact-block">
-                    <span className="block-label">Why It Matters (Research Context)</span>
-                    <p className="block-text">{item.impact}</p>
-                  </div>
-
-                  <div className="priority-block drill-block">
-                    <span className="block-label">Actionable Practice Drill</span>
-                    <p className="block-text">{item.actionablePractice}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* TWO-COLUMN EMPIRICAL METRICS DEEP DIVE */}
-        <div className="results-two-col-grid animate-fade-in">
-          {/* Left Column: Vocal Prosody & Fluency Breakdown */}
-          <div className="deep-dive-card glass-card">
-            <div className="deep-dive-header">
-              <div className="header-title-box">
-                <Mic size={18} className="card-icon" />
-                <h3>Vocal Prosody & Fluency Metrics</h3>
-              </div>
-              <button
-                className="info-icon-btn"
-                onClick={() => {
-                  setActiveEvidenceKey('speech_rate_wpm')
-                  setShowEvidenceModal(true)
-                }}
-                title="View speech rate and filler literature"
-              >
-                <Info size={14} />
-              </button>
-            </div>
-
-            <div className="deep-dive-body">
-              {/* Speaking Pace Bar */}
-              <div className="metric-row-item">
-                <div className="metric-row-header">
-                  <span className="metric-name">Pacing (Words Per Minute)</span>
-                  <span className="metric-highlight">{voiceMetrics?.wpm || 0} WPM</span>
-                </div>
-                <div className="pace-gauge-track">
-                  <div className="pace-target-zone" style={{ left: '45%', width: '25%' }}>
-                    <span className="zone-label">Target: 130–160</span>
-                  </div>
-                  <div
-                    className="pace-indicator-pin"
-                    style={{ left: `${Math.min(100, Math.max(5, ((voiceMetrics?.wpm || 0) / 220) * 100))}%` }}
-                  />
-                </div>
-                <div className="metric-sub-note">
-                  {voiceMetrics?.pacingAssessment === 'fast'
-                    ? 'Pace is higher than optimal. Practice inserting intentional 1.5s pauses between key architectural concepts.'
-                    : voiceMetrics?.pacingAssessment === 'measured'
-                    ? 'Pace is slower than average. Strive to maintain conversational momentum to demonstrate confidence.'
-                    : 'Pacing is within the optimal 130–160 WPM window for professional evaluations (DeGroot & Motowidlo 1999).'}
-                </div>
-              </div>
-
-              {/* Filler Word Breakdown */}
-              <div className="metric-row-item">
-                <div className="metric-row-header">
-                  <span className="metric-name">Verbal Filler Tokens</span>
-                  <span className="metric-highlight">
-                    {voiceMetrics?.fillerCount || 0} detected ({voiceMetrics?.fillerDensity || 0}%)
-                  </span>
-                </div>
-                {voiceMetrics?.fillerBreakdown && Object.keys(voiceMetrics.fillerBreakdown).length > 0 ? (
-                  <div className="filler-tokens-list">
-                    {Object.entries(voiceMetrics.fillerBreakdown).map(([token, count]) => (
-                      <span key={token} className="filler-token-chip">
-                        "{token}": <strong>{count}</strong>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="clean-signal-banner">
-                    <Check size={14} /> Zero verbal fillers detected. Highly articulate phrasing.
-                  </div>
-                )}
-                <div className="metric-sub-note">
-                  Target density is &lt; 2.5%. Clark & Fox Tree (2002) demonstrate that replacing filled pauses with silent pauses enhances perceived competence.
-                </div>
-              </div>
-
-              {/* Pause & Hesitation */}
-              <div className="metric-row-item">
-                <div className="metric-row-header">
-                  <span className="metric-name">Pause Management</span>
-                  <span className="metric-highlight">
-                    Avg ~{voiceMetrics?.pauseMetrics?.averagePauseSec || 1.2}s
-                  </span>
-                </div>
-                <div className="pause-stats-row">
-                  <div className="pause-stat">
-                    <span className="p-label">Average Pause</span>
-                    <span className="p-val">{voiceMetrics?.pauseMetrics?.averagePauseSec || 1.2}s</span>
-                  </div>
-                  <div className="pause-stat">
-                    <span className="p-label">Max Silence</span>
-                    <span className="p-val">{voiceMetrics?.pauseMetrics?.maxPauseSec || 2.8}s</span>
-                  </div>
-                  <div className="pause-stat">
-                    <span className="p-label">Estimated Transitions</span>
-                    <span className="p-val">~{voiceMetrics?.pauseMetrics?.pauseCountEstimate || 1}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: Observable Behavior & Presence */}
-          <div className="deep-dive-card glass-card">
-            <div className="deep-dive-header">
-              <div className="header-title-box">
-                <Eye size={18} className="card-icon" />
-                <h3>Observable Non-Verbal Composure</h3>
-              </div>
-              <button
-                className="info-icon-btn"
-                onClick={() => {
-                  setActiveEvidenceKey('visual_engagement_gaze')
-                  setShowEvidenceModal(true)
-                }}
-                title="View gaze and posture literature"
-              >
-                <Info size={14} />
-              </button>
-            </div>
-
-            <div className="deep-dive-body">
-              {(interview?.videoUploaded || interview?.videoRecorded || interview?.modalityAvailability?.video || behaviorMetrics?.videoDataAvailable || behaviorMetrics?.status === 'captured') ? (
-                <>
-                  {/* Section A: Video & Presence Table */}
-                  <div className="metric-subsection">
-                    <span className="subsection-title">VIDEO & PRESENCE (YOLOv8 DETECTOR)</span>
-                    <div className="presence-stats-table">
-                      <div className="presence-stat-row">
-                        <span className="p-row-label">Face visible</span>
-                        <span className="p-row-val">{behaviorMetrics?.faceScore ?? 92}%</span>
-                      </div>
-                      <div className="presence-stat-row">
-                        <span className="p-row-label">Person visible</span>
-                        <span className="p-row-val">{behaviorMetrics?.personScore ?? 95}%</span>
-                      </div>
-                      <div className="presence-stat-row">
-                        <span className="p-row-label">Good framing</span>
-                        <span className="p-row-val">{behaviorMetrics?.goodFramingScore ?? 88}%</span>
-                      </div>
-                      <div className="presence-stat-row">
-                        <span className="p-row-label">Multiple-person frames</span>
-                        <span className="p-row-val">{behaviorMetrics?.multiplePersonScore ?? 0}%</span>
-                      </div>
-                      <div className="presence-stat-row">
-                        <span className="p-row-label">Camera orientation (centered)</span>
-                        <span className="p-row-val">{behaviorMetrics?.cameraGazeRatio ?? 78}%</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Section B: Expression Analysis Table */}
-                  <div className="metric-subsection" style={{ marginTop: '16px' }}>
-                    <span className="subsection-title">EXPRESSION ANALYSIS</span>
-                    {behaviorMetrics?.expressionDistribution ? (
-                      <div className="presence-stats-table">
-                        {Object.entries(behaviorMetrics.expressionDistribution).map(([expr, ratio]) => (
-                          <div key={expr} className="presence-stat-row">
-                            <span className="p-row-label" style={{ textTransform: 'capitalize' }}>
-                              {expr.replace('_', ' ')}
-                            </span>
-                            <span className="p-row-val">{Math.round(ratio * 100)}%</span>
-                          </div>
-                        ))}
-                        <div className="presence-stat-row sub-row-accent">
-                          <span className="p-row-label">Dominant Expression</span>
-                          <span className="p-row-val" style={{ textTransform: 'capitalize', color: '#67e8f9' }}>
-                            {behaviorMetrics?.dominantExpression?.replace('_', ' ') || 'Neutral'}
-                          </span>
-                        </div>
-                        <div className="presence-stat-row sub-row-accent">
-                          <span className="p-row-label">Expression Transitions</span>
-                          <span className="p-row-val">
-                            {behaviorMetrics?.expressionTransitions || 0} transitions
-                          </span>
-                        </div>
-                        {behaviorMetrics?.expressionClassificationConfidence != null && (
-                          <div className="presence-stat-row sub-row-muted">
-                            <span className="p-row-label">Model Classification Confidence</span>
-                            <span className="p-row-val">
-                              {Math.round(behaviorMetrics.expressionClassificationConfidence * 100)}%
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="metric-sub-note">Expression distribution captured across response timeline.</p>
-                    )}
-                  </div>
-
-                  {/* Section C: Observable Observations */}
-                  {behaviorMetrics?.observableNotes?.length > 0 && (
-                    <div className="notes-list-box" style={{ marginTop: '16px' }}>
-                      <span className="notes-label">OBSERVATIONS (PHYSICAL CUES ONLY):</span>
-                      <ul>
-                        {behaviorMetrics.observableNotes.map((note, i) => (
-                          <li key={i}>{note}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Audit notice banner */}
-                  <div className="audit-disclaimer-box" style={{ marginTop: '16px' }}>
-                    <div className="audit-disclaimer-header">
-                      <ShieldCheck size={14} color="#38bdf8" />
-                      <strong>Model & Dataset Verification Statement</strong>
-                    </div>
-                    <p>
-                      {behaviorMetrics?.modelAuditNote ||
-                        'RAVDESS is being used as the dataset, but the current implementation does not prove that the RAVDESS data was trained using YOLOv8.'}
-                    </p>
-                    <small>
-                      YOLOv8 is operating in object detection mode (`task: detect`) for person presence and framing. Model classification confidence measures model certainty, not candidate emotional confidence or competence.
-                    </small>
-                  </div>
-                </>
-              ) : (
-                <div className="unavailability-deep-notice">
-                  <div className="notice-icon-box">
-                    <VideoOff size={28} />
-                  </div>
-                  <h4>{(interview?.videoModeEnabled || behaviorMetrics?.status === 'failed') ? 'Camera Stream Captured Without Video Payload' : 'No Video Data Recorded'}</h4>
-                  <p>
-                    {(interview?.videoModeEnabled || behaviorMetrics?.status === 'failed')
-                      ? 'Camera stream was active in the browser, but media payload was not recorded. Camera hardware tracks were released cleanly upon session end.'
-                      : 'Camera mode was not enabled during this practice interview. To adhere strictly to empirical standards, InterviewX does NOT synthesize unrecorded physical metrics.'}
-                  </p>
-                  <div className="setup-tip-box">
-                    <strong>Tip for Next Interview:</strong> Enable camera mode in Interview Setup to receive webcam framing and gaze orientation analysis.
-                  </div>
-                </div>
-              )}
-
-              <div className="scientific-caveat-box">
-                <ShieldCheck size={14} style={{ color: '#93c5fd', flexShrink: 0 }} />
-                <span>
-                  <strong>Empirical Standard:</strong> InterviewX measures physical, observable signals only. We never generate subjective psychological inferences regarding anxiety, confidence, honesty, or personality.
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* QUESTION-BY-QUESTION BREAKDOWN (WITH STAR EVALUATION) */}
-        {questionBreakdown?.length > 0 && (
-          <div className="results-section qb-section animate-fade-in">
-            <div className="qb-section-header">
-              <div className="header-left">
-                <BookOpen size={18} />
-                <h2>Question-by-Question Deep Dive</h2>
-                <span className="badge badge-gray">{questionBreakdown.length} Prompts</span>
-              </div>
-              <div className="qb-controls">
-                <button className="btn btn-ghost btn-xs" onClick={expandAllQuestions}>
-                  Expand All
-                </button>
-                <button className="btn btn-ghost btn-xs" onClick={collapseAllQuestions}>
-                  Collapse All
-                </button>
-              </div>
-            </div>
-
-            <div className="questions-accordion-list">
-              {questionBreakdown.map((q, idx) => {
-                const isExpanded = !!expandedQuestions[idx]
-                const isSkipped = q.status === 'skipped'
-                const hasStar = !!q.starAnalysis
-
-                return (
-                  <div
-                    key={idx}
-                    className={`question-item-card glass-card ${isSkipped ? 'card-skipped' : ''}`}
-                  >
-                    {/* Collapsible Row Header */}
-                    <div className="q-card-header" onClick={() => toggleQuestion(idx)}>
-                      <div className="q-header-meta">
-                        <span className="q-number-pill">Q{q.questionNumber}</span>
-                        <span className="badge badge-purple">{q.type === 'coding' ? '💻 Coding' : q.category}</span>
-                        <span className={`badge ${q.difficulty === 'hard' ? 'badge-red' : q.difficulty === 'easy' ? 'badge-green' : 'badge-yellow'}`}>
-                          {q.difficulty}
-                        </span>
-                        {q.targetSkill && q.targetSkill !== 'general' && (
-                          <span className="badge badge-gray">{q.targetSkill}</span>
-                        )}
-                        {hasStar && (
-                          <span className="star-tag">STAR Framework</span>
-                        )}
-                      </div>
-
-                      <div className="q-header-title-bar">
-                        <p className="q-preview-text">{q.questionText}</p>
-                      </div>
-
-                      <div className="q-header-right">
-                        {isSkipped ? (
-                          <span className="score-badge skipped-badge">Skipped</span>
-                        ) : (
-                          <span className="score-badge evaluated-badge">
-                            {q.score !== null ? `${Math.round(q.score)}/100` : 'Evaluated'}
-                          </span>
-                        )}
-                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      </div>
-                    </div>
-
-                    {/* Collapsible Body */}
-                    {isExpanded && (
-                      <div className="q-card-body">
-                        {q.contextNote && (
-                          <div className="q-context-note">
-                            <strong>Interviewer Context:</strong> {q.contextNote}
-                          </div>
-                        )}
-
-                        <div className="q-full-prompt-box">
-                          <span className="sub-header-label">Full Question:</span>
-                          <p>{q.questionText}</p>
-                        </div>
-
-                        {isSkipped ? (
-                          <div className="q-skipped-notice">
-                            <AlertTriangle size={16} color="#f59e0b" />
-                            <div>
-                              <strong>Question Skipped by Candidate</strong>
-                              <p>Excluded from overall score calculation. Recommend reviewing core principles of this topic for your next session.</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            {/* Candidate Transcript / Code */}
-                            {q.code && (
-                              <div className="q-code-snippet">
-                                <span className="sub-header-label">Submitted Code ({q.language || 'javascript'}):</span>
-                                <pre><code>{q.code}</code></pre>
-                              </div>
-                            )}
-
-                            <div className="q-transcript-box">
-                              <div className="transcript-header-row">
-                                <span className="sub-header-label">Spoken Response Transcript:</span>
-                                <span className="word-count-tag">{q.wordCount || 0} words</span>
-                              </div>
-                              <p className="transcript-text">{q.answerText || '(No spoken text recorded)'}</p>
-                            </div>
-
-                            {/* Spoken Delivery Micro-Stats */}
-                            {q.fillersDetected && q.fillersDetected.length > 0 && (
-                              <div className="q-delivery-microstats">
-                                <span className="microstat-label">Disfluency Tokens in this Answer:</span>
-                                <div className="microstat-chips">
-                                  {q.fillersDetected.map((f, fi) => (
-                                    <span key={fi} className="token-chip">
-                                      "{f.word}": {f.count}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Behavioral STAR Framework Breakdown */}
-                            {hasStar && q.starAnalysis && (
-                              <div className="star-breakdown-box">
-                                <div className="star-box-header">
-                                  <div className="star-title-left">
-                                    <Target size={16} />
-                                    <h4>Behavioral Structure Analysis (STAR)</h4>
-                                  </div>
-                                  <span className="star-score-indicator">
-                                    Structure Alignment: <strong>{q.starAnalysis.completionScore}%</strong>
-                                  </span>
-                                </div>
-
-                                <div className="star-pill-grid">
-                                  <StarBadge component="situation" data={q.starAnalysis.situation} />
-                                  <StarBadge component="task" data={q.starAnalysis.task} />
-                                  <StarBadge component="action" data={q.starAnalysis.action} />
-                                  <StarBadge component="result" data={q.starAnalysis.result} />
-                                </div>
-
-                                {q.starAnalysis.feedback && (
-                                  <p className="star-feedback-text">
-                                    💡 {q.starAnalysis.feedback}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Strengths and Improvements */}
-                            <div className="strengths-improvements-grid">
-                              {q.strengths && q.strengths.length > 0 && (
-                                <div className="si-column strengths-col">
-                                  <span className="si-label">✓ Strong Observations</span>
-                                  <ul>
-                                    {q.strengths.map((s, si) => (
-                                      <li key={si}>{s}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                              {q.areasForImprovement && q.areasForImprovement.length > 0 && (
-                                <div className="si-column improvements-col">
-                                  <span className="si-label">△ Areas to Strengthen</span>
-                                  <ul>
-                                    {q.areasForImprovement.map((imp, ii) => (
-                                      <li key={ii}>{imp}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* PERSONALIZED PRACTICE PLAN & NEXT STEPS */}
-        {personalizedPracticePlan && (
-          <div className="results-section practice-plan-section animate-fade-in">
-            <div className="section-title-wrap">
-              <div className="title-left">
-                <Target size={18} className="icon-glow" />
-                <h2>Personalized Follow-up Practice Plan</h2>
-              </div>
-              <span className="section-subtitle-tag">Targeted Improvement Drills</span>
-            </div>
-
-            <div className="plan-columns-grid">
-              <div className="plan-card glass-card">
-                <div className="plan-card-header">
-                  <Mic size={16} />
-                  <h3>Communication & Delivery Goals</h3>
-                </div>
-                <ul className="plan-goals-list">
-                  {personalizedPracticePlan.communicationGoals?.map((g, i) => (
-                    <li key={i}>{g}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="plan-card glass-card">
-                <div className="plan-card-header">
-                  <Brain size={16} />
-                  <h3>Answer Architecture & STAR</h3>
-                </div>
-                <ul className="plan-goals-list">
-                  {personalizedPracticePlan.structuralGoals?.map((g, i) => (
-                    <li key={i}>{g}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="plan-card glass-card">
-                <div className="plan-card-header">
-                  <Eye size={16} />
-                  <h3>Observable Non-Verbal Goals</h3>
-                </div>
-                <ul className="plan-goals-list">
-                  {personalizedPracticePlan.behavioralGoals?.map((g, i) => (
-                    <li key={i}>{g}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* Targeted Re-Practice CTA */}
-            <div className="practice-cta-card glass-card">
-              <div className="cta-text-side">
-                <h3>Ready to apply these improvements in a targeted session?</h3>
-                <p>
-                  Start a new interview tailored to <strong>{interview?.targetRole || 'your target role'}</strong> focusing on{' '}
-                  {personalizedPracticePlan.recommendedFollowUp?.focusAreas?.join(', ') || 'articulation and structured answers'}.
-                </p>
-              </div>
-              <Link to={`/create-interview?practiceFrom=${interview?.id || id}`} className="btn btn-primary btn-lg">
-                <Zap size={16} /> Practice Again
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {/* Bottom Actions */}
-        <div className="results-footer-actions animate-fade-in">
-          <Link to={`/create-interview?practiceFrom=${interview?.id || id}`} className="btn btn-primary">
-            <Zap size={16} /> Practice Again
-          </Link>
-          <Link to="/create-interview" className="btn btn-secondary">
-            Start New Role
-          </Link>
-          <Link to="/progress" className="btn btn-secondary">
-            <TrendingUp size={16} /> Track Longitudinal Progress
-          </Link>
-          <Link to="/dashboard" className="btn btn-ghost">
-            <Home size={16} /> Dashboard
-          </Link>
-        </div>
+        {/* ── AI COACH DRAWER (RESULTS → TRAIN ME) ─────────────────────────── */}
+        <AIAssistantDrawer
+          isOpen={coachOpen}
+          onClose={() => setCoachOpen(false)}
+          initialSourceInterviewId={id}
+        />
       </div>
-
-      {/* RESEARCH EVIDENCE MODAL / DRAWER */}
-      {showEvidenceModal && (
-        <div className="modal-backdrop" onClick={() => setShowEvidenceModal(false)}>
-          <div className="evidence-modal glass-card animate-fade-in" onClick={(e) => e.stopPropagation()}>
-            <div className="evidence-modal-header">
-              <div className="modal-title-box">
-                <BookOpen size={20} className="modal-icon" />
-                <div>
-                  <h3>Research Evidence & Evaluation Methodology</h3>
-                  <p>Peer-reviewed literature grounding each measured signal in InterviewX</p>
-                </div>
-              </div>
-              <button className="modal-close-btn" onClick={() => setShowEvidenceModal(false)}>
-                ✕
-              </button>
-            </div>
-
-            <div className="evidence-modal-body">
-              {/* Sidebar Tabs */}
-              <div className="evidence-tabs-nav">
-                {Object.keys(researchEvidence).map((k) => (
-                  <button
-                    key={k}
-                    className={`evidence-tab-btn ${activeEvidenceKey === k ? 'active' : ''}`}
-                    onClick={() => setActiveEvidenceKey(k)}
-                  >
-                    {researchEvidence[k]?.name || k}
-                  </button>
-                ))}
-              </div>
-
-              {/* Detail Content */}
-              <div className="evidence-tab-content">
-                {researchEvidence[activeEvidenceKey] && (
-                  <>
-                    <div className="evidence-header-block">
-                      <span className="evidence-cat-tag">{researchEvidence[activeEvidenceKey].category}</span>
-                      <h4>{researchEvidence[activeEvidenceKey].name}</h4>
-                      <div className="empirical-target-banner">
-                        <strong>Empirical Target:</strong> {researchEvidence[activeEvidenceKey].empiricalTarget}
-                      </div>
-                    </div>
-
-                    <div className="evidence-section-block">
-                      <h5>Measurement Definition</h5>
-                      <p>{researchEvidence[activeEvidenceKey].definition}</p>
-                    </div>
-
-                    <div className="evidence-section-block">
-                      <h5>Academic Research Citation</h5>
-                      <div className="citation-card">
-                        <p className="citation-authors">{researchEvidence[activeEvidenceKey].citation?.authors} ({researchEvidence[activeEvidenceKey].citation?.year})</p>
-                        <p className="citation-title">"{researchEvidence[activeEvidenceKey].citation?.title}"</p>
-                        <p className="citation-journal">{researchEvidence[activeEvidenceKey].citation?.journal}</p>
-                      </div>
-                    </div>
-
-                    <div className="evidence-section-block">
-                      <h5>Interpretation Guidance</h5>
-                      <p>{researchEvidence[activeEvidenceKey].interpretation}</p>
-                    </div>
-
-                    <div className="evidence-section-block caveat-section">
-                      <h5>Evaluation Limitations & Nuance</h5>
-                      <p>{researchEvidence[activeEvidenceKey].limitations}</p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="evidence-modal-footer">
-              <p className="ethical-notice">
-                InterviewX strictly follows empirical measurement guidelines: vocal prosody and video framing reflect observable communicative signals, not fixed personality traits or psychological diagnostic states.
-              </p>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowEvidenceModal(false)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

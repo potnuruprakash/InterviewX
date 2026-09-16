@@ -24,7 +24,13 @@ const JobDescription = require('../models/JobDescription');
 const SkillAnalysis = require('../models/SkillAnalysis');
 const { sendError, sendSuccess } = require('../utils/errorHandler');
 const { validateCreateInterview, validateSubmitResponse } = require('../utils/validators');
-const { generateInterviewQuestions, generateFollowUpQuestion } = require('../services/questionService');
+const {
+  generateInterviewQuestions,
+  generateFollowUpQuestion,
+  isDuplicateQuestion,
+  normalizeQuestionText,
+  getQuestionsForInterview,
+} = require('../services/questionService');
 const { evaluateResponse, evaluateAudio, evaluateVideo, aggregateInterviewScore } = require('../services/evaluationService');
 const { aggregateInterviewFusion, buildEvaluation } = require('../services/multimodalFusionService');
 const { updateSkillPerformance, determineAdaptiveAction, shouldStopInterview } = require('../services/adaptiveEngineService');
@@ -119,11 +125,7 @@ const createInterview = async (req, res) => {
       } : {},
     });
 
-    // ── Phase 3: Generate personalized questions ────────────────────────────
-    let questionData = [];
-    let generationSource = 'static_bank';
-
-    // Candidate profile extraction
+    // ── Phase 3: Generate personalized questions with diversity & reattempt logic ──
     const candidateProfile = resume.parsedData || {};
     const jobProfile = job.parsedData || {};
 
@@ -134,26 +136,86 @@ const createInterview = async (req, res) => {
       skillAnalysis !== null
     );
 
-    if (hasPersonalizationData) {
-      questionData = generateInterviewQuestions({
-        candidateProfile,
-        jobProfile,
-        skillAnalysis: skillAnalysis || {},
-        targetRole,
-        interviewType,
-        difficulty,
-        totalQuestions: requestedCount,
-      });
-      generationSource = 'personalized';
+    // Build avoid list and weak areas to prioritize
+    const avoidQuestions = [];
+    let weakAreasToTarget = [];
+    let isPracticeReattempt = false;
+
+    // 1. Mandatory exclusion & weak area extraction from practiceFromInterviewId
+    if (practiceFromInterviewId) {
+      // SECURITY: Ensure practiceFromInterviewId belongs to the authenticated clerkUserId
+      const prevInterview = await Interview.findOne({
+        _id: practiceFromInterviewId,
+        clerkUserId,
+      }).lean();
+
+      if (prevInterview) {
+        isPracticeReattempt = true;
+
+        // Extract weak areas from finalEvaluation, interviewState, or skillAnalysis
+        weakAreasToTarget = [
+          ...(prevInterview.finalEvaluation?.weakAreas || []),
+          ...(prevInterview.interviewState?.weakAreas || []),
+          ...(prevInterview.skillAnalysis?.weakSkills || []),
+        ].filter(Boolean);
+
+        // Load all previous questions from that practice interview (mandatory exclusion)
+        const prevQuestions = await Question.find({
+          interviewId: prevInterview._id,
+          clerkUserId,
+        }).select('text targetSkill skill category type').lean();
+
+        prevQuestions.forEach((q) => {
+          if (q && q.text) avoidQuestions.push(q);
+        });
+      } else {
+        console.warn(`[Security] User ${clerkUserId} attempted unauthorized reattempt from interview ${practiceFromInterviewId}`);
+      }
     }
 
-    // Fall back to static bank if personalized generation produced fewer questions than requested
-    if (questionData.length < requestedCount) {
-      const { getQuestionsForInterview } = require('../services/questionService');
-      const fallback = getQuestionsForInterview(interviewType, difficulty, requestedCount * 2);
-      questionData = [
-        ...questionData,
-        ...fallback.map((q) => ({
+    // 2. Candidate historical question deduplication: avoid all previously asked questions for this user
+    try {
+      const candidatePreviousQuestions = await Question.find({
+        clerkUserId,
+        interviewId: { $ne: interview._id },
+      })
+        .select('text targetSkill skill category type')
+        .lean();
+
+      candidatePreviousQuestions.forEach((q) => {
+        if (q && q.text) avoidQuestions.push(q);
+      });
+    } catch (histErr) {
+      console.warn('[QuestionGeneration] Failed to retrieve candidate question history:', histErr.message);
+    }
+
+    // 3. Bounded regeneration loop (MAX_GENERATION_ATTEMPTS = 3)
+    const MAX_GENERATION_ATTEMPTS = 3;
+    let attempts = 0;
+    let duplicatesRejectedCount = 0;
+    const uniqueQuestions = [];
+    let generationSource = hasPersonalizationData ? 'personalized' : 'static_bank';
+
+    while (uniqueQuestions.length < requestedCount && attempts < MAX_GENERATION_ATTEMPTS) {
+      attempts++;
+
+      let batchCandidates = [];
+      if (hasPersonalizationData) {
+        batchCandidates = generateInterviewQuestions({
+          candidateProfile,
+          jobProfile,
+          skillAnalysis: skillAnalysis || {},
+          targetRole,
+          interviewType,
+          difficulty,
+          totalQuestions: requestedCount,
+          avoidTexts: [...avoidQuestions, ...uniqueQuestions],
+          weakAreas: weakAreasToTarget,
+          isPracticeAttempt: isPracticeReattempt,
+        });
+      } else {
+        const fallback = getQuestionsForInterview(interviewType, difficulty, requestedCount * 2);
+        batchCandidates = fallback.map((q) => ({
           ...q,
           type: q.category || 'technical',
           source: 'general_pool',
@@ -162,30 +224,35 @@ const createInterview = async (req, res) => {
           expectedTopics: q.expectedKeyPoints || [],
           followUpAllowed: true,
           contextNote: null,
-        })),
-      ];
-      generationSource = questionData.length > 0 ? 'hybrid' : 'static_bank';
-    }
-
-    // Deduplicate + trim strictly to requestedCount
-    const seen = new Set();
-    const unique = [];
-    for (const q of questionData) {
-      if (!seen.has(q.text)) {
-        seen.add(q.text);
-        unique.push(q);
+        }));
       }
-      if (unique.length >= requestedCount) break;
+
+      for (const q of batchCandidates) {
+        if (!q || !q.text || q.text.trim().length < 15) continue;
+
+        // Layered duplicate check against previous interview avoid list and currently accepted questions
+        const dupCheck = isDuplicateQuestion(q, [...avoidQuestions, ...uniqueQuestions]);
+        if (dupCheck.isDuplicate) {
+          duplicatesRejectedCount++;
+          continue;
+        }
+
+        uniqueQuestions.push(q);
+        if (uniqueQuestions.length >= requestedCount) break;
+      }
     }
 
-    // If still under requestedCount, fill with more static questions
-    if (unique.length < requestedCount) {
-      const { getQuestionsForInterview } = require('../services/questionService');
-      const extra = getQuestionsForInterview('mixed', difficulty, requestedCount * 2);
-      for (const q of extra) {
-        if (!seen.has(q.text)) {
-          seen.add(q.text);
-          unique.push({
+    // 4. Safe fallback if still under requestedCount after bounded retries
+    if (uniqueQuestions.length < requestedCount) {
+      generationSource = uniqueQuestions.length > 0 ? 'hybrid' : 'static_bank';
+      const extraPool = getQuestionsForInterview('mixed', difficulty, requestedCount * 3);
+      for (const q of extraPool) {
+        const normText = normalizeQuestionText(q.text);
+        const isAlreadyChosen = uniqueQuestions.some(
+          (u) => normalizeQuestionText(u.text) === normText
+        );
+        if (!isAlreadyChosen) {
+          uniqueQuestions.push({
             ...q,
             type: q.category || 'technical',
             source: 'general_pool',
@@ -196,34 +263,57 @@ const createInterview = async (req, res) => {
             contextNote: null,
           });
         }
-        if (unique.length >= requestedCount) break;
+        if (uniqueQuestions.length >= requestedCount) break;
       }
     }
 
-    const questionsToInsert = unique.slice(0, requestedCount);
+    // 5. Structured server logging (No PII, no resume contents, no auth tokens)
+    console.log(
+      `[QuestionGeneration] interviewId=${interview._id} ` +
+      `practiceFromInterviewId=${practiceFromInterviewId || 'none'} ` +
+      `historyCount=${avoidQuestions.length} ` +
+      `weakAreaCount=${weakAreasToTarget.length} ` +
+      `attempts=${attempts} ` +
+      `duplicatesRejected=${duplicatesRejectedCount} ` +
+      `finalCount=${uniqueQuestions.length}`
+    );
+
+    const questionsToInsert = uniqueQuestions.slice(0, requestedCount);
+
+    const VALID_TYPES = ['introduction', 'resume', 'technical', 'coding', 'project', 'experience', 'behavioral', 'job_specific', 'skill_gap', 'follow_up'];
+    const VALID_CATEGORIES = ['introduction', 'resume', 'project', 'technical', 'coding', 'behavioral', 'hr', 'conceptual', 'situational', 'skill_gap', 'experience', 'follow_up', 'job_description'];
+    const VALID_DIFFICULTIES = ['easy', 'medium', 'hard'];
+    const VALID_SOURCES = ['resume', 'project', 'job_description', 'skill_gap', 'behavioral', 'experience', 'previous_answer', 'general_pool', 'static_bank'];
 
     const questions = await Question.insertMany(
-      questionsToInsert.map((q, index) => ({
-        interviewId: interview._id,
-        clerkUserId,
-        text: q.text,
-        type: q.type || q.category || 'technical',
-        category: q.category || 'technical',
-        difficulty: q.difficulty || difficulty,
-        targetSkill: q.targetSkill || q.skill || null,
-        skill: q.skill || q.targetSkill || 'general',
-        source: q.source || 'general_pool',
-        sourceProject: q.sourceProject || null,
-        expectedConcepts: q.expectedConcepts || q.expectedKeyPoints || [],
-        expectedTopics: q.expectedTopics || q.expectedConcepts || q.expectedKeyPoints || [],
-        expectedKeyPoints: q.expectedKeyPoints || q.expectedConcepts || [],
-        order: index,
-        followUpAllowed: q.followUpAllowed !== false,
-        contextNote: q.contextNote || null,
-        starterCode: q.starterCode || null,
-        language: q.language || 'javascript',
-        status: 'pending',
-      }))
+      questionsToInsert.map((q, index) => {
+        const resolvedType = VALID_TYPES.includes(q.type) ? q.type : (VALID_TYPES.includes(q.category) ? q.category : 'technical');
+        const resolvedCategory = VALID_CATEGORIES.includes(q.category) ? q.category : 'technical';
+        const resolvedDiff = VALID_DIFFICULTIES.includes(q.difficulty) ? q.difficulty : (VALID_DIFFICULTIES.includes(difficulty) ? difficulty : 'medium');
+        const resolvedSource = VALID_SOURCES.includes(q.source) ? q.source : 'general_pool';
+
+        return {
+          interviewId: interview._id,
+          clerkUserId,
+          text: q.text,
+          type: resolvedType,
+          category: resolvedCategory,
+          difficulty: resolvedDiff,
+          targetSkill: q.targetSkill || q.skill || null,
+          skill: q.skill || q.targetSkill || 'general',
+          source: resolvedSource,
+          sourceProject: q.sourceProject || null,
+          expectedConcepts: q.expectedConcepts || q.expectedKeyPoints || [],
+          expectedTopics: q.expectedTopics || q.expectedConcepts || q.expectedKeyPoints || [],
+          expectedKeyPoints: q.expectedKeyPoints || q.expectedConcepts || [],
+          order: index,
+          followUpAllowed: q.followUpAllowed !== false,
+          contextNote: q.contextNote || null,
+          starterCode: q.starterCode || null,
+          language: q.language || 'javascript',
+          status: 'pending',
+        };
+      })
     );
 
     interview.configuredQuestionCount = requestedCount;

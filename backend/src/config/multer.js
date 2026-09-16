@@ -42,4 +42,34 @@ const resumeUpload = multer({
   },
 });
 
-module.exports = { resumeUpload };
+const chatAttachmentMimeTypes = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'text/markdown',
+  'text/x-markdown',
+  'application/json',
+  'text/csv',
+];
+
+const chatAttachmentExtensions = ['.pdf', '.doc', '.docx', '.txt', '.md', '.markdown', '.json', '.csv'];
+
+const chatAttachmentFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (chatAttachmentMimeTypes.includes(file.mimetype) || chatAttachmentExtensions.includes(ext)) {
+    cb(null, true);
+  } else {
+    cb(new Error('INVALID_FILE_TYPE: Allowed formats: PDF, DOCX, TXT, MD, JSON, CSV'), false);
+  }
+};
+
+const chatAttachmentUpload = multer({
+  storage,
+  fileFilter: chatAttachmentFilter,
+  limits: {
+    fileSize: 15 * 1024 * 1024, // 15 MB
+  },
+});
+
+module.exports = { resumeUpload, chatAttachmentUpload };

@@ -159,13 +159,28 @@ const extractTextFromFile = async (filePath, mimeType) => {
     ext === '.docx' ||
     ext === '.doc';
 
+  const isText =
+    mimeType === 'text/plain' ||
+    mimeType === 'text/markdown' ||
+    mimeType === 'text/x-markdown' ||
+    mimeType === 'application/json' ||
+    mimeType === 'text/csv' ||
+    ['.txt', '.md', '.markdown', '.json', '.csv'].includes(ext);
+
   if (isPDF) {
     return extractTextFromPDF(filePath);
   } else if (isDOCX) {
     return extractTextFromDOCX(filePath);
+  } else if (isText) {
+    const resolvedPath = resolveFilePath(filePath);
+    if (!fs.existsSync(resolvedPath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+    const content = fs.readFileSync(resolvedPath, 'utf8');
+    return cleanExtractedText(content);
   } else {
     throw new Error(
-      `Unsupported file type: ${mimeType || ext}. Only PDF and DOCX files are supported.`
+      `Unsupported file type: ${mimeType || ext}. Allowed: PDF, DOCX, TXT, MD, JSON, CSV.`
     );
   }
 };

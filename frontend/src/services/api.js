@@ -112,6 +112,36 @@ export const getUserSkillAnalyses = () =>
 export const getSkillAnalysisByContext = (resumeId, jobDescriptionId) =>
   authApi.get(`/api/skill-analysis/by-context?resumeId=${resumeId}&jobDescriptionId=${jobDescriptionId}`)
 
+// ─── AI Coach & Assistant API Helpers ───────────────────────────────────────
+export const getCoachProfile = () => authApi.get('/api/ai/coach/profile')
+export const getCoachProgress = () => authApi.get('/api/ai/coach/progress')
+export const getCoachSessions = () => authApi.get('/api/ai/coach/sessions')
+export const getCoachSession = (id) => authApi.get(`/api/ai/coach/sessions/${id}`)
+export const createCoachSession = (payload = {}) => authApi.post('/api/ai/coach/sessions', payload)
+export const sendCoachMessage = (sessionId, content) =>
+  authApi.post(`/api/ai/coach/sessions/${sessionId}/messages`, { content })
+export const triggerCoachAction = (sessionId, action) =>
+  authApi.post(`/api/ai/coach/sessions/${sessionId}/action`, { action })
+
+// ChatGPT-Style Conversations
+export const getConversations = () => authApi.get('/api/ai/coach/conversations')
+export const getConversation = (id) => authApi.get(`/api/ai/coach/conversations/${id}`)
+export const createConversation = (payload = {}) => authApi.post('/api/ai/coach/conversations', payload)
+export const deleteConversation = (id) => authApi.delete(`/api/ai/coach/conversations/${id}`)
+export const sendConversationMessage = (id, payload) =>
+  authApi.post(`/api/ai/coach/conversations/${id}/messages`, payload)
+
+export const uploadChatAttachment = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return authApi.post('/api/ai/coach/upload-attachment', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export const rateMessageFeedback = (msgId, rating) =>
+  authApi.post(`/api/ai/coach/messages/${msgId}/feedback`, { rating })
+
 /**
  * Hook providing access to the singleton authApi, auth state, and helper methods.
  * Ensures the token getter is synchronized without re-instantiating Axios or looping.
@@ -154,6 +184,20 @@ export const useAuthApi = () => {
     getSkillAnalysis,
     getUserSkillAnalyses,
     getSkillAnalysisByContext,
+    getCoachProfile,
+    getCoachProgress,
+    getCoachSessions,
+    getCoachSession,
+    createCoachSession,
+    sendCoachMessage,
+    triggerCoachAction,
+    getConversations,
+    getConversation,
+    createConversation,
+    deleteConversation,
+    sendConversationMessage,
+    uploadChatAttachment,
+    rateMessageFeedback,
   }
 }
 
