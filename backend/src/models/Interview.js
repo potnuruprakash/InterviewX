@@ -147,6 +147,8 @@ const interviewSchema = new mongoose.Schema(
     finalEvaluation: {
       overallScore: { type: Number, default: null },
       technicalScore: { type: Number, default: null },
+      communicationScore: { type: Number, default: null },
+      problemSolvingScore: { type: Number, default: null },
       audioScore: { type: Number, default: null },
       videoScore: { type: Number, default: null },
       modalitiesUsed: { type: [String], default: [] },

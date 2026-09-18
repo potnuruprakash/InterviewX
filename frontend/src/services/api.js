@@ -123,7 +123,7 @@ export const sendCoachMessage = (sessionId, content) =>
 export const triggerCoachAction = (sessionId, action) =>
   authApi.post(`/api/ai/coach/sessions/${sessionId}/action`, { action })
 
-// ChatGPT-Style Conversations
+// ChatGPT-Style Conversations (Legacy AI Coach)
 export const getConversations = () => authApi.get('/api/ai/coach/conversations')
 export const getConversation = (id) => authApi.get(`/api/ai/coach/conversations/${id}`)
 export const createConversation = (payload = {}) => authApi.post('/api/ai/coach/conversations', payload)
@@ -141,6 +141,30 @@ export const uploadChatAttachment = (file) => {
 
 export const rateMessageFeedback = (msgId, rating) =>
   authApi.post(`/api/ai/coach/messages/${msgId}/feedback`, { rating })
+
+// ─── Separate Chatbot APIs (Dashboard AI & Results AI) ──────────────────────
+// Dashboard Chatbot
+export const getDashboardChatSessions = () => authApi.get('/api/chat/dashboard/sessions')
+export const createDashboardChatSession = () => authApi.post('/api/chat/dashboard/sessions')
+export const getDashboardChatSession = (id) => authApi.get(`/api/chat/dashboard/sessions/${id}`)
+export const deleteDashboardChatSession = (id) => authApi.delete(`/api/chat/dashboard/sessions/${id}`)
+export const sendDashboardChatMessage = (id, payload) =>
+  authApi.post(`/api/chat/dashboard/sessions/${id}/messages`, payload)
+export const regenerateDashboardChatResponse = (id) =>
+  authApi.post(`/api/chat/dashboard/sessions/${id}/regenerate`)
+
+// Results Chatbot
+export const getResultChatSessions = (resultId) => authApi.get(`/api/chat/results/${resultId}/sessions`)
+export const createResultChatSession = (resultId) => authApi.post(`/api/chat/results/${resultId}/sessions`)
+export const getResultChatSession = (resultId, id) =>
+  authApi.get(`/api/chat/results/${resultId}/sessions/${id}`)
+export const deleteResultChatSession = (resultId, id) =>
+  authApi.delete(`/api/chat/results/${resultId}/sessions/${id}`)
+export const sendResultChatMessage = (resultId, id, payload) =>
+  authApi.post(`/api/chat/results/${resultId}/sessions/${id}/messages`, payload)
+export const regenerateResultChatResponse = (resultId, id) =>
+  authApi.post(`/api/chat/results/${resultId}/sessions/${id}/regenerate`)
+
 
 /**
  * Hook providing access to the singleton authApi, auth state, and helper methods.
@@ -198,6 +222,18 @@ export const useAuthApi = () => {
     sendConversationMessage,
     uploadChatAttachment,
     rateMessageFeedback,
+    getDashboardChatSessions,
+    createDashboardChatSession,
+    getDashboardChatSession,
+    deleteDashboardChatSession,
+    sendDashboardChatMessage,
+    regenerateDashboardChatResponse,
+    getResultChatSessions,
+    createResultChatSession,
+    getResultChatSession,
+    deleteResultChatSession,
+    sendResultChatMessage,
+    regenerateResultChatResponse,
   }
 }
 

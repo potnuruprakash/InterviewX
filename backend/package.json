@@ -25,6 +25,7 @@
     "mongoose": "^9.9.3",
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
+    "openai": "^7.17.0",
     "pdf-parse": "^1.1.1",
     "pdf2json": "^4.0.3",
     "uuid": "^14.0.2"

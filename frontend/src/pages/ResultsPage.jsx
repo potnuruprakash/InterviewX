@@ -3,11 +3,11 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuthApi } from '../services/api'
 import {
   ArrowLeft, RefreshCw, AlertCircle, Award, Activity, Video, Mic,
-  Layers, FileText, BookOpen, ChevronRight, PlusCircle, Compass, Target, Bot
+  Layers, FileText, BookOpen, ChevronRight, PlusCircle, Compass, Target, Bot, BarChart2
 } from 'lucide-react'
 
 import { adaptResults } from '../utils/resultsAdapter'
-import AIAssistantDrawer from '../components/coach/AIAssistantDrawer'
+import ResultsChatbot from '../components/chat/ResultsChatbot'
 
 // Modular Components
 import ResultsHero from '../components/results/ResultsHero'
@@ -167,10 +167,11 @@ export default function ResultsPage() {
               type="button"
               className="btn-nav-action action-train-me"
               onClick={() => setCoachOpen(true)}
-              title="Targeted AI Coach training based on this interview"
+              title="Analyze interview results with Results AI"
+              id="results-page-analyze-ai-btn"
             >
-              <Target size={13} />
-              <span>🎯 Train Me</span>
+              <BarChart2 size={13} />
+              <span>📊 Analyze Results AI</span>
             </button>
             <Link to={practiceUrl} className="btn-nav-action action-practice">
               <Compass size={13} />
@@ -320,12 +321,38 @@ export default function ResultsPage() {
           researchEvidence={methodology.researchEvidence}
         />
 
-        {/* ── AI COACH DRAWER (RESULTS → TRAIN ME) ─────────────────────────── */}
-        <AIAssistantDrawer
+        {/* ── RESULTS AI CHATBOT ────────────────────────────────────────── */}
+        <ResultsChatbot
           isOpen={coachOpen}
           onClose={() => setCoachOpen(false)}
-          initialSourceInterviewId={id}
+          resultId={id}
         />
+
+        {/* ── FLOATING RESULTS AI BUTTON ──────────────────────────────────── */}
+        <div
+          className="floating-results-ai-container"
+          style={{ position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 900 }}
+        >
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setCoachOpen((prev) => !prev)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              boxShadow: '0 4px 20px rgba(2, 132, 199, 0.4)',
+              borderRadius: '999px',
+              padding: '0.65rem 1.15rem',
+              fontWeight: 600,
+            }}
+            id="floating-results-ai-btn"
+            title="Open Results AI Assistant"
+          >
+            <BarChart2 size={16} />
+            <span>Analyze Results AI</span>
+          </button>
+        </div>
       </div>
     </div>
   )

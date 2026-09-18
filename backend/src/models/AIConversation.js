@@ -6,7 +6,16 @@ const aiConversationStateSchema = new mongoose.Schema(
     learningTrack: { type: String, default: null },
     currentMode: {
       type: String,
-      enum: ['general_chat', 'interview_prep', 'training_drill', 'plan_review', 'rapid_fire', 'results_coaching'],
+      enum: [
+        'general_chat',
+        'results_coaching',
+        'interview_practice',
+        'answer_evaluation',
+        'interview_prep',
+        'training_drill',
+        'plan_review',
+        'rapid_fire',
+      ],
       default: 'general_chat',
     },
     currentDay: { type: Number, default: null },
@@ -81,6 +90,10 @@ const aiConversationSchema = new mongoose.Schema(
     lastMessagePreview: {
       type: String,
       default: '',
+    },
+    summary: {
+      type: String,
+      default: null,
     },
     state: {
       type: aiConversationStateSchema,

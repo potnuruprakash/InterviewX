@@ -16,6 +16,7 @@ const interviewRoutes = require('./routes/interviews');
 const progressRoutes = require('./routes/progress');
 const skillAnalysisRoutes = require('./routes/skillAnalysis');
 const aiCoachRoutes = require('./routes/aiCoach');
+const chatRoutes = require('./routes/chat');
 
 const app = express();
 
@@ -92,6 +93,7 @@ app.use('/api/interviews', interviewRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/skill-analysis', skillAnalysisRoutes);
 app.use('/api/ai/coach', aiCoachRoutes);
+app.use('/api/chat', chatRoutes);
 
 // 404 handler
 app.use((req, res) => {

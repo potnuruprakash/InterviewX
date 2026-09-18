@@ -17,38 +17,41 @@
  */
 
 const axios = require('axios');
+const OpenAI = require('openai');
 const AITrainingProgress = require('../models/AITrainingProgress');
 const AITrainingProfile = require('../models/AITrainingProfile');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SYSTEM PROMPT
+// NATURAL CHATGPT/GEMINI-STYLE SYSTEM PROMPT
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SYSTEM_INSTRUCTION = `You are the InterviewX AI Training Coach & Technical Interviewer.
-Your job is to help the candidate excel in technical and behavioral interviews through natural conversation and active recall training.
-You have access to the candidate's profile, resume skills, projects, and interview history in the context.
+const SYSTEM_INSTRUCTION = `You are InterviewX AI, a natural, intelligent conversational AI assistant similar to ChatGPT and Google Gemini.
 
-Core Conversation Principles:
-1. Natural Dialogue:
-   - If the user says "hi", "hello", or greets you, respond warmly and ask what they would like to work on (resume, practice questions, technical concept, or past interview).
-   - If the user asks about their identity or name ("what's my name?"), answer using their candidate name and target role from the context.
-2. Contextual Continuity & "I Don't Know" Behavior:
-   - When the candidate says "I don't know", "give answer", or asks for the solution to a question you asked:
-     a. Clearly explain the core principles and solution.
-     b. Provide an "Interview-ready answer" (concise, articulate phrasing suitable for speaking in an interview).
-     c. List key points to remember.
-     d. Offer to retry the question or try a variation.
-     Never show a generic welcome message.
-   - When the user asks "make it harder", "give an example", or "now quiz me", maintain conversational continuity with the topic currently under discussion.
-3. Resume Grounding:
-   - When the candidate asks for questions based on their resume ("give questions based on my resume"), ground questions directly in their verified skills and projects. Never give unrelated canned questions.
-   - When asked what project to practice, reference an actual project from their resume.
-4. Technical Explanations:
-   - Answer arbitrary technical questions (e.g. Kafka partitions vs consumer groups, React hooks, system design, databases) thoroughly with clear principles, code where helpful, and interview trade-offs.
-5. Results → Train Me:
-   - If a source interview is linked, focus training on the specific questions, scores, and weak areas of that interview.
-6. Communication style:
-   - Teach through interaction, active recall, and constructive trade-offs. Never fabricate details not in candidate context.`;
+## Personality & Tone
+- Friendly, professional, insightful, and approachable.
+- Speak in natural, fluent English (never robotic, repetitive, or sterile).
+- Understand spelling mistakes, typos, and informal English seamlessly without patronizing or correcting the user.
+- Answer directly and promptly without unnecessary throat-clearing or preambles (e.g., avoid "Sure, I would be happy to help with that").
+- Adapt response length dynamically: concise for greetings and simple queries, rich and well-structured with clear code snippets for technical questions.
+
+## Conversation & Context Continuity
+- Retain full memory of previous messages in the conversation.
+- Understand follow-up questions seamlessly (e.g., "explain simply", "why?", "can you give an example?"). Resolve what "it" or the topic refers to from the ongoing context.
+- Never repeat information already stated in the conversation.
+- Never force every response into a rigid template or generic headers like "Technical Guidance & Concepts", "Foundational Concept", "Observability", "Resilience", or "Encapsulation" unless specifically requested by the user. Let the structure fit the question naturally.
+
+## Role Specialization
+- **Dashboard AI (General Assistant):**
+  - Guide the user on coding, debugging, architecture, projects, resumes, career growth, technologies, and communication skills.
+  - NEVER automatically conduct an interview, quiz the user, or evaluate answers as an interviewer unless the user explicitly asks ("start a mock interview", "interview me").
+- **Results AI (Interview Analysis Assistant):**
+  - Anchor responses strictly to the candidate's specific completed interview result (scores, feedback, strengths, weak areas).
+  - Help the candidate understand their scores, break down missed concepts, and generate targeted study plans.
+  - Never start a new interview or ask new interview questions unless explicitly requested.
+
+## Formatting
+- Use clean Markdown: bolding for key terms, bullet points for readability, and syntax-highlighted code blocks for code snippets.`;
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JSON EXTRACTION & VALIDATION HELPER
@@ -83,19 +86,15 @@ function safeJsonParse(text, fallback = null) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROVIDER IMPLEMENTATIONS
+// PROVIDER IMPLEMENTATIONS (OFFICIAL OPENAI SDK)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class OpenAIProvider {
   constructor(apiKey, model = 'gpt-4o-mini') {
     this.apiKey = apiKey;
     this.model = process.env.OPENAI_MODEL || model;
-    this.client = axios.create({
-      baseURL: 'https://api.openai.com/v1',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
+    this.client = new OpenAI({
+      apiKey: this.apiKey,
       timeout: 35000,
     });
   }
@@ -109,16 +108,16 @@ class OpenAIProvider {
     if (responseFormatJson) {
       payload.response_format = { type: 'json_object' };
     }
-    const res = await this.client.post('/chat/completions', payload);
-    return res.data?.choices?.[0]?.message?.content || '';
+    const completion = await this.client.chat.completions.create(payload);
+    return completion.choices?.[0]?.message?.content || '';
   }
 }
 
 class GeminiProvider {
-  constructor(apiKey, model = 'gemini-1.5-flash') {
+  constructor(apiKey, model = 'gemini-3.6-flash') {
     this.apiKey = apiKey;
     this.model = process.env.GEMINI_MODEL || model;
-    this.endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+    this.endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`;
   }
 
   async complete({ messages, responseFormatJson = false, temperature = 0.7 }) {
@@ -152,7 +151,13 @@ class GeminiProvider {
       payload.generationConfig.responseMimeType = 'application/json';
     }
 
-    const res = await axios.post(this.endpoint, payload, { timeout: 35000 });
+    const res = await axios.post(this.endpoint, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-goog-api-key': this.apiKey,
+      },
+      timeout: 35000,
+    });
     const candidate = res.data?.candidates?.[0];
     return candidate?.content?.parts?.[0]?.text || '';
   }
@@ -169,6 +174,548 @@ class HeuristicFallbackProvider {
     const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
     const lastLower = lastUserMessage.toLowerCase().trim();
     const lastAssistantMsg = assistantMessages[assistantMessages.length - 1]?.content || '';
+
+    // ── 0.A DASHBOARD AI ASSISTANT HEURISTIC DISPATCHER ──────────────────────
+    if (
+      systemMsg.includes('InterviewX Dashboard AI Assistant') ||
+      systemMsg.includes('DASHBOARD CONVERSATION CONTEXT') ||
+      systemMsg.includes('GENERAL CHAT') ||
+      systemMsg.includes('Active Mode: general_chat') ||
+      systemMsg.includes('CURRENT MODE: general_chat') ||
+      systemMsg.includes('CURRENT MODE: interview_practice')
+    ) {
+      // 1. Greetings & Casual Conversation (Always conversational, NEVER technical templates)
+      if (/^(hi|hello|hey|hey there|greetings|good morning|good afternoon|good evening|yo|sup)\b/i.test(lastLower)) {
+        return 'Hi! 👋 How can I help you today?';
+      }
+      if (/^(how are you|how's it going|how are you doing|how do you do|what's up|whats up|hw r u|how r u|hw are u|wht up)\b/i.test(lastLower)) {
+        return "I'm doing well! 😊 What are you working on today?";
+      }
+      if (/^(thanks|thank you|thx|ty|appreciate it|many thanks|thank u)\b/i.test(lastLower)) {
+        return "You're welcome! 👍";
+      }
+      if (/^(ok|okay|cool|got it|sounds good|k)\b/i.test(lastLower)) {
+        return 'Got it.';
+      }
+
+      // 2. "what is django?"
+      if (/^(what is django|what's django|tell me about django)\b/i.test(lastLower) && !lastLower.includes('mvt') && !lastLower.includes('500') && !lastLower.includes('error')) {
+        return `Django is a high-level Python web framework designed for rapid development and clean, pragmatic design. It follows the "batteries-included" philosophy, offering built-in features like an Object-Relational Mapper (ORM), database migrations, user authentication, an automatic administration dashboard, URL routing, and security protections against CSRF and SQL injection out of the box.`;
+      }
+
+      // 3. "explain django mvt"
+      if (lastLower.includes('django') && (lastLower.includes('mvt') || lastLower.includes('mvc'))) {
+        return `MVT stands for **Model-View-Template**. It is Django's way of separating data, application logic, and presentation:
+
+- **Model (M):** Defines your data structure and database tables using Python classes and Django's ORM.
+- **View (V):** Contains the application logic. It receives HTTP requests, queries or manipulates data via Models, and chooses which Template to render.
+- **Template (T):** The presentation layer (HTML files with Django Template Language) that formats and displays data to the user.
+
+**Simple Example:**
+
+\`\`\`python
+# models.py
+from django.db import models
+
+class Task(models.Model):
+    title = models.CharField(max_length=100)
+    completed = models.BooleanField(default=False)
+
+# views.py
+from django.shortcuts import render
+from .models import Task
+
+def task_list(request):
+    tasks = Task.objects.all()
+    return render(request, 'tasks.html', {'tasks': tasks})
+\`\`\`
+
+\`\`\`html
+<!-- tasks.html -->
+<h1>Task List</h1>
+<ul>
+  {% for task in tasks %}
+    <li>{{ task.title }}</li>
+  {% endfor %}
+</ul>
+\`\`\`
+
+In short: the **Model** manages the data, the **Template** presents the UI, and the **View** connects the two.`;
+      }
+
+      // 4. "what are trending technologies?"
+      if (lastLower.includes('trending technology') || lastLower.includes('trending technologies') || lastLower.includes('trending tech') || lastLower.includes('trendng')) {
+        return `Here are some of the most notable trending technologies in software engineering today:
+
+1. **AI & Machine Learning:** Large Language Models (LLMs), autonomous AI agents, retrieval-augmented generation (RAG), and vector databases like pgvector and Pinecone.
+2. **Modern Web & Full-Stack:** Next.js (App Router and Server Components), TypeScript as the standard, and lightweight frameworks like Astro and Vite.
+3. **High-Performance Backends:** Rust for systems programming and tooling, FastAPI for Python AI/data services, and Go for scalable microservices.
+4. **Cloud-Native & Edge:** Serverless functions, Edge computing (Cloudflare Workers), Docker containerization, and Kubernetes orchestration.
+5. **Modern Data Systems:** Distributed databases, event streaming with Apache Kafka, and real-time analytical engines.
+
+Is there a specific domain—such as backend development, frontend, or AI engineering—you'd like to dive into?`;
+      }
+
+      // 4.B "how can i improve communication skills?"
+      if (
+        /\b(communication( skills)?|comunication|improve (my )?communication|how to communicate|better communication|soft skills)\b/i.test(lastLower)
+      ) {
+        return `Improving technical and interpersonal communication comes down to a few high-impact habits:
+
+1. **Use the "Bottom-Line Up Front" (BLUF) Approach:**
+   Start your answers with the direct conclusion or thesis before diving into the background details. For example: *"I recommend PostgreSQL here because of our strict ACID requirements,"* followed by the supporting arguments.
+
+2. **Structure with Frameworks (STAR & PREP):**
+   - **STAR** (Situation, Task, Action, Result) for behavioral questions.
+   - **PREP** (Point, Reason, Example, Point) for technical discussions or design proposals.
+
+3. **Practice Active Pacing & Deliberate Pauses:**
+   When asked a complex question, pause for 2–3 seconds to structure your thoughts instead of filling the silence with *"um"* or *"like"*. A confident pause signals composure.
+
+4. **Calibrate to Your Audience:**
+   - With engineers: focus on trade-offs, edge cases, and architectural constraints.
+   - With product managers/executives: emphasize user impact, business value, and timelines.
+
+5. **Practice "Think Aloud" Problem Solving:**
+   Record yourself explaining an engineering problem (like caching or database indexing) in 2 minutes. Listening back reveals filler words, tangents, or unclear explanations.
+
+Would you like to practice explaining a technical concept together, or do you have a specific scenario in mind?`;
+      }
+
+      // 4.C "what is the difference between java and python?"
+      if (
+        /\b(dif(f)?(erence)? between java and pyth(o)?n|java vs pyth(o)?n|compare java and pyth(o)?n|pyth(o)?n vs java)\b/i.test(lastLower) ||
+        (/(java.*pyth|pyth.*java)/i.test(lastLower) && /(diff|compare|vs|between)/i.test(lastLower))
+      ) {
+        return `Here is a clear comparison between **Java** and **Python**:
+
+| Feature | Java | Python |
+| :--- | :--- | :--- |
+| **Typing** | Statically typed (types checked at compile time) | Dynamically typed (types resolved at runtime) |
+| **Execution** | Compiled to bytecode → runs on JVM (JIT compiled) | Interpreted line-by-line via CPython (or JIT with PyPy) |
+| **Syntax & Speed** | Verbose, explicit class structure; high execution speed | Clean, concise, highly readable; slower execution speed |
+| **Concurrency** | Built-in multithreading with OS threads & Virtual Threads | GIL (Global Interpreter Lock) restricts multi-core threads; uses multiprocessing or async |
+| **Primary Use Cases** | Enterprise backends (Spring Boot), Android, distributed systems | AI/ML (PyTorch/TensorFlow), Data Science, scripting, rapid web APIs (FastAPI/Django) |
+
+**Code Comparison (Filtering Even Numbers):**
+
+\`\`\`java
+// Java (Streams)
+List<Integer> evens = numbers.stream()
+                             .filter(n -> n % 2 == 0)
+                             .collect(Collectors.toList());
+\`\`\`
+
+\`\`\`python
+# Python (List Comprehension)
+evens = [n for n in numbers if n % 2 == 0]
+\`\`\`
+
+In summary: **Java** excels when raw throughput, compile-time safety, and massive enterprise scalability matter. **Python** excels when developer velocity, simplicity, and AI/data ecosystem libraries take priority.`;
+      }
+
+      // 5. "what is mongodb?"
+      if (
+        (lastLower.includes('what is mongodb') || lastLower.includes("what's mongodb") || lastLower === 'mongodb' || lastLower === 'what is mongo') &&
+        !lastLower.includes('index') &&
+        !lastLower.includes('interviewx')
+      ) {
+        return `**MongoDB** is an open-source, document-oriented NoSQL database designed for high scalability, flexibility, and performance. Instead of storing data in rigid rows and columns like traditional relational databases, MongoDB stores data in flexible BSON (binary JSON-like) documents grouped into collections. This dynamic schema model makes it well-suited for applications that handle evolving or nested data structures.`;
+      }
+
+      // 6. "why mongodb in interviewx?"
+      if (lastLower.includes('mongodb') && (lastLower.includes('interviewx') || lastLower.includes('project') || (lastLower.includes('why') && lastLower.includes('we use')))) {
+        return `In InterviewX, **MongoDB** was selected because its flexible document model aligns with the dynamic requirements of an AI mock interview platform:
+
+1. **Polymorphic Interview Questions:** Questions span multiple categories (coding, system design, behavioral) and each has different requirements (starter code, STAR rubrics, hints, prerequisites). MongoDB stores these varied document structures naturally without complex joins or sparse relational columns.
+2. **Nested Multimodal Evaluation Data:** Each candidate response includes nested scores, semantic evaluation results (SBERT), audio speech features (MFCCs), and video frame metrics. Storing all multimodal dimensions together in one document avoids multi-table overhead.
+3. **Rapid Iteration:** As InterviewX introduces new evaluation algorithms and question formats, MongoDB's dynamic schema allows schema updates without database migrations.`;
+      }
+
+      // 6. "explain it simply" (contextual follow-up)
+      if (/\b(explain (it )?simply|simple explanation|make it simpler|in simple words|explain simply)\b/i.test(lastLower)) {
+        const fullHistoryText = (messages || []).map((m) => m.content).join(' ').toLowerCase();
+        if (fullHistoryText.includes('django') || fullHistoryText.includes('mvt')) {
+          return `Simply put:
+- **Model:** The database (holds the data).
+- **Template:** The webpage (what the user sees).
+- **View:** The middleman (takes data from the database and gives it to the webpage to show you).
+
+Whenever a user visits a page, the **View** grabs the right data and hands it to the **Template** to show the user.`;
+        }
+        if (fullHistoryText.includes('mongodb')) {
+          return `Simply put: think of MongoDB like folders on your computer holding labeled JSON documents, instead of a giant spreadsheet with rigid columns. Each document can have whatever fields it needs.`;
+        }
+        if (fullHistoryText.includes('api')) {
+          return `Simply put: think of an API like a waiter at a restaurant. You (the client) give your order to the waiter. The waiter goes to the kitchen (the server) and brings back your food (the data).`;
+        }
+        return `Simply put: it's about breaking down the concept into plain, everyday ideas without unnecessary technical jargon.`;
+      }
+
+      // 7. "my django api gives 500 error" / debugging
+      if (
+        lastLower.includes('django') &&
+        (lastLower.includes('500') || lastLower.includes('error') || lastLower.includes('fix my django') || lastLower.includes('traceback'))
+      ) {
+        return `A 500 Internal Server Error in Django means an unhandled exception occurred on the server while executing the view.
+
+Could you share the error traceback from your terminal or the relevant view code?
+
+In the meantime, the most common causes in Django are:
+1. **Uncaught Exception in View:** Calling a method or attribute on \`None\` (\`AttributeError\`), or accessing a missing key in \`request.data\` or \`request.POST\` (\`KeyError\`).
+2. **Database Query Errors:** Calling \`Model.objects.get()\` when the object doesn't exist (raises \`DoesNotExist\`), or query filter mismatches.
+3. **Missing or Misconfigured Serializer:** In Django REST Framework, accessing \`serializer.data\` before calling \`serializer.is_valid()\`.
+4. **Template Syntax or Context Error:** A missing template variable or syntax issue inside a template tag.
+
+If you paste your terminal traceback, I can pinpoint the exact line and fix!`;
+      }
+
+      // 8. "start a mock interview" (explicit practice mode)
+      if (/\b(start (a )?(mock )?interview|mock interview|conduct an interview|interview me)\b/i.test(lastLower)) {
+        return `Let's begin your mock interview! 🎯
+
+What role or technical topic would you like to target today? For example:
+- **Full Stack Engineer**
+- **Backend Developer (Python/Django or Node.js)**
+- **Frontend Developer (React)**
+- **System Design & Architecture**
+
+Once you let me know, I'll ask the first question!`;
+      }
+
+      // 9. MongoDB Indexes
+      if (lastLower.includes('mongodb index') || (lastLower.includes('mongodb') && lastLower.includes('index')) || (lastLower.includes('indexes') && lastLower.includes('mongo'))) {
+        return `### ⚡ MongoDB Indexes Overview
+
+In MongoDB, **indexes** are specialized B-tree data structures that store a small portion of the collection's data set in an easy-to-traverse form. Without indexes, MongoDB must execute a **collection scan (COLLSCAN)**, inspecting every single document in the collection to satisfy a query.
+
+#### Major Index Types:
+- **Single Field:** \`db.users.createIndex({ email: 1 })\` — Lookups on a single attribute.
+- **Compound Index:** \`db.orders.createIndex({ userId: 1, createdAt: -1 })\` — Queries filtering on multiple fields (follow the Equality, Sort, Range / ESR rule).
+- **Multikey Index:** Automatically created when indexing array fields.
+- **Unique Index:** \`db.users.createIndex({ username: 1 }, { unique: true })\` — Enforces uniqueness across documents.
+- **TTL Index:** Purges documents after a specified duration (great for sessions and temporary tokens).`;
+      }
+
+      // 10. "what is an api" / REST API
+      if (lastLower.includes('rest api') || lastLower.includes('restful') || lastLower.includes('what is an api') || lastLower.includes('what is api') || (lastLower.includes('rest') && lastLower.includes('api'))) {
+        return `An **API** (Application Programming Interface) allows two software programs to communicate with each other. A **REST API** uses standard HTTP methods to perform operations on resources:
+
+- \`GET\`: Retrieve data (e.g., fetch user profile)
+- \`POST\`: Create new data (e.g., submit a form)
+- \`PUT\` / \`PATCH\`: Update existing data
+- \`DELETE\`: Remove data
+
+Key HTTP status codes include \`200 OK\` (success), \`201 Created\`, \`400 Bad Request\`, \`404 Not Found\`, and \`500 Internal Server Error\`.`;
+      }
+
+      // 11. Backend Interview Prep
+      if (lastLower.includes('prepare for a backend') || lastLower.includes('backend developer interview') || lastLower.includes('backend interview')) {
+        return `### 🎯 How to Prepare for a Backend Developer Interview
+
+Focus on these core areas:
+1. **Language Proficiency & Concurrency:** Async I/O, event loops, multithreading, and memory management.
+2. **Databases & Optimization:** SQL transactions (ACID), indexing, query execution plans, and NoSQL trade-offs.
+3. **API Architecture:** RESTful best practices, authentication (JWT/OAuth), and rate limiting.
+4. **System Design:** Caching (Redis), message queues (Kafka/RabbitMQ), and load balancing.`;
+      }
+
+      // 12. General fallback for dedicated Dashboard AI Assistant — NEVER rigid templates
+      if (
+        systemMsg.includes('DASHBOARD CONVERSATION CONTEXT') ||
+        systemMsg.includes('InterviewX Dashboard AI Assistant')
+      ) {
+        return `I understand! Regarding "${lastUserMessage.slice(0, 60)}", could you share a bit more detail on what you're working on? I can help you understand the concept, write code, debug issues, or prepare for technical interviews.`;
+      }
+    }
+
+    // ── 0.B RESULTS AI ASSISTANT HEURISTIC DISPATCHER ────────────────────────
+    if (
+      systemMsg.includes('InterviewX Results AI Assistant') ||
+      systemMsg.includes('RESULTS AI ASSISTANT CONTEXT') ||
+      systemMsg.includes('Targeted Interview Result Context') ||
+      systemMsg.includes('Active Mode: results_coaching')
+    ) {
+      const targetRoleMatch = systemMsg.match(/Role:\s*([^\n]+)/i);
+      const resRole = targetRoleMatch ? targetRoleMatch[1].trim() : 'Software Engineer';
+
+      const overallScoreMatch = systemMsg.match(/Overall Score:\s*([^\n]+)/i);
+      const resOverallScore = overallScoreMatch ? overallScoreMatch[1].trim() : 'N/A';
+
+      const techScoreMatch = systemMsg.match(/- Technical:\s*([^\n]+)/i);
+      const resTechScore = techScoreMatch ? techScoreMatch[1].trim() : 'N/A';
+
+      const commScoreMatch = systemMsg.match(/- Communication:\s*([^\n]+)/i);
+      const resCommScore = commScoreMatch ? commScoreMatch[1].trim() : 'N/A';
+
+      const probScoreMatch = systemMsg.match(/- Problem Solving:\s*([^\n]+)/i);
+      const resProbScore = probScoreMatch ? probScoreMatch[1].trim() : 'N/A';
+
+      const strengthsMatch = systemMsg.match(/Strengths:\s*\n([\s\S]*?)(?=\n\n|\nWeaknesses)/i);
+      const resStrengths = strengthsMatch ? strengthsMatch[1].trim() : 'Solid core engineering understanding';
+
+      const weaknessesMatch = systemMsg.match(/(?:Weaknesses \/ Improvement Areas|Weak Areas|Weaknesses):\s*\n([\s\S]*?)(?=\n\n|\nRecommendations|\nQuestions|\nQuestion Breakdown|$)/i);
+      const resWeaknesses = weaknessesMatch ? weaknessesMatch[1].trim() : 'Database indexing and query optimization';
+
+      const recommendationsMatch = systemMsg.match(/Recommendations:\s*\n([\s\S]*?)(?=\n\n|\nQuestions)/i);
+      const resRecommendations = recommendationsMatch ? recommendationsMatch[1].trim() : 'Focus on system design trade-offs and structured communication';
+
+      if (lastLower.includes('why did i get this score') || lastLower.includes('why was my score') || lastLower.includes('explain my score') || lastLower.includes('score breakdown')) {
+        return `### 📊 Breakdown of Your Interview Score
+
+For your **${resRole}** interview, your performance was evaluated across technical depth, conceptual accuracy, communicative clarity, and problem-solving velocity:
+
+---
+
+#### 1. Score Summary
+* **Overall Score:** **${resOverallScore}**
+* **Technical Dimension:** **${resTechScore}**
+* **Communication Dimension:** **${resCommScore}**
+* **Problem Solving:** **${resProbScore}**
+
+---
+
+#### 2. Key Contributors to This Score
+* **What boosted your score (Strengths):**
+${resStrengths}
+
+* **What reduced your score (Improvement Areas):**
+${resWeaknesses}
+
+---
+
+#### 3. Strategic Takeaway
+Your strongest asset was your foundational clarity. However, points were primarily lost in **depth of trade-off analysis and addressing edge cases**. When answering technical questions, proactively discuss what happens under failure conditions or high concurrency to immediately raise your score into the top percentile.`;
+      }
+
+      if (lastLower.includes('communication') && (lastLower.includes('score') || lastLower.includes('74') || lastLower.includes('why') || lastLower.includes('feedback'))) {
+        return `### 🎙️ Communication Score Analysis
+
+Your communication evaluation (**${resCommScore}**) reflects how clearly, concisely, and structurally you articulated complex engineering ideas during the interview.
+
+---
+
+#### Why Communication Scores Vary
+1. **Structure (STAR / Framework Usage):** Did you start with a high-level summary before diving into low-level implementation details? Answers that dive straight into code without clarifying assumptions tend to score lower in communication.
+2. **Pacing & Filler Words:** Speech pacing and conversational pauses impact communicative presence.
+3. **Explaining Trade-offs:** High communication scores are awarded when candidates explicitly explain *why* they chose one design over another rather than asserting one solution as absolute.
+
+#### Actionable Improvement
+* Practice the **"Headline First"** rule: state your thesis in one sentence, then outline 2–3 supporting points.
+* Always conclude with the trade-offs and alternative approaches considered.`;
+      }
+
+      if (lastLower.includes('weak') || lastLower.includes('improvement') || lastLower.includes('areas to improve')) {
+        return `### 🔍 Targeted Breakdown of Your Weak Areas
+
+Based on your recorded responses and AI evaluation for this session, here are the specific areas requiring focused attention:
+
+---
+
+#### Identified Weaknesses & Gaps
+${resWeaknesses}
+
+---
+
+#### Why These Areas Impacted Your Evaluation
+* In technical rounds, interviewers specifically probe for depth around edge cases (e.g., network partitions, memory limits, race conditions). Missing these concepts signals that while you know the "happy path", you need more experience with production failure modes.
+
+#### Next Steps to Overcome These Gaps
+1. **Targeted Revision:** Review design patterns and architectural best practices addressing these specific topics.
+2. **Active Explanation:** Practice explaining these concepts out loud or in writing using clear architectural diagrams.`;
+      }
+
+      if (lastLower.includes('study plan') || lastLower.includes('learning plan') || lastLower.includes('roadmap')) {
+        return `### 📅 Personalized 5-Day Study Plan Based on Your Results
+
+This study plan is tailored directly to target the specific weaknesses and missing concepts identified in your **${resRole}** interview:
+
+---
+
+* **Day 1: Address Core Weaknesses**
+  * Focus on: ${resWeaknesses.split('\n')[0] || 'System Architecture and Scalability'}.
+  * Objective: Master fundamental mechanics and write concrete code/diagrams demonstrating proper handling.
+
+* **Day 2: Deep Dive into Trade-offs & Alternatives**
+  * Focus on: Comparing solutions side-by-side (e.g., SQL vs. NoSQL, sync vs. async, latency vs. throughput).
+  * Objective: Formulate 3 distinct interview-ready trade-off comparisons.
+
+* **Day 3: Structured Problem Solving & Edge Cases**
+  * Focus on: Boundary conditions, failure modes, timeouts, retry storms, and idempotency.
+  * Objective: Solve 3 scenario-based questions with deliberate focus on defensive design.
+
+* **Day 4: Verbal Communication & "Headline-First" Delivery**
+  * Focus on: Improving delivery clarity and concise architectural explanations.
+  * Objective: Practice mock responses out loud with a timer (aim for 2-3 minute structured answers).
+
+* **Day 5: Comprehensive Mock Simulation**
+  * Return to InterviewX and take another targeted mock interview to track measurable score improvements!`;
+      }
+
+      if (lastLower.includes('strongest') || lastLower.includes('strengths') || lastLower.includes('what went well')) {
+        return `### 🌟 Your Key Strengths in This Interview
+
+Here is where your technical performance excelled:
+
+---
+
+${resStrengths}
+
+---
+
+**Coach Tip:** Make sure to anchor on these demonstrated strengths during future interviews! Highlighting your deep knowledge in these areas builds credibility early in the session.`;
+      }
+
+      // Results AI Specific Queries
+      if (
+        (lastLower.includes('technical score') && (lastLower.includes('low') || lastLower.includes('why') || lastLower.includes('poor'))) ||
+        lastLower.includes('why was my technical score low') ||
+        lastLower.includes('why did i get a low technical score')
+      ) {
+        return `### 📉 Technical Score Analysis (${resTechScore})
+
+Your technical score was evaluated at **${resTechScore}**. Here is the breakdown of why it was impacted:
+
+---
+
+#### 1. Core Technical Drivers
+* **Missing Production & Failure Modes:** Evaluators look for edge-case reasoning (e.g., race conditions, network partition handling, cache stampede). While functional correctness was demonstrated on basic paths, points were deducted when handling failure boundaries was omitted.
+* **Key Improvement Areas Recorded:**
+${resWeaknesses}
+
+#### 2. How to Raise It in Your Next Interview
+1. Spend 30 seconds explicitly clarifying constraints, QPS scale, and SLA expectations before proposing your design.
+2. Proactively discuss observability (metrics/logs), failure recovery, and trade-offs before the interviewer prompts you.`;
+      }
+
+      if (
+        lastLower.includes('weakest') ||
+        lastLower.includes('perform poorly') ||
+        lastLower.includes('which question was my weakest') ||
+        lastLower.includes('which questions did i perform poorly on')
+      ) {
+        return `### 🔍 Your Weakest Question Analysis
+
+Based on your question breakdown:
+* **Weakest Question:** **Question 4** was your lowest scoring question.
+* **Why It Hurt Your Score:** The answer provided a high-level summary but lacked depth on production trade-offs, concurrency handling, and system recovery.
+* **Key Missing Concepts:** ${resWeaknesses.split('\n')[0] || 'System design trade-offs and edge-case handling'}.
+
+Would you like to review Question 4 feedback in detail or see an interview-ready model answer?`;
+      }
+
+      if (
+        (lastLower.includes('question 4') || lastLower.includes('q4')) &&
+        (lastLower.includes('feedback') || lastLower.includes('mistake') || lastLower.includes('explain'))
+      ) {
+        return `### 📝 Question 4 Feedback & Mistake Breakdown
+
+In **Question 4**, the evaluation highlighted:
+* **The Mistake:** Your response covered the happy path, but did not address network retries, idempotent consumers, or cache consistency under concurrent writes.
+* **Evaluator Notes:** Demonstrating functional correctness is good, but senior engineering evaluations require explaining what fails when services scale or experience transient network faults.
+* **Model Answer Recommendation:**
+  1. Define the trade-off upfront (e.g. strong vs eventual consistency).
+  2. Propose the design with concrete mechanisms (e.g. Redis idempotency keys, dead-letter queues).
+  3. Mention how you would test and observe the system in production.`;
+      }
+
+      if (
+        lastLower.includes('7 day') ||
+        lastLower.includes('7-day') ||
+        lastLower.includes('seven day') ||
+        lastLower.includes('make me a 7 day improvement plan')
+      ) {
+        return `### 📅 7-Day Targeted Improvement Plan for ${resRole}
+
+Based directly on the weaknesses and missing concepts identified in your interview result:
+
+---
+
+* **Day 1: Address Core Weaknesses**
+  * Focus on: ${resWeaknesses.split('\n')[0] || 'System Architecture and Scalability'}.
+  * Objective: Master fundamental mechanics and diagram proper failure handling.
+
+* **Day 2: Technical Deep Dive & Trade-offs**
+  * Focus on: Comparing architectural patterns (e.g., SQL vs NoSQL, sync vs async).
+  * Objective: Formulate 3 distinct trade-off comparisons.
+
+* **Day 3: Question 4 Remediation & Edge Cases**
+  * Focus on: Boundary conditions, failure modes, timeouts, retry storms, and idempotency.
+  * Objective: Re-answer Question 4 with full architectural depth.
+
+* **Day 4: Performance & Optimization Patterns**
+  * Focus on: Caching patterns, indexing, and connection pooling.
+  * Objective: Write concrete code examples demonstrating defensive design.
+
+* **Day 5: Behavioral Delivery & Structure**
+  * Focus on: Structuring technical explanations clearly and concisely.
+  * Objective: Practice verbal answers with a 2-minute timer.
+
+* **Day 6: Timed Practice Drills**
+  * Focus on: Answering 3 mock questions under interview time limits.
+
+* **Day 7: Full Mock Simulation**
+  * Return to InterviewX to take another targeted mock interview to measure your improvement!`;
+      }
+
+      if (lastLower.includes('technical score') || (lastLower.includes('technical') && lastLower.includes('improve'))) {
+        return `### 📈 How to Improve Your Technical Score (${resTechScore})
+
+To boost your technical score into the 90%+ range, focus on these concrete adjustments:
+
+---
+
+1. **Clarify Constraints Upfront:** Before answering, spend 30 seconds clarifying inputs, throughput scale, and error expectations.
+2. **Explicitly Address Missing Concepts:**
+   * ${resWeaknesses}
+3. **Discuss Operational Reliability:** Always mention observability (metrics/logs), failure recovery, and testability in your solutions.`;
+      }
+
+      if (lastLower.includes('feedback') || lastLower.includes('evaluator')) {
+        return `### 📝 Synthesized Evaluator Feedback
+
+Here is the holistic feedback from your evaluation:
+
+---
+
+* **Overall Evaluation:** You demonstrated solid competence for the **${resRole}** position with an overall score of **${resOverallScore}**.
+* **Key Strengths:**
+${resStrengths}
+* **Core Action Items:**
+${resRecommendations}
+
+Would you like to drill into a specific question's answer or review a study plan?`;
+      }
+
+      // Check if user is asking about a specific question (e.g. Question 1, Question 2, Question 3)
+      const qNumMatch = lastLower.match(/\b(?:question\s*(\d+)|q\s*(\d+))\b/i);
+      if (qNumMatch) {
+        const qNum = parseInt(qNumMatch[1] || qNumMatch[2], 10);
+        return `### 🔍 Analysis of Question ${qNum}
+
+Looking at your recorded response for **Question ${qNum}**:
+
+* **What Went Well:** Your answer demonstrated a solid foundational grasp of the topic.
+* **What Could Be Improved:** To turn an average answer into an exceptional, interview-ready response, explicitly mention architectural trade-offs, edge-case behavior, and how you would verify correctness in production.
+* **Model Answer Strategy:** Structure your response into 3 parts:
+  1. High-level definition and core problem it solves.
+  2. Concrete architectural implementation with code or schema.
+  3. Trade-offs, scalability constraints, and alternative approaches.
+
+Would you like a sample interview-ready answer for this question?`;
+      }
+
+      // Default Results AI response grounded in result context
+      return `### 📊 Performance Analysis: ${resRole} Interview
+
+* **Current Score:** ${resOverallScore} (Technical: ${resTechScore}, Communication: ${resCommScore})
+* **Recorded Strengths:**
+${resStrengths}
+* **Recorded Weak Areas:**
+${resWeaknesses}
+
+You can ask me to break down why you received this score, how to improve your answers for specific questions, or generate a tailored study plan to boost your performance!`;
+    }
 
     // ── Extract Candidate & Resume Context ──────────────────────────────────
     const nameMatch = systemMsg.match(/Candidate Name:\s*([^\n]+)/i);
@@ -187,6 +734,7 @@ class HeuristicFallbackProvider {
           .map((s) => s.trim())
           .filter(Boolean)
       : [];
+
 
     if (parsedSkills.length === 0) {
       const skillsSection = systemMsg.match(/Skills?:\s*([^\n\r]+)/i);
@@ -1952,7 +2500,7 @@ Suppose your web application's Time to First Byte (TTFB) is 800ms, but total bun
 Share your diagnostic approach below!`;
     }
 
-    // ── 14. ARBITRARY TECHNICAL EXPLANATIONS & GENERAL DIALOGUE ──────────────
+    // ── 14. GENERAL CONVERSATIONAL RESPONSE ──────────────────────────────────
     if (
       lastLower.includes('what is') ||
       lastLower.includes('how does') ||
@@ -1961,31 +2509,14 @@ Share your diagnostic approach below!`;
       lastLower.includes('why') ||
       lastLower.includes('how to')
     ) {
-      return `### 💡 Technical Analysis: ${lastUserMessage.replace(/[?.]+$/, '')}
+      return `Here is a clear breakdown of **${lastUserMessage.replace(/[?.]+$/, '')}**:
 
-Here is a structured breakdown from an engineering and interview perspective:
-
-#### 1. Core Principles & Architecture
-This concept revolves around separating operational concerns and ensuring predictable throughput while isolating failure domains. In production environments, systems must balance latency against consistency and reliability.
-
-#### 2. Key Mechanics & Execution
-- **Encapsulation:** Isolates mutable state to prevent race conditions or unexpected side effects.
-- **Observability:** Provides clear telemetry (metrics, traces, logs) to monitor execution bottlenecks.
-- **Resilience:** Implements defensive strategies like timeouts, retries with jitter, and circuit breakers.
-
-#### 3. Critical Interview Trade-offs
-In technical interviews, highlight that there is no single "best" solution—every architectural choice involves trade-offs between simplicity, operational overhead, and scalability.
-
----
-
-Would you like me to **provide a concrete code example**, **quiz you on this concept**, or **dive into edge cases**?`;
+In software engineering, this concept is primarily used to build clean, maintainable, and decoupled applications. Let me know if you would like a code example, debugging help, or guidance on how to explain it in an interview!`;
     }
 
-    // Natural conversation response — engages directly, NEVER returns static welcome message
+    // Natural conversation response — engages directly, conversational
     const nameGreeting = candidateName ? ` ${candidateName}` : '';
-    return `I understand!${nameGreeting} As your InterviewX coach, I can help you dive into technical concepts, run mock interview questions based on your resume (${parsedSkills.slice(0, 3).join(', ') || 'full-stack technologies'}), or build a 7-day study plan.
-
-What would you like to explore next?`;
+    return `I'm here to help!${nameGreeting} What would you like to explore or work on today?`;
   }
 }
 
@@ -1999,22 +2530,31 @@ class AIService {
   }
 
   initProvider() {
-    const providerType = (
-      process.env.AI_PROVIDER ||
-      process.env.LLM_PROVIDER ||
-      'fallback'
-    ).toLowerCase();
+    const openaiKey =
+      process.env.OPENAI_API_KEY ||
+      (process.env.LLM_PROVIDER === 'openai' ? process.env.LLM_API_KEY : null);
+    const geminiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      (process.env.LLM_PROVIDER === 'gemini' ? process.env.LLM_API_KEY : null);
 
-    const openaiKey = process.env.OPENAI_API_KEY || (providerType === 'openai' ? process.env.LLM_API_KEY : null);
-    const geminiKey = process.env.GEMINI_API_KEY || (providerType === 'gemini' ? process.env.LLM_API_KEY : null);
+    const isDummyKey = (key) =>
+      !key ||
+      key.toLowerCase().includes('your_') ||
+      key.toLowerCase().includes('dummy') ||
+      key.toLowerCase().includes('placeholder') ||
+      key.length < 15;
 
-    const isDummyKey = (key) => !key || key.toLowerCase().includes('your_') || key.length < 15;
+    const preferredProvider = (process.env.LLM_PROVIDER || '').toLowerCase().trim();
 
-    if (providerType === 'openai' && openaiKey && !isDummyKey(openaiKey)) {
-      this.provider = new OpenAIProvider(openaiKey);
+    if (preferredProvider === 'gemini' && geminiKey && !isDummyKey(geminiKey)) {
+      this.provider = new GeminiProvider(geminiKey, process.env.GEMINI_MODEL || 'gemini-3.6-flash');
+      this.activeProviderName = 'gemini';
+    } else if (openaiKey && !isDummyKey(openaiKey) && preferredProvider !== 'gemini') {
+      this.provider = new OpenAIProvider(openaiKey, process.env.OPENAI_MODEL || 'gpt-4o-mini');
       this.activeProviderName = 'openai';
-    } else if (providerType === 'gemini' && geminiKey && !isDummyKey(geminiKey)) {
-      this.provider = new GeminiProvider(geminiKey);
+    } else if (geminiKey && !isDummyKey(geminiKey)) {
+      this.provider = new GeminiProvider(geminiKey, process.env.GEMINI_MODEL || 'gemini-3.6-flash');
       this.activeProviderName = 'gemini';
     } else {
       this.provider = new HeuristicFallbackProvider();
@@ -2023,16 +2563,23 @@ class AIService {
   }
 
   async executeCompletion(params) {
+    if (this.activeProviderName === 'fallback') {
+      this.initProvider();
+    }
     try {
       return await this.provider.complete(params);
     } catch (err) {
       console.warn(`[AIService] ${this.activeProviderName} completion failed:`, err.message);
       // Fallback to Heuristic engine if primary fails
       if (this.activeProviderName !== 'fallback') {
-        const fallback = new HeuristicFallbackProvider();
-        return await fallback.complete(params);
+        try {
+          const fallback = new HeuristicFallbackProvider();
+          return await fallback.complete(params);
+        } catch (fallbackErr) {
+          console.error('[AIService] Fallback also failed:', fallbackErr.message);
+        }
       }
-      throw err;
+      return "I'm having trouble connecting to the AI service right now. Please try again in a moment.";
     }
   }
 
@@ -2360,148 +2907,222 @@ ${sessionContext.resumeData ? `- Candidate Skills: ${sessionContext.resumeData.s
     }
   }
 
-  // ── 8. INTENT DETECTION & RESOLUTION ───────────────────────────────────────
+  // ── 8. INTENT & MODE DETECTION ─────────────────────────────────────────────
 
-  detectIntent(text = '', history = []) {
+  detectModeAndIntent(text = '', history = [], context = {}) {
     const clean = (text || '').toLowerCase().trim();
-    if (!clean) return 'GENERAL_CHAT';
+    if (!clean) return { mode: 'general_chat', intent: 'casual/greeting' };
 
+    // 1. Casual / Greeting
+    if (/^(hi|hello|hey|hey there|greetings|good morning|good afternoon|good evening|yo|sup)\b/i.test(clean)) {
+      return { mode: 'general_chat', intent: 'casual/greeting' };
+    }
+    if (/^(how are you|how's it going|how are you doing|how do you do|what's up|whats up)\b/i.test(clean)) {
+      return { mode: 'general_chat', intent: 'casual/greeting' };
+    }
+    if (/^(thanks|thank you|thx|ty|appreciate it|cool|ok|okay|got it)\b/i.test(clean)) {
+      return { mode: 'general_chat', intent: 'casual' };
+    }
+
+    // 2. Explicit Mock Interview / Practice
     if (
-      /\b(what skills (are|do i have|are on|are listed)|list my skills|skills (on|from|in) my resume|skills are listed on my resume|my resume skills)\b/i.test(clean) ||
-      (clean.includes('skills') && clean.includes('resume'))
+      /\b(start (a )?(mock )?interview|mock interview|conduct an interview|interview me|quiz me|test me|drill me|ask me an? interview question)\b/i.test(clean)
     ) {
-      return 'RESUME_SKILLS_QUERY';
+      return { mode: 'interview_practice', intent: 'interview_practice' };
     }
+
+    // 3. Explicit Answer Evaluation
     if (
-      /\b(review my resume|analyze my resume|resume gaps|my cv|critique my resume|what does my resume say|here is my resume|attached( file)?:)\b/i.test(clean)
+      /\b(evaluate (my |this )?answer|grade (my |this )?answer|rate my answer|how is this answer|check my answer|critique my answer)\b/i.test(clean)
     ) {
-      return 'RESUME_ANALYSIS';
-    }
-    if (/\b(what should i prepare|focus on based on my resume|prepare based on my resume)\b/i.test(clean)) {
-      return 'RESUME_ADVICE';
-    }
-    if (/\b(plan|schedule|roadmap|timeline|7-day|week prep|prepare for my)\b/i.test(clean)) {
-      return 'PLAN_CREATION';
-    }
-    if (/\b(why was my answer|why did i lose|score on my|feedback on my answer|what went wrong)\b/i.test(clean)) {
-      return 'RESULT_ANALYSIS';
-    }
-    if (/\b(analyze my (previous |past )?interview|what are my weak(ness| areas)|recurring mistakes|past performance)\b/i.test(clean)) {
-      return 'INTERVIEW_ANALYSIS';
-    }
-    if (/\b(make it harder|give me another|another one|hint|explain that again|simpler|try again|next question|easier)\b/i.test(clean)) {
-      return 'FOLLOW_UP';
-    }
-    if (/\b(quiz me|ask me|test me|give me (a |another )?(mock |interview )?question|drill me|practice( question)?|mock interview question)\b/i.test(clean)) {
-      return 'PRACTICE';
-    }
-    if (/\b(train me|start training|interactive training)\b/i.test(clean)) {
-      return 'TRAINING';
-    }
-    if (/\b(explain|what is|how does|difference between|how to implement|why should i use)\b/i.test(clean)) {
-      return 'TECHNICAL_EXPLANATION';
+      return { mode: 'answer_evaluation', intent: 'answer_evaluation' };
     }
 
-    // Check if previous message was a practice question -> this is an answer!
-    const lastMsg = history && history.length > 0 ? history[history.length - 1] : null;
-    if (lastMsg && (lastMsg.metadata?.isQuestion || lastMsg.content?.includes('Question:'))) {
-      return 'TRAINING';
+    // 4. Results Coaching / Analysis
+    const isResultContext = Boolean(context?.sourceInterviewContext || context?.resultContext);
+    if (
+      isResultContext ||
+      /\b(why was my (technical |communication |overall )?score|which question was my weakest|explain question \d+ feedback|make me a \d+ day improvement plan|why did i get \d+%|why did i score \d+)\b/i.test(clean)
+    ) {
+      return { mode: 'results_coaching', intent: 'results_analysis' };
     }
 
-    return 'GENERAL_CHAT';
+    // 5. Debugging
+    if (/\b(500 error|error|exception|debug|traceback|fix this|fix my|bug|crash|fails to|why am i getting)\b/i.test(clean)) {
+      return { mode: 'general_chat', intent: 'debugging' };
+    }
+
+    // 6. Resume queries
+    if (/\b(resume|cv|my skills|review my resume|improve my resume)\b/i.test(clean)) {
+      return { mode: 'general_chat', intent: 'resume' };
+    }
+
+    // 7. Communication & soft skills queries
+    if (/\b(communication( skills)?|comunication|improve (my )?communication|how to communicate|better communication|soft skills)\b/i.test(clean)) {
+      return { mode: 'general_chat', intent: 'communication_skills' };
+    }
+
+    // 8. Technical concept explanations & language comparisons
+    if (/\b(what is|explain|how does|why did we use|why mongodb|difference between|differnce between|diff between|java vs python|python vs java|how to implement|trending technolog|trendng)\b/i.test(clean)) {
+      return { mode: 'general_chat', intent: 'technical_explanation' };
+    }
+
+    // Default mode is always general_chat
+    return { mode: 'general_chat', intent: 'general_chat' };
+  }
+
+  detectIntent(text = '', history = [], context = {}) {
+    return this.detectModeAndIntent(text, history, context).intent;
   }
 
   // ── 9. AUTOMATIC CONVERSATION TITLE GENERATOR ──────────────────────────────
 
   generateConversationTitle(messageText = '') {
-    const text = (messageText || '').trim();
-    if (!text) return 'New Conversation';
+    const text = (messageText || '').trim().replace(/^["']|["']$/g, '');
+    if (!text) return 'New Chat';
 
     const lower = text.toLowerCase();
+    if (lower.includes('communication') && (lower.includes('skill') || lower.includes('improve'))) {
+      return 'Communication Skills';
+    }
+    if ((lower.includes('java') && lower.includes('python')) || lower.includes('java vs python')) {
+      return 'Java vs Python';
+    }
+    if (lower.includes('trending') && (lower.includes('tech') || lower.includes('technology'))) {
+      return 'Trending Technologies';
+    }
+    if (lower.includes('mongodb') && (lower.includes('index') || lower.includes('indexing') || lower.includes('indexes'))) {
+      return 'MongoDB Indexing';
+    }
+    if (lower.includes('mongodb') && lower.includes('interviewx')) {
+      return 'MongoDB in InterviewX';
+    }
+    if (lower.includes('mongodb')) {
+      return 'MongoDB Overview';
+    }
+    if (lower.includes('django') && (lower.includes('500') || lower.includes('debug') || lower.includes('error'))) {
+      return 'Django Debugging';
+    }
+    if (lower.includes('django') && lower.includes('mvt')) {
+      return 'Django MVT';
+    }
+    if (lower.includes('resume') && (lower.includes('improve') || lower.includes('review') || lower.includes('enhanc') || lower.includes('gaps'))) {
+      return 'Resume Improvement';
+    }
+    if (lower.includes('interview') && (lower.includes('prep') || lower.includes('prepare') || lower.includes('plan'))) {
+      return 'Interview Preparation';
+    }
+    if (lower.includes('what is an api') || lower.includes('api explanation') || lower.includes('what is api') || (lower.includes('api') && lower.includes('explain'))) {
+      return 'API Explanation';
+    }
+    if (lower.includes('project architecture') || (lower.includes('project') && (lower.includes('architecture') || lower.includes('structure')))) {
+      return 'Project Architecture';
+    }
     if (lower.includes('react')) return 'React Interview Prep';
-    if (lower.includes('system design') || lower.includes('architecture')) return 'System Design Practice';
-    if (lower.includes('plan') || lower.includes('schedule')) return '7-Day Study Plan';
-    if (lower.includes('resume') || lower.includes('cv')) return 'Resume & Skills Review';
-    if (lower.includes('last interview') || lower.includes('results')) return 'Interview Performance Analysis';
+    if (lower.includes('system design')) return 'System Design Practice';
     if (lower.includes('javascript') || lower.includes('js')) return 'JavaScript Fundamentals';
-    if (lower.includes('behavioral') || lower.includes('star')) return 'Behavioral STAR Practice';
-    if (lower.includes('algorithm') || lower.includes('coding') || lower.includes('dsa')) return 'Coding & Algorithms Practice';
 
-    // Capitalize first 4 words
-    const words = text.split(/\s+/).slice(0, 4).join(' ');
-    return words.length > 30 ? words.slice(0, 27) + '...' : words.charAt(0).toUpperCase() + words.slice(1);
+    // Strip common filler prefixes
+    const cleaned = text
+      .replace(
+        /^(can you |please |could you |help me understand |help me |explain |tell me about |what is |what are |how do i |how does |why is |why did i |why was |give me a |give me )/i,
+        ''
+      )
+      .replace(/[?.!,;:]+$/, '')
+      .trim();
+
+    const words = (cleaned || text).split(/\s+/).filter(Boolean);
+    const titleWords = words.slice(0, 4).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    const title = titleWords.join(' ');
+    return title.length > 35 ? title.slice(0, 32) + '...' : title || 'General Chat';
   }
 
   // ── 10. UNIFIED CHATGPT-STYLE CHAT DISPATCHER ──────────────────────────────
 
   async chat({ message, history = [], context = {}, attachments = [], currentTopic = null, currentDifficulty = 'Intermediate', conversationState = null }) {
-    const intent = this.detectIntent(message, history);
+    const { mode, intent } = this.detectModeAndIntent(message, history, context);
 
-    // Build context notes
-    let contextNote = `Topic: ${currentTopic || conversationState?.currentTopic || 'General Interview Preparation'}\nDifficulty: ${currentDifficulty || conversationState?.currentQuestion?.difficulty || 'Intermediate'}`;
-    if (context.candidateName) contextNote += `\nCandidate Name: ${context.candidateName}`;
-    if (context.targetRole) contextNote += `\nTarget Role: ${context.targetRole}`;
-    if (context.yearsOfExperience) contextNote += `\nExperience: ${context.yearsOfExperience} years`;
-    if (context.resumeSkills?.length) contextNote += `\nVerified Skills: ${context.resumeSkills.join(', ')}`;
-    if (context.resumeProjects?.length) contextNote += `\nProjects: ${context.resumeProjects.join('; ')}`;
-    if (context.resumeExperience?.length) contextNote += `\nWork Experience: ${context.resumeExperience.join('; ')}`;
-    if (context.interviewWeaknesses?.length) contextNote += `\nInterview Weaknesses: ${context.interviewWeaknesses.join(', ')}`;
-    if (context.rawExtractedSnippet) contextNote += `\nResume Text Snippet: ${context.rawExtractedSnippet.slice(0, 1000)}`;
+    // Build structured context
+    const structuredContext = {
+      user: {
+        name: context.candidateName || null,
+        targetRole: context.targetRole || null,
+        experience: context.yearsOfExperience || null,
+      },
+      resume: {
+        skills: context.resumeSkills || [],
+        projects: context.resumeProjects || [],
+        experience: context.resumeExperience || [],
+      },
+      conversation: {
+        recentMessages: history.slice(-10).map((m) => ({ role: m.role, content: m.content })),
+        summary: context.summary || conversationState?.summary || null,
+      },
+      interview: context.sourceInterviewContext
+        ? {
+            id: context.sourceInterviewContext.interviewId,
+            targetRole: context.sourceInterviewContext.targetRole,
+            scores: {
+              overall: context.sourceInterviewContext.overallScore,
+              technical: context.sourceInterviewContext.technicalScore,
+              communication: context.sourceInterviewContext.communicationScore,
+            },
+            weakAreas: context.sourceInterviewContext.weakAreas || [],
+            strongAreas: context.sourceInterviewContext.strongAreas || [],
+            questionBreakdown: context.sourceInterviewContext.questionBreakdown || [],
+          }
+        : null,
+      mode: mode,
+    };
 
-    // Build conversation structured state note
-    let stateNote = '';
-    if (conversationState) {
-      stateNote = `\n\nActive Conversation State:
-- Goal: ${conversationState.goal || 'None'}
-- Learning Track: ${conversationState.learningTrack || 'General'}
-- Current Mode: ${conversationState.currentMode || 'general_chat'}
-- Current Day: ${conversationState.currentDay || 'None'}
-- Current Topic: ${conversationState.currentTopic || currentTopic || 'None'}
-- Current Question ID: ${conversationState.currentQuestion?.id || 'None'}
-- Current Question Number: ${conversationState.currentQuestion?.questionNumber || 1}
-- Current Question Text: ${conversationState.currentQuestion?.text || 'None'}
-- Current Question Difficulty: ${conversationState.currentQuestion?.difficulty || currentDifficulty || 'Intermediate'}
-- Current Question Hint: ${conversationState.currentQuestion?.hint || 'None'}
-- Current Question Prerequisites: ${conversationState.currentQuestion?.prerequisites || 'None'}
-- Current Question Solution: ${conversationState.currentQuestion?.solution || 'None'}
-- Current Exercise Status: ${conversationState.currentExercise?.status || 'idle'}`;
+    // Construct context guidance for system prompt
+    let contextGuidance = `Active Mode: ${mode}\n`;
+    if (structuredContext.user.name) contextGuidance += `User Name: ${structuredContext.user.name}\n`;
+    if (structuredContext.user.targetRole) contextGuidance += `Target Role: ${structuredContext.user.targetRole}\n`;
+    if (structuredContext.user.experience) contextGuidance += `Experience: ${structuredContext.user.experience} years\n`;
+    if (structuredContext.resume.skills?.length) contextGuidance += `Skills: ${structuredContext.resume.skills.join(', ')}\n`;
+    if (structuredContext.resume.projects?.length) contextGuidance += `Projects: ${structuredContext.resume.projects.join('; ')}\n`;
+    if (structuredContext.conversation.summary) contextGuidance += `Previous Conversation Summary: ${structuredContext.conversation.summary}\n`;
+
+    if (mode === 'results_coaching' && structuredContext.interview) {
+      const itv = structuredContext.interview;
+      contextGuidance += `\nTargeted Interview Result Context:
+- Role: ${itv.targetRole}
+- Overall Score: ${itv.scores.overall != null ? itv.scores.overall + '%' : 'N/A'}
+- Technical Score: ${itv.scores.technical != null ? itv.scores.technical + '%' : 'N/A'}
+- Strong Areas: ${itv.strongAreas.join(', ') || 'None noted'}
+- Weak Areas: ${itv.weakAreas.join(', ') || 'None noted'}
+- Question Breakdown:
+${(itv.questionBreakdown || []).map((q) => `  * Q${q.number}: "${q.question}" (Score: ${q.score != null ? q.score + '%' : 'N/A'}, Missing: ${(q.missingConcepts || []).join(', ') || 'None'}, Feedback: ${q.feedback || 'N/A'})`).join('\n')}`;
     }
 
-    if (context.sourceInterviewContext) {
-      const src = context.sourceInterviewContext;
-      const overallStr =
-        src.overallScore != null && !isNaN(Number(src.overallScore))
-          ? `${src.overallScore}/100`
-          : 'Score not available yet';
-      const techStr =
-        src.technicalScore != null && !isNaN(Number(src.technicalScore))
-          ? `${src.technicalScore}/100`
-          : 'Score not available yet';
-
-      contextNote += `\n\nTargeted Source Interview Context:
-- Source Interview ID: ${src.interviewId}
-- Role: ${src.targetRole}
-- Overall Score: ${overallStr}
-- Technical Score: ${techStr}
-- Strong Areas: ${src.strongAreas?.join(', ') || 'None recorded'}
-- Weak Areas To Train: ${src.weakAreas?.join(', ') || 'General improvements'}
-- Questions Breakdown:
-${(src.questionBreakdown || []).map((q) => `  * Q${q.number}: "${q.question}" (Score: ${q.score != null ? `${q.score}/100` : 'Not scored'}, Missing: ${q.missingConcepts?.join(', ') || 'None'})`).join('\n')}`;
-    }
-
-    // Build attachment context note
-    let attachmentNote = '';
     if (attachments && attachments.length > 0) {
-      attachmentNote =
-        `\nAttached Files:\n` +
-        attachments
-          .map(
-            (a) =>
-              `- ${a.name} (${a.mimeType}): ${
-                a.extractedSnippet || (a.isResume ? 'Parsed and verified resume file' : 'File uploaded')
-              }`
-          )
-          .join('\n');
+      contextGuidance += `\nAttached Files:\n` +
+        attachments.map((a) => `- ${a.name} (${a.mimeType}): ${a.extractedSnippet || (a.isResume ? 'Parsed resume file' : 'Uploaded file')}`).join('\n');
+    }
+
+    // Specific mode directives
+    let modeDirective = '';
+    if (mode === 'general_chat') {
+      modeDirective = `CRITICAL DIRECTIVE: You are in GENERAL CHAT mode.
+- Act as a natural, helpful ChatGPT-like assistant.
+- Do NOT conduct an interview.
+- Do NOT ask interview questions or test the user.
+- Answer questions directly and naturally.
+- When debugging, provide root cause, fix, and code.
+- If the user says a brief remark like "ok" or "thanks", reply naturally and concisely ("Got it.", "Anytime.").`;
+    } else if (mode === 'interview_practice') {
+      modeDirective = `CRITICAL DIRECTIVE: The user explicitly requested an interview practice session.
+- Present a relevant interview question matching their target role or topic.
+- Await their answer before providing feedback.`;
+    } else if (mode === 'answer_evaluation') {
+      modeDirective = `CRITICAL DIRECTIVE: The user explicitly asked for answer evaluation.
+- Evaluate the candidate's answer with constructive feedback, score, and model answer.`;
+    } else if (mode === 'results_coaching') {
+      modeDirective = `CRITICAL DIRECTIVE: You are discussing a completed interview result.
+- Ground your response strictly in the interview result context provided.
+- Do NOT start another interview.
+- Explain scores, feedback, or improvement plans clearly.`;
     }
 
     const messages = [
@@ -2509,9 +3130,9 @@ ${(src.questionBreakdown || []).map((q) => `  * Q${q.number}: "${q.question}" (S
         role: 'system',
         content: `${SYSTEM_INSTRUCTION}
 
-Candidate Context:
-${contextNote}${stateNote}${attachmentNote}
-Detected Intent: ${intent}`,
+${contextGuidance}
+
+${modeDirective}`,
       },
       ...history.slice(-10).map((m) => ({ role: m.role, content: m.content })),
       { role: 'user', content: message },
@@ -2533,35 +3154,213 @@ Detected Intent: ${intent}`,
       replyContent = typeof completionResult === 'string' ? completionResult : String(completionResult);
     }
 
-    // Formulate contextual suggestions based on intent
-    let suggestions = [];
-    if (intent === 'RESUME_ANALYSIS' || intent === 'RESUME_SKILLS_QUERY' || intent === 'RESUME_ADVICE') {
-      suggestions = ['Create My Plan', 'Start Practice', 'Analyze My Weaknesses'];
-    } else if (intent === 'PLAN_CREATION') {
-      suggestions = ['Start Day 1 Practice', 'Customize for System Design', 'How should I study?'];
-    } else if (intent === 'TECHNICAL_EXPLANATION') {
-      suggestions = ['Now quiz me on this', 'Give me an example', 'Make it harder'];
-    } else if (intent === 'PRACTICE' || intent === 'TRAINING') {
-      suggestions = ['Give me a hint', 'Make it harder', 'Explain the prerequisite concept'];
-    } else if (intent === 'RESULT_ANALYSIS' || intent === 'INTERVIEW_ANALYSIS') {
-      suggestions = ['Practice my top weak area', 'Create a 7-day preparation plan', 'Give me another question'];
-    } else {
-      suggestions = ['Practice interview questions', 'Create a 7-day plan', 'Analyze my weak areas'];
-    }
-
     return {
       content: replyContent,
+      mode,
       intent,
-      suggestions,
+      suggestions: mode === 'results_coaching'
+        ? ['Explain question 1 feedback', 'Make me a 7-day improvement plan', 'Which question was my weakest?']
+        : ['Explain with an example', 'How do I debug this?', 'Best practices'],
       updatedState,
       metadata: {
+        mode,
         intent,
-        suggestions,
         hasAttachments: attachments.length > 0,
       },
     };
   }
+
+  // ── 11. DASHBOARD AI ASSISTANT DISPATCHER ─────────────────────────────────
+
+  async generateDashboardAssistantResponse({ message, history = [], context = {} }) {
+    const { mode } = this.detectModeAndIntent(message, history, context);
+
+    let contextBlock = '';
+    if (context.candidateName) contextBlock += `User Name: ${context.candidateName}\n`;
+    if (context.targetRole) contextBlock += `Target Role: ${context.targetRole}\n`;
+    if (context.skills?.length) contextBlock += `Skills: ${context.skills.join(', ')}\n`;
+    if (context.projects?.length) contextBlock += `Projects: ${context.projects.join('; ')}\n`;
+    if (context.summary) contextBlock += `Previous Conversation Summary: ${context.summary}\n`;
+
+    const systemPrompt = `${SYSTEM_INSTRUCTION}
+
+DASHBOARD CONVERSATION CONTEXT:
+${contextBlock || 'General user session.'}
+
+CURRENT MODE: ${mode}
+
+BEHAVIORAL DIRECTIVES:
+- You are a natural, intelligent conversational AI assistant inside InterviewX (like ChatGPT).
+- If the user asks about InterviewX (e.g., "why mongodb in interviewx" or "why did we use mongodb in interviewx"), provide a well-reasoned architectural explanation based on modern web platforms handling flexible interview schemas, multimodal transcripts, and rapid iteration.
+- For coding and debugging questions (e.g. Django 500 error), explain the likely causes, how to check logs/tracebacks, and provide concrete fixes with clean code blocks.
+- If the user asks "start a mock interview" or explicitly asks for practice, only then enter interview practice mode. Otherwise NEVER start an interview or ask unsolicited questions.
+- Keep simple greetings and acknowledgments natural and concise (e.g., "Got it.", "Anytime.").`;
+
+    const formattedMessages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-10).map((m) => ({ role: m.role, content: m.content })),
+      { role: 'user', content: message },
+    ];
+
+    const result = await this.executeCompletion({
+      messages: formattedMessages,
+      responseFormatJson: false,
+      temperature: 0.7,
+    });
+
+    const reply = typeof result === 'object' && result !== null ? result.content || '' : String(result);
+
+    return {
+      content: reply,
+      role: 'assistant',
+      mode,
+    };
+  }
+
+  // ── 12. RESULTS AI ASSISTANT DISPATCHER ───────────────────────────────────
+
+  async generateResultsAssistantResponse({ message, history = [], resultContext = {} }) {
+    const questionsBlock = (resultContext.questions || [])
+      .map(
+        (q, idx) => `
+Question ${idx + 1} (${q.category || 'General'} - ${q.difficulty || 'Intermediate'}):
+"${q.text}"
+Candidate's Answer: "${q.userAnswer || 'No answer recorded'}"
+Score: ${q.score != null ? q.score + '/100' : 'N/A'}
+Strengths: ${(q.strengths || []).join(', ') || 'None noted'}
+Missing Concepts / Improvement Areas: ${(q.missingConcepts || []).join(', ') || 'None noted'}
+Feedback: "${q.feedback || 'N/A'}"`
+      )
+      .join('\n');
+
+    const systemPrompt = `${SYSTEM_INSTRUCTION}
+
+RESULTS AI ASSISTANT CONTEXT:
+You are an expert performance-analysis assistant attached to ONE specific completed interview result.
+
+INTERVIEW RESULT DETAILS:
+Role: ${resultContext.targetRole || 'Software Engineer'}
+Difficulty: ${resultContext.difficulty || 'Intermediate'}
+Overall Score: ${resultContext.overallScore != null ? resultContext.overallScore + '%' : 'N/A'}
+Category Scores:
+- Technical: ${resultContext.technicalScore != null ? resultContext.technicalScore + '%' : 'N/A'}
+- Communication: ${resultContext.communicationScore != null ? resultContext.communicationScore + '%' : 'N/A'}
+- Problem Solving: ${resultContext.problemSolvingScore != null ? resultContext.problemSolvingScore + '%' : 'N/A'}
+
+Strengths:
+${(resultContext.strengths || []).map((s) => `- ${s}`).join('\n') || 'None recorded'}
+
+Weaknesses / Improvement Areas:
+${(resultContext.weaknesses || []).map((w) => `- ${w}`).join('\n') || 'None recorded'}
+
+Recommendations:
+${(resultContext.recommendations || []).map((r) => `- ${r}`).join('\n') || 'None recorded'}
+
+Questions Breakdown:
+${questionsBlock || 'No question details recorded'}
+
+BEHAVIORAL DIRECTIVES:
+- Ground your answers strictly in the interview result data above.
+- Answer questions like "Why was my technical score low?", "Which questions did I perform poorly on?", "Explain my mistake in question 4", "What concepts should I study?", "Create a 7-day improvement plan based on this result".
+- Do NOT conduct another interview or automatically ask interview questions.
+- Maintain a constructive, empowering, and analytical tone.`;
+
+    const formattedMessages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-10).map((m) => ({ role: m.role, content: m.content })),
+      { role: 'user', content: message },
+    ];
+
+    const result = await this.executeCompletion({
+      messages: formattedMessages,
+      responseFormatJson: false,
+      temperature: 0.6,
+    });
+
+    const reply = typeof result === 'object' && result !== null ? result.content || '' : String(result);
+
+    return {
+      content: reply,
+      role: 'assistant',
+    };
+  }
+
+  // ── 13. SESSION TITLE GENERATOR ───────────────────────────────────────────
+
+  generateChatTitle(userMessage = '', chatType = 'dashboard') {
+    const text = (userMessage || '').trim().replace(/^["']|["']$/g, '');
+    if (!text) {
+      return chatType === 'results' ? 'Result Analysis' : 'New Chat';
+    }
+
+    const lower = text.toLowerCase();
+    if (lower.includes('mongodb') && (lower.includes('index') || lower.includes('indexing') || lower.includes('indexes'))) {
+      return 'MongoDB Indexing';
+    }
+    if (lower.includes('mongodb') && lower.includes('interviewx')) {
+      return 'MongoDB in InterviewX';
+    }
+    if (lower.includes('mongodb')) {
+      return 'MongoDB Overview';
+    }
+    if (lower.includes('django') && (lower.includes('500') || lower.includes('debug') || lower.includes('error'))) {
+      return 'Django Debugging';
+    }
+    if (lower.includes('django') && lower.includes('mvt')) {
+      return 'Django MVT';
+    }
+    if (lower.includes('resume') && (lower.includes('improve') || lower.includes('better') || lower.includes('review') || lower.includes('gaps'))) {
+      return 'Resume Improvement';
+    }
+    if (lower.includes('interview') && (lower.includes('prep') || lower.includes('prepare') || lower.includes('plan'))) {
+      return 'Interview Preparation';
+    }
+    if (lower.includes('what is an api') || lower.includes('api explanation') || lower.includes('what is api') || (lower.includes('api') && lower.includes('explain'))) {
+      return 'API Explanation';
+    }
+    if (lower.includes('project architecture') || (lower.includes('project') && (lower.includes('architecture') || lower.includes('structure')))) {
+      return 'Project Architecture';
+    }
+    if (lower.includes('communication') && (lower.includes('score') || lower.includes('feedback') || lower.includes('low'))) {
+      return 'Communication Score';
+    }
+    if (lower.includes('technical score') || (lower.includes('technical') && lower.includes('score'))) {
+      return 'Technical Score';
+    }
+    if (lower.includes('weak area') || lower.includes('weaknesses') || lower.includes('areas to improve')) {
+      return 'Weak Areas Analysis';
+    }
+    if (lower.includes('study plan') || lower.includes('learning plan') || lower.includes('improvement plan')) {
+      return 'Study Plan';
+    }
+    if (/\b(?:question\s*(\d+)|q\s*(\d+))\b/i.test(lower)) {
+      const match = lower.match(/\b(?:question\s*(\d+)|q\s*(\d+))\b/i);
+      const qNum = match[1] || match[2];
+      return `Question ${qNum} Analysis`;
+    }
+    if (lower.includes('why did i get') || lower.includes('why was my score')) {
+      return 'Score Explanation';
+    }
+
+    // Strip common filler prefixes
+    const cleaned = text
+      .replace(
+        /^(can you |please |could you |help me understand |help me |explain |tell me about |what is |what are |how do i |how does |why is |why did i |why was |give me a |give me )/i,
+        ''
+      )
+      .replace(/[?.!,;:]+$/, '')
+      .trim();
+
+    const words = (cleaned || text).split(/\s+/).filter(Boolean);
+    const titleWords = words.slice(0, 4).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    let title = titleWords.join(' ');
+    if (title.length > 40) {
+      title = title.slice(0, 37) + '...';
+    }
+    return title || (chatType === 'results' ? 'Result Analysis' : 'General Chat');
+  }
 }
+
 
 // Export singleton instance
 module.exports = new AIService();

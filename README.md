@@ -88,7 +88,60 @@ CLERK_SECRET_KEY=sk_test_...
 AI_SERVICE_URL=http://localhost:8000
 AI_SERVICE_TIMEOUT=60000
 FRONTEND_URL=http://localhost:5173
+
+# OpenAI Assistant Integration (Official Node.js SDK on Backend)
+# NEVER expose your API key to frontend, React code, or git
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
 ```
+
+---
+
+### 🤖 OpenAI API Setup & Configuration
+
+The InterviewX AI Coach uses the official OpenAI Node.js SDK on the backend to deliver natural, ChatGPT-like conversational assistance across two dedicated assistants:
+- **Dashboard AI Assistant**: General conversational engineering mentor (concepts, debugging, architecture, learning paths). It does **not** conduct mock interviews or evaluate unless explicitly asked.
+- **Results AI Assistant**: Performance analysis coach strictly attached to a specific interview result.
+
+#### 1. Obtaining an OpenAI API Key
+1. Navigate to the [OpenAI Platform](https://platform.openai.com/api-keys).
+2. Log in or create an OpenAI developer account.
+3. Go to **Dashboard → API Keys** and click **Create new secret key**.
+4. Give it a name (e.g., `InterviewX-Backend`) and copy the generated key (`sk-...`).
+
+#### 2. Where to Put Your API Key
+Add the key into `backend/.env`:
+```env
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxx
+OPENAI_MODEL=gpt-4o-mini
+```
+> [!IMPORTANT]
+> **Security Guardrail**: Never put `OPENAI_API_KEY` in `frontend/.env`, browser code, or git commits. The frontend communicates strictly via authenticated backend REST endpoints.
+
+#### 3. Configuring the Model
+The model is fully configurable without changing application code via `OPENAI_MODEL`. Recommended models:
+- `gpt-4o-mini` (Default: fast, cost-effective, high reasoning quality)
+- `gpt-4o` (Flagship multimodal intelligence)
+- `gpt-3.5-turbo` (Legacy lightweight)
+
+#### 4. Running the Backend
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+#### 5. Testing the AI Endpoints
+You can test the endpoints via curl, Postman, or our automated test suite:
+- **Dashboard Chat Test**:
+  ```bash
+  node backend/src/tests/openai_assistant_chat_test.js
+  ```
+- **Separation & History Verification**:
+  ```bash
+  node backend/src/tests/chatbot_separation_test.js
+  ```
+
 
 #### Frontend (`frontend/.env`)
 ```env

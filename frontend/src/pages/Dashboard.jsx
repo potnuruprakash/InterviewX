@@ -8,7 +8,7 @@ import {
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import FloatingCoachButton from '../components/coach/FloatingCoachButton'
-import AIAssistantDrawer from '../components/coach/AIAssistantDrawer'
+import DashboardChatbot from '../components/chat/DashboardChatbot'
 import './Dashboard.css'
 
 // Custom tooltip for chart
@@ -539,8 +539,10 @@ export default function Dashboard() {
       <FloatingCoachButton
         isOpen={coachOpen}
         onClick={() => setCoachOpen((prev) => !prev)}
+        label="Dashboard AI"
+        tooltip="Open Dashboard AI"
       />
-      <AIAssistantDrawer
+      <DashboardChatbot
         isOpen={coachOpen}
         onClose={() => setCoachOpen(false)}
       />
