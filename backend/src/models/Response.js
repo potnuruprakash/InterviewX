@@ -122,4 +122,9 @@ const responseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Prevent duplicate submissions: exactly one response per question per interview per user
+responseSchema.index({ interviewId: 1, questionId: 1, clerkUserId: 1 }, { unique: true });
+responseSchema.index({ clerkUserId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Response', responseSchema);
+

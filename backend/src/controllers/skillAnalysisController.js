@@ -233,9 +233,11 @@ const getSkillAnalysis = async (req, res) => {
       return sendError(res, 404, 'SKILL_ANALYSIS_NOT_FOUND', 'Skill analysis not found.');
     }
 
-    // Optionally populate resume and JD info
-    const resume = await Resume.findById(analysis.resumeId).select('originalName parsedData.basicInfo parsedData.skills parsedData.projects parsedData.education parsedData.experience processingStatus');
-    const job = await JobDescription.findById(analysis.jobDescriptionId).select('targetRole parsedData processingStatus');
+    // Optionally populate resume and JD info with user ownership
+    const [resume, job] = await Promise.all([
+      Resume.findOne({ _id: analysis.resumeId, clerkUserId: req.clerkUserId }).select('originalName parsedData.basicInfo parsedData.skills parsedData.projects parsedData.education parsedData.experience processingStatus'),
+      JobDescription.findOne({ _id: analysis.jobDescriptionId, clerkUserId: req.clerkUserId }).select('targetRole parsedData processingStatus'),
+    ]);
 
     return sendSuccess(res, {
       skillAnalysis: {
@@ -287,8 +289,10 @@ const getAnalysisByContext = async (req, res) => {
       return sendSuccess(res, { skillAnalysis: null, message: 'No analysis found for this combination.' });
     }
 
-    const resume = await Resume.findById(resumeId).select('originalName parsedData.basicInfo parsedData.skills parsedData.projects parsedData.education parsedData.experience processingStatus');
-    const job = await JobDescription.findById(jobDescriptionId).select('targetRole parsedData processingStatus');
+    const [resume, job] = await Promise.all([
+      Resume.findOne({ _id: resumeId, clerkUserId }).select('originalName parsedData.basicInfo parsedData.skills parsedData.projects parsedData.education parsedData.experience processingStatus'),
+      JobDescription.findOne({ _id: jobDescriptionId, clerkUserId }).select('targetRole parsedData processingStatus'),
+    ]);
 
     return sendSuccess(res, {
       skillAnalysis: {

@@ -37,6 +37,14 @@ const { updateSkillPerformance, determineAdaptiveAction, shouldStopInterview } =
 const { generateRoadmap, calculateJobReadiness } = require('../services/roadmapService');
 const { analyzeVoiceAndBehavior } = require('../services/voiceBehaviorAnalysisService');
 const { deleteFile } = require('../middleware/upload');
+const {
+  MAX_ADAPTIVE_FOLLOW_UPS,
+  getMaximumAllowedQuestions,
+  getInterviewCounts,
+  canAddAdaptiveFollowUp,
+  isInterviewComplete: checkInterviewComplete,
+} = require('../utils/interviewStateHelper');
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -663,6 +671,16 @@ const submitResponse = async (req, res) => {
     const interview = await Interview.findOne({ _id: req.params.id, clerkUserId });
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
 
+    const question = await Question.findOne({ _id: questionId, interviewId: interview._id });
+    if (!question) return sendError(res, 404, 'QUESTION_NOT_FOUND', 'Question not found in this interview.');
+
+    if (question.status === 'answered' || question.status === 'skipped') {
+      return sendError(res, 409, 'RESPONSE_EXISTS', `This question has already been marked as ${question.status}.`);
+    }
+
+    const existingResponse = await Response.findOne({ interviewId: interview._id, questionId, clerkUserId });
+    if (existingResponse) return sendError(res, 409, 'RESPONSE_EXISTS', 'Answer already submitted for this question.');
+
     // Enforce interview completed check
     if (interview.status === 'completed') {
       return sendError(res, 400, 'INTERVIEW_COMPLETED', 'This interview is already completed.');
@@ -678,15 +696,6 @@ const submitResponse = async (req, res) => {
       return sendError(res, 400, 'INTERVIEW_EXPIRED', 'The interview duration has expired. Submissions are no longer accepted.');
     }
 
-    const question = await Question.findOne({ _id: questionId, interviewId: interview._id });
-    if (!question) return sendError(res, 404, 'QUESTION_NOT_FOUND', 'Question not found in this interview.');
-
-    if (question.status === 'answered' || question.status === 'skipped') {
-      return sendError(res, 409, 'RESPONSE_EXISTS', `This question has already been marked as ${question.status}.`);
-    }
-
-    const existingResponse = await Response.findOne({ interviewId: interview._id, questionId, clerkUserId });
-    if (existingResponse) return sendError(res, 409, 'RESPONSE_EXISTS', 'Answer already submitted for this question.');
 
     // Determine evaluation text: if coding response, combine explanation and code for semantic evaluation
     const textToEvaluate = (answerText && answerText.trim().length > 0)
@@ -705,21 +714,30 @@ const submitResponse = async (req, res) => {
     // ── Build multimodal evaluation (text only initially) ────────────
     const multimodalEval = buildEvaluation(textEvaluation, null, null);
 
-    // Save response
-    const response = await Response.create({
-      clerkUserId,
-      interviewId: interview._id,
-      questionId,
-      answerText: textToEvaluate,
-      responseType: responseType || (code ? 'coding' : 'text'),
-      code: code || null,
-      language: language || null,
-      status: 'submitted',
-      textEvaluation,
-      multimodalEvaluation: multimodalEval,
-      evaluation,
-      submittedAt: new Date(),
-    });
+    // Save response with duplicate key handling
+    let response;
+    try {
+      response = await Response.create({
+        clerkUserId,
+        interviewId: interview._id,
+        questionId,
+        answerText: textToEvaluate,
+        responseType: responseType || (code ? 'coding' : 'text'),
+        code: code || null,
+        language: language || null,
+        status: 'submitted',
+        textEvaluation,
+        multimodalEvaluation: multimodalEval,
+        evaluation,
+        submittedAt: new Date(),
+      });
+    } catch (createErr) {
+      if (createErr.code === 11000) {
+        return sendError(res, 409, 'RESPONSE_EXISTS', 'An answer has already been submitted for this question.');
+      }
+      throw createErr;
+    }
+
 
     // Mark question as answered
     question.status = 'answered';
@@ -751,26 +769,37 @@ const submitResponse = async (req, res) => {
       currentDifficulty: nextDifficulty,
     };
 
-    // Check stop conditions
-    const maxAllowedQuestions = interview.configuredQuestionCount || interview.totalQuestions || 5;
+    // Check stop conditions and maximum interview question limit
+    const maxAllowedQuestions = getMaximumAllowedQuestions(interview.configuredQuestionCount);
+    const allInterviewQuestions = await Question.find({ interviewId: interview._id }).sort({ order: 1 });
     const { shouldStop } = shouldStopInterview(interview);
     let isComplete = shouldStop || (interview.currentQuestionIndex >= maxAllowedQuestions);
 
-    // Generate follow-up question ONLY if not complete and totalQuestions < maxAllowedQuestions
+    // Generate follow-up question predictably at the current position if quota allows
     let nextQuestion = null;
-    if (!isComplete && shouldFollowUp && missingConcepts.length > 0 && interview.totalQuestions < maxAllowedQuestions) {
+    if (!isComplete && shouldFollowUp && missingConcepts.length > 0 && canAddAdaptiveFollowUp(interview, allInterviewQuestions)) {
       const followUpData = generateFollowUpQuestion(question, textToEvaluate, missingConcepts);
-      const followUpOrder = interview.totalQuestions;
+      const followUpOrder = interview.currentQuestionIndex;
+
+      // Shift remaining pending questions to make room for follow-up
+      await Question.updateMany(
+        { interviewId: interview._id, order: { $gte: followUpOrder }, status: 'pending' },
+        { $inc: { order: 1 } }
+      );
+
       const followUp = await Question.create({
         interviewId: interview._id,
         clerkUserId,
         ...followUpData,
         order: followUpOrder,
         parentQuestionId: question._id,
+        isAdaptive: true,
       });
+
       interview.totalQuestions += 1;
       nextQuestion = formatQuestion(followUp);
     }
+
 
     if (isComplete) {
       interview.status = 'completed';
@@ -806,12 +835,20 @@ const submitResponse = async (req, res) => {
       if (nextQuestionDoc && interview.currentQuestionIndex < maxAllowedQuestions) {
         nextQuestion = formatQuestion(nextQuestionDoc);
       } else {
-        isComplete = true;
-        interview.status = 'completed';
-        interview.completionReason = interview.completionReason || 'all_questions_completed';
-        interview.completedAt = new Date();
-        await interview.save();
-        await saveProgress(interview, clerkUserId);
+        const remainingPending = await Question.countDocuments({
+          interviewId: interview._id,
+          status: 'pending',
+          order: { $lt: maxAllowedQuestions },
+        });
+        const totalProcessed = (interview.answeredQuestionsCount || 0) + (interview.skippedQuestionsCount || 0);
+        if (remainingPending === 0 && totalProcessed >= (interview.configuredQuestionCount || interview.totalQuestions || 5)) {
+          isComplete = true;
+          interview.status = 'completed';
+          interview.completionReason = interview.completionReason || 'all_questions_completed';
+          interview.completedAt = new Date();
+          await interview.save();
+          await saveProgress(interview, clerkUserId);
+        }
       }
     }
 
@@ -884,52 +921,55 @@ const skipQuestion = async (req, res) => {
 
     const maxAllowedQuestions = interview.configuredQuestionCount || interview.totalQuestions || 5;
     const durationSeconds = interview.durationSeconds || (interview.durationMinutes || 30) * 60;
-    const isAlreadyAtEnd = interview.currentQuestionIndex >= maxAllowedQuestions;
-
-    if (interview.status === 'completed' || isAlreadyAtEnd) {
-      if (interview.status !== 'completed') {
-        interview.status = 'completed';
-        interview.completedAt = interview.completedAt || new Date();
-        interview.completionReason = interview.completionReason || 'all_questions_completed';
-        await interview.save();
-        await saveProgress(interview, clerkUserId);
-      }
-      return sendSuccess(res, {
-        message: 'Interview completed. All questions skipped or answered.',
-        status: 'completed',
-        isComplete: true,
-        interview: {
-          id: interview._id,
-          currentQuestionIndex: maxAllowedQuestions,
-          totalQuestions: maxAllowedQuestions,
-          configuredQuestionCount: maxAllowedQuestions,
-          skippedQuestionsCount: interview.skippedQuestionsCount || maxAllowedQuestions,
-          answeredQuestionsCount: interview.answeredQuestionsCount || 0,
-          timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
-          durationMinutes: interview.durationMinutes || 30,
-          durationSeconds,
-          startedAt: interview.startedAt,
-          expiresAt: interview.expiresAt,
-          remainingSeconds: 0,
-          status: 'completed',
-          isComplete: true,
-          completionReason: interview.completionReason,
-          videoModeEnabled: interview.videoModeEnabled || false,
-          videoRecorded: interview.videoRecorded || false,
-          videoUploaded: interview.videoUploaded || false,
-        },
-        nextQuestion: null,
-      });
-    }
 
     let question = null;
     if (questionId) {
       question = await Question.findOne({ _id: questionId, interviewId: interview._id });
+      if (!question) {
+        return sendError(res, 404, 'QUESTION_NOT_FOUND', 'Question not found in this interview.');
+      }
     } else {
+      const isAlreadyAtEnd = interview.currentQuestionIndex >= maxAllowedQuestions;
+      if (interview.status === 'completed' || isAlreadyAtEnd) {
+        if (interview.status !== 'completed') {
+          interview.status = 'completed';
+          interview.completedAt = interview.completedAt || new Date();
+          interview.completionReason = interview.completionReason || 'all_questions_completed';
+          await interview.save();
+          await saveProgress(interview, clerkUserId);
+        }
+        return sendSuccess(res, {
+          message: 'Interview completed. All questions skipped or answered.',
+          status: 'completed',
+          isComplete: true,
+          interview: {
+            id: interview._id,
+            currentQuestionIndex: maxAllowedQuestions,
+            totalQuestions: maxAllowedQuestions,
+            configuredQuestionCount: maxAllowedQuestions,
+            skippedQuestionsCount: interview.skippedQuestionsCount || maxAllowedQuestions,
+            answeredQuestionsCount: interview.answeredQuestionsCount || 0,
+            timedOutQuestionsCount: interview.timedOutQuestionsCount || 0,
+            durationMinutes: interview.durationMinutes || 30,
+            durationSeconds,
+            startedAt: interview.startedAt,
+            expiresAt: interview.expiresAt,
+            remainingSeconds: 0,
+            status: 'completed',
+            isComplete: true,
+            completionReason: interview.completionReason,
+            videoModeEnabled: interview.videoModeEnabled || false,
+            videoRecorded: interview.videoRecorded || false,
+            videoUploaded: interview.videoUploaded || false,
+          },
+          nextQuestion: null,
+        });
+      }
+
       question = await Question.findOne({ interviewId: interview._id, order: interview.currentQuestionIndex });
-    }
-    if (!question) {
-      question = await Question.findOne({ interviewId: interview._id, status: 'pending', order: { $lt: maxAllowedQuestions } }).sort({ order: 1 });
+      if (!question) {
+        question = await Question.findOne({ interviewId: interview._id, status: 'pending', order: { $lt: maxAllowedQuestions } }).sort({ order: 1 });
+      }
     }
 
     if (!question) {
@@ -1405,7 +1445,7 @@ const getResults = async (req, res) => {
     let jobReadiness = null;
     try {
       const skillAnalysis = interview.skillAnalysisId
-        ? await SkillAnalysis.findById(interview.skillAnalysisId)
+        ? await SkillAnalysis.findOne({ _id: interview.skillAnalysisId, clerkUserId: req.clerkUserId })
         : null;
       jobReadiness = calculateJobReadiness({
         skillCoveragePercentage: skillAnalysis?.skillCoveragePercentage || 0,
@@ -1552,7 +1592,7 @@ const getRoadmap = async (req, res) => {
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
 
     const skillAnalysis = interview.skillAnalysisId
-      ? await SkillAnalysis.findById(interview.skillAnalysisId)
+      ? await SkillAnalysis.findOne({ _id: interview.skillAnalysisId, clerkUserId: req.clerkUserId })
       : null;
 
     const skillPerformance = interview.interviewState?.skillPerformance || {};
@@ -1634,9 +1674,10 @@ const saveProgress = async (interview, clerkUserId) => {
       overallScore: fusion.overallScore || aggregated.overallScore,
       technicalScore: fusion.technicalScore,
       skillScores,
-      questionsAnswered: responses.length,
+      questionsAnswered: responses.filter((r) => r.status === 'submitted' || Boolean(r.answerText)).length,
       interviewType: interview.interviewType,
       difficulty: interview.difficulty,
+
       modalitiesUsed,
       isDevelopmentEvaluation: aggregated.isDevelopmentEvaluation,
       strongAreas: state.strongAreas || [],

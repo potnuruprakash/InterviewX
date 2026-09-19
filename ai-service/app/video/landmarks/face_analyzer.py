@@ -19,7 +19,8 @@ class FaceOrientationResult:
     face_bbox: Optional[List[int]]  # Pixel [x1, y1, x2, y2]
     camera_orientation: str  # "centered", "left", "right", "up", "down", "unknown"
     gaze_alignment_score: float  # 0.0 - 1.0 (estimated camera direction alignment)
-    smile_expressive_detected: bool
+    mouth_region_activity: bool  # Observable mouth movement / speech articulation
+    smile_expressive_detected: bool  # Backward-compat alias for observable articulation
     observable_notes: List[str]
 
 
@@ -27,8 +28,16 @@ class FaceAnalyzer:
     """Estimates face visibility and head orientation from candidate frame crops."""
 
     def __init__(self):
-        # We use OpenCV DNN / color / gradient symmetry analysis on the candidate head crop
-        logger.info("[FaceAnalyzer] Initialized Face & Camera Orientation Analyzer.")
+        # Load OpenCV's built-in Haar Cascade detector for robust face presence
+        self._cascade = None
+        try:
+            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            loaded = cv2.CascadeClassifier(cascade_path)
+            if not loaded.empty():
+                self._cascade = loaded
+                logger.info("[FaceAnalyzer] Initialized OpenCV Haar frontal face cascade detector.")
+        except Exception as e:
+            logger.warning(f"[FaceAnalyzer] Haar Cascade unavailable, using chromatic fallback: {e}")
 
     def analyze_head_region(
         self,
@@ -45,6 +54,7 @@ class FaceAnalyzer:
                 face_bbox=None,
                 camera_orientation="unknown",
                 gaze_alignment_score=0.0,
+                mouth_region_activity=False,
                 smile_expressive_detected=False,
                 observable_notes=["No candidate head region available."]
             )
@@ -63,25 +73,38 @@ class FaceAnalyzer:
                 face_bbox=None,
                 camera_orientation="unknown",
                 gaze_alignment_score=0.0,
+                mouth_region_activity=False,
                 smile_expressive_detected=False,
                 observable_notes=["Head region too small for reliable feature extraction."]
             )
 
         crop_h, crop_w = crop.shape[:2]
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
 
-        # 1. Skin & Luminance feature estimation
-        ycrcb = cv2.cvtColor(crop, cv2.COLOR_BGR2YCrCb)
-        cr = ycrcb[:, :, 1]
-        cb = ycrcb[:, :, 2]
-        # Standard human skin chromatic bounds
-        skin_mask = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 127)
-        skin_ratio = float(np.sum(skin_mask)) / float(crop_h * crop_w)
+        # 1. Face detection via OpenCV Haar Cascade with chromatic fallback
+        face_detected = False
+        detected_face_bbox = [x1, y1, x2, y2]
 
-        face_detected = skin_ratio >= 0.15
+        if self._cascade is not None:
+            try:
+                faces = self._cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(20, 20))
+                if len(faces) > 0:
+                    face_detected = True
+                    fx, fy, fw, fh = faces[0]
+                    detected_face_bbox = [x1 + int(fx), y1 + int(fy), x1 + int(fx + fw), y1 + int(fy + fh)]
+            except Exception:
+                pass
+
+        # Fallback to skin chromatic verification if cascade did not trigger
+        if not face_detected:
+            ycrcb = cv2.cvtColor(crop, cv2.COLOR_BGR2YCrCb)
+            cr = ycrcb[:, :, 1]
+            cb = ycrcb[:, :, 2]
+            skin_mask = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 127)
+            skin_ratio = float(np.sum(skin_mask)) / float(crop_h * crop_w)
+            face_detected = skin_ratio >= 0.18
 
         # 2. Horizontal orientation estimation (Left vs Center vs Right)
-        # Using left vs right hemisphere gradient/color centroid
-        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         mid_x = crop_w // 2
         left_hemisphere = gray[:, :mid_x]
         right_hemisphere = gray[:, mid_x:]
@@ -91,7 +114,7 @@ class FaceAnalyzer:
 
         diff_ratio = (mean_left - mean_right) / max(1.0, (mean_left + mean_right))
 
-        # Check candidate's position relative to overall frame center
+        # Position relative to overall frame center
         head_center_x = (x1 + x2) / 2.0 / w_frame
         head_center_y = (y1 + y2) / 2.0 / h_frame
 
@@ -113,23 +136,23 @@ class FaceAnalyzer:
 
         gaze_alignment = 0.88 if orientation == "centered" else 0.60
 
-        # 3. Detect smile / expressive opening cue (mouth region gradient changes)
-        # Mouth region is typically lower 35% of head crop
+        # 3. Detect mouth region activity / articulation (observable gradient variance)
+        # Note: Measures physical mouth movement/articulation during speech, NOT certified emotion/psychology
         mouth_y1 = int(crop_h * 0.65)
         mouth_crop = gray[mouth_y1:, :]
         mouth_std = float(np.std(mouth_crop)) if mouth_crop.size > 0 else 0.0
-
-        # High variance in lower third with skin presence indicates smiling / speaking articulation
-        smile_detected = mouth_std > 28.0
+        mouth_activity = mouth_std > 28.0
 
         return FaceOrientationResult(
             face_detected=face_detected,
-            face_bbox=[x1, y1, x2, y2],
+            face_bbox=detected_face_bbox,
             camera_orientation=orientation,
             gaze_alignment_score=round(gaze_alignment, 2),
-            smile_expressive_detected=smile_detected,
+            mouth_region_activity=mouth_activity,
+            smile_expressive_detected=mouth_activity,  # Backward compatibility
             observable_notes=notes,
         )
+
 
 
 # Global singleton instance

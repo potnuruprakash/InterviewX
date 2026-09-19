@@ -111,4 +111,7 @@ const resumeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+resumeSchema.index({ clerkUserId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Resume', resumeSchema);
+

@@ -60,9 +60,10 @@ const aiConversationSchema = new mongoose.Schema(
     },
     contextType: {
       type: String,
-      enum: ['dashboard', 'results', 'general'],
+      enum: ['dashboard', 'results', 'training', 'general'],
       default: 'dashboard',
     },
+
     sourceInterviewId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Interview',

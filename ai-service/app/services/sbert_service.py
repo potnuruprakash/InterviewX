@@ -23,6 +23,13 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# HEURISTIC CONSTANTS & CALIBRATION THRESHOLDS
+# ─────────────────────────────────────────────────────────────────────────────
+SEMANTIC_SCORE_SCALE = 115.0        # Scales practical sentence cosine similarity [0.0, 0.87] -> [0, 100]
+CONCEPT_MATCH_THRESHOLD = 0.35      # Cosine similarity threshold for concept matching
+HIGH_ALIGNMENT_THRESHOLD = 70.0     # Alignment threshold for direct answer relevance
+MODERATE_ALIGNMENT_THRESHOLD = 45.0 # Partial alignment threshold
+
 # MODEL LOADING (singleton — loaded once at startup)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -92,7 +99,8 @@ def evaluate_text(
       strengths         : list of covered concepts
       missingConcepts   : list of uncovered concepts
       improvementSuggestion : string
-      confidence        : 0-1, reliability indicator
+      responseCompletenessIndicator : 0-1, indicator based on answer length
+      confidence        : backward-compat alias for responseCompletenessIndicator
       modelStatus       : string
     """
     if _model is None:
@@ -110,7 +118,8 @@ def evaluate_text(
             "strengths": [],
             "missingConcepts": expected_concepts[:5],
             "improvementSuggestion": "Please provide a detailed answer.",
-            "confidence": 1.0,
+            "responseCompletenessIndicator": 0.0,
+            "confidence": 0.0,
             "modelStatus": "sbert_evaluated",
         }
 
@@ -121,9 +130,7 @@ def evaluate_text(
 
         # Semantic score: how relevant is the answer to the question
         raw_sim = cosine_similarity(q_emb, a_emb)
-        # Normalize: cosine similarity is [-1, 1], but for sentences typically [0.2, 0.95]
-        # We scale from practical range [0.0, 0.95] → [0, 100]
-        semantic_score = min(100.0, max(0.0, raw_sim * 115))
+        semantic_score = min(100.0, max(0.0, raw_sim * SEMANTIC_SCORE_SCALE))
 
         # Concept coverage
         covered_concepts = []
@@ -134,20 +141,20 @@ def evaluate_text(
             concept_embs = _model.encode(expected_concepts, convert_to_numpy=True)
             for i, concept in enumerate(expected_concepts):
                 sim = cosine_similarity(a_emb, concept_embs[i])
-                if sim >= 0.35:  # threshold for concept coverage
+                if sim >= CONCEPT_MATCH_THRESHOLD:
                     covered_concepts.append(concept)
                 else:
                     missing_concepts.append(concept)
             concept_score = (len(covered_concepts) / len(expected_concepts)) * 100
         else:
-            concept_score = semantic_score  # fall back to semantic score
+            concept_score = semantic_score
 
-        # Combined text score (formula documented in module docstring)
+        # Combined text score
         text_score = round(0.5 * semantic_score + 0.5 * concept_score, 1)
 
-        # Confidence: higher with more answer content
+        # Response completeness indicator based on answer length (NOT psychological confidence)
         word_count = len(answer.split())
-        confidence = min(1.0, word_count / 100)
+        completeness = min(1.0, word_count / 100.0)
 
         # Generate structured feedback
         feedback = _generate_feedback(text_score, semantic_score, concept_score, covered_concepts, missing_concepts)
@@ -161,13 +168,15 @@ def evaluate_text(
             "strengths": covered_concepts,
             "missingConcepts": missing_concepts,
             "improvementSuggestion": improvement,
-            "confidence": round(confidence, 2),
+            "responseCompletenessIndicator": round(completeness, 2),
+            "confidence": round(completeness, 2),  # Backward compatibility alias
             "modelStatus": "sbert_evaluated",
         }
 
     except Exception as e:
         logger.error(f"[SBERT] Evaluation error: {e}")
         return _fallback_result(f"Evaluation error: {str(e)}", "evaluation_error")
+
 
 
 def _generate_feedback(text_score: float, semantic_score: float, concept_score: float,

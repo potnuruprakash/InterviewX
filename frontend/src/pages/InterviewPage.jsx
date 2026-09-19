@@ -101,10 +101,21 @@ export default function InterviewPage() {
   // Track whether speech was auto-started for this question
   const autoStartedSpeechRef = useRef(false)
 
+  // Ref to always track latest answer text for speech recognition callbacks (stale closure protection)
+  const answerRef = useRef('')
+  useEffect(() => {
+    answerRef.current = answer
+  }, [answer])
+
   // Speech-to-Text Integration
   // When a final speech segment is confirmed, append non-destructively with punctuation awareness
   const handleFinalTranscript = useCallback((phrase) => {
-    setAnswer((prev) => normalizeTranscriptJoin(prev, phrase))
+    setAnswer((prev) => {
+      const current = prev !== undefined ? prev : answerRef.current
+      const updated = normalizeTranscriptJoin(current, phrase)
+      answerRef.current = updated
+      return updated
+    })
   }, [])
 
   const {
@@ -116,8 +127,27 @@ export default function InterviewPage() {
     startListening,
     stopListening,
     flushAndStop,
+    clearInterim,
     reset: resetSpeech,
   } = useSpeechRecognition({ onFinalTranscript: handleFinalTranscript })
+
+  // Microphone Controls: Candidate starts/stops microphone by clicking the speech control
+  const handleStartListening = useCallback(() => {
+    startListening()
+  }, [startListening])
+
+  const handleStopListening = useCallback(() => {
+    stopListening()
+  }, [stopListening])
+
+  // Cleanup speech recognition on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        resetSpeech()
+      } catch (_) {}
+    }
+  }, [resetSpeech])
 
   // Initialize Interview Session
   useEffect(() => {
@@ -179,24 +209,6 @@ export default function InterviewPage() {
     }
     init()
   }, [id, isLoaded, isSignedIn])
-
-  // Auto-start speech recognition when a new question becomes active
-  useEffect(() => {
-    if (!currentQuestion || loading || isComplete) return
-    // Only auto-start if speech is supported and not already listening
-    if (!isSpeechSupported) return
-    if (isListening) return
-    // Prevent duplicate starts for the same question
-    if (autoStartedSpeechRef.current === currentQuestion.id) return
-
-    autoStartedSpeechRef.current = currentQuestion.id
-    // Small delay to allow question animation to settle
-    const timer = setTimeout(() => {
-      startListening()
-      setIsMediaRecording(true)
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [currentQuestion?.id, loading, isComplete, isSpeechSupported])
 
   // Workspace ref for bounding floating draggable camera
   const workspaceRef = useRef(null)
@@ -291,12 +303,12 @@ export default function InterviewPage() {
     setAnswer('')
     setAudioBlob(null)
     setVideoBlob(null)
+    if (clearInterim) clearInterim()
     resetSpeech()
     // Restart speech after clear
     setTimeout(() => {
       if (isSpeechSupported && !isListening) {
         startListening()
-        setIsMediaRecording(true)
       }
     }, 200)
   }
@@ -861,10 +873,29 @@ export default function InterviewPage() {
             <div className="meta-card-header">
               <span className="meta-card-title">Candidate Controls</span>
               <div className="media-status-row">
-                <span className={`media-status-chip ${isListening ? 'active' : speechError ? 'error' : ''}`}>
+                <button
+                  type="button"
+                  className={`media-status-chip ${isListening ? 'active' : speechError ? 'error' : ''} clickable`}
+                  onClick={() => {
+                    if (submitting || skipping || isTimeExpired) return
+                    if (isListening) {
+                      handleStopListening()
+                    } else {
+                      handleStartListening()
+                    }
+                  }}
+                  title={
+                    isListening
+                      ? 'Click to stop microphone'
+                      : isSpeechSupported && !speechError
+                      ? 'Click to start microphone'
+                      : speechError || 'Microphone unavailable'
+                  }
+                  disabled={!isSpeechSupported || Boolean(speechError)}
+                >
                   <span className={`status-dot ${isListening ? 'live' : ''}`} />
-                  {isListening ? 'Mic live' : speechError ? 'Mic unavailable' : isSpeechSupported ? 'Mic ready' : 'Mic off'}
-                </span>
+                  {isListening ? 'Mic live (Click to stop)' : speechError ? 'Mic unavailable' : isSpeechSupported ? 'Mic ready (Click to speak)' : 'Mic off'}
+                </button>
                 {videoEnabled && (
                   <span className="media-status-chip active">
                     <span className="status-dot live" />
@@ -910,6 +941,9 @@ export default function InterviewPage() {
             speechStatus={speechStatus}
             speechError={speechError}
             isSpeechSupported={isSpeechSupported}
+            onStartListening={handleStartListening}
+            onStopListening={handleStopListening}
+            onClearInterim={clearInterim}
             onSubmit={handleSubmit}
             onSkip={handleInitiateSkip}
             onClear={handleClearAnswer}

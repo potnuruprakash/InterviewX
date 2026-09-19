@@ -56,18 +56,57 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow backend service and localhost
+# CORS — allow only backend microservice
 allowed_origins_str = os.getenv("BACKEND_URL", "http://localhost:5000")
-allowed_origins = [o.strip() for o in allowed_origins_str.split(",")]
-allowed_origins.append("http://localhost:5173")  # frontend dev server
+allowed_origins = [o.strip() for o in allowed_origins_str.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def verify_internal_service_key(request, call_next):
+    """
+    Ensure all /api/ai endpoints require verified internal service authentication.
+    Prevents unauthorized direct access from internet/browsers.
+    """
+    path = request.url.path
+    if path.startswith("/api/ai"):
+        expected_key = os.getenv("AI_SERVICE_SECRET_KEY")
+        if not expected_key:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "error": "SERVICE_MISCONFIGURED",
+                    "message": "AI service secret key is not configured.",
+                },
+            )
+
+        import hmac
+        provided_key = request.headers.get("x-internal-service-key") or ""
+        auth_header = request.headers.get("authorization") or ""
+        if auth_header.startswith("Bearer "):
+            provided_key = auth_header[7:].strip()
+
+        if not hmac.compare_digest(provided_key, expected_key):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "success": False,
+                    "error": "UNAUTHORIZED_SERVICE",
+                    "message": "Invalid or missing internal service key.",
+                },
+            )
+    return await call_next(request)
+
 
 # Routers
 app.include_router(health.router)

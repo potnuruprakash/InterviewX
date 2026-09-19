@@ -17,8 +17,10 @@ const progressRoutes = require('./routes/progress');
 const skillAnalysisRoutes = require('./routes/skillAnalysis');
 const aiCoachRoutes = require('./routes/aiCoach');
 const chatRoutes = require('./routes/chat');
+const fileRoutes = require('./routes/files');
 
 const app = express();
+
 
 // Security headers
 app.use(helmet());
@@ -40,9 +42,10 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-dev-clerk-user-id'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
 
 // Request logging
 app.use(morgan('dev'));
@@ -94,8 +97,10 @@ app.use('/api/progress', progressRoutes);
 app.use('/api/skill-analysis', skillAnalysisRoutes);
 app.use('/api/ai/coach', aiCoachRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/files', fileRoutes);
 
 // 404 handler
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,

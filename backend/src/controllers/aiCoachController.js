@@ -902,18 +902,9 @@ const postConversationMessage = async (req, res) => {
     const yearsOfExperience =
       parsedData.basicInfo?.yearsOfExperience || candidateProfileRecord?.yearsOfExperience || 0;
 
-    // Resolve candidate name from resume, profile, or token
-    let candidateName = parsedData.basicInfo?.name || candidateProfileRecord?.candidateName || null;
-    if (!candidateName && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-      try {
-        const rawToken = req.headers.authorization.slice(7).trim();
-        const parts = rawToken.split('.');
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-          candidateName = payload.first_name || payload.given_name || payload.name || payload.username || null;
-        }
-      } catch (e) {}
-    }
+    // Resolve candidate name from resume or profile
+    const candidateName = parsedData.basicInfo?.name || candidateProfileRecord?.candidateName || 'Candidate';
+
 
     // Retrieve specific source interview context if linked
     let sourceInterviewContext = null;

@@ -44,10 +44,6 @@ authApi.interceptors.request.use(async (config) => {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    const resolvedUserId = currentUserId || (typeof window !== 'undefined' ? window.Clerk?.user?.id : null)
-    if (resolvedUserId) {
-      config.headers['x-dev-clerk-user-id'] = resolvedUserId
-    }
   } catch (err) {
     console.warn('[API] Could not retrieve Clerk token:', err.message)
   }
@@ -71,10 +67,6 @@ authApi.interceptors.response.use(
         }
         if (freshToken) {
           originalRequest.headers.Authorization = `Bearer ${freshToken}`
-          const resolvedUserId = currentUserId || (typeof window !== 'undefined' ? window.Clerk?.user?.id : null)
-          if (resolvedUserId) {
-            originalRequest.headers['x-dev-clerk-user-id'] = resolvedUserId
-          }
           return authApi(originalRequest)
         }
       } catch (retryErr) {
@@ -85,6 +77,7 @@ authApi.interceptors.response.use(
     return Promise.reject(new Error(message))
   }
 )
+
 
 // ─── Direct Helper Methods bound to singleton authApi ─────────────────────────
 
@@ -171,27 +164,16 @@ export const regenerateResultChatResponse = (resultId, id) =>
  * Ensures the token getter is synchronized without re-instantiating Axios or looping.
  */
 export const useAuthApi = () => {
-  let isLoaded = true
-  let isSignedIn = false
-  let userId = null
-  let getToken = null
-
-  if (hasClerkKey) {
-    try {
-      const clerkAuth = useAuth()
-      isLoaded = clerkAuth.isLoaded
-      isSignedIn = clerkAuth.isSignedIn
-      userId = clerkAuth.userId
-      if (userId) {
-        currentUserId = userId
-      }
-      getToken = clerkAuth.getToken
-      if (getToken) {
-        currentTokenGetter = getToken
-      }
-    } catch (e) {
-      // Not wrapped in ClerkProvider
-    }
+  const clerkAuth = useAuth()
+  const isLoaded = clerkAuth.isLoaded ?? true
+  const isSignedIn = clerkAuth.isSignedIn ?? false
+  const userId = clerkAuth.userId || null
+  if (userId) {
+    currentUserId = userId
+  }
+  const getToken = clerkAuth.getToken || null
+  if (getToken) {
+    currentTokenGetter = getToken
   }
 
   return {

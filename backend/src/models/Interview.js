@@ -183,4 +183,8 @@ const interviewSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+interviewSchema.index({ clerkUserId: 1, createdAt: -1 });
+interviewSchema.index({ clerkUserId: 1, status: 1 });
+
 module.exports = mongoose.model('Interview', interviewSchema);
+

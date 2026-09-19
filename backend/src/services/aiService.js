@@ -20,12 +20,17 @@ const path = require('path');
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 const AI_SERVICE_TIMEOUT = parseInt(process.env.AI_SERVICE_TIMEOUT || '60000', 10);
+const AI_SERVICE_SECRET_KEY = process.env.AI_SERVICE_SECRET_KEY || '';
 
 const aiClient = axios.create({
   baseURL: AI_SERVICE_URL,
   timeout: AI_SERVICE_TIMEOUT,
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    ...(AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}),
+  },
 });
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HEALTH
@@ -100,7 +105,10 @@ const analyzeAudio = async (audioFilePath) => {
     });
 
     const res = await axios.post(`${AI_SERVICE_URL}/api/ai/audio-analyze`, form, {
-      headers: { ...form.getHeaders() },
+      headers: {
+        ...form.getHeaders(),
+        ...(AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}),
+      },
       timeout: AI_SERVICE_TIMEOUT,
     });
     return res.data?.data || res.data;
@@ -109,7 +117,7 @@ const analyzeAudio = async (audioFilePath) => {
     return {
       audioFeaturesAvailable: false,
       modelStatus: 'ai_service_unavailable',
-      error: err.message,
+      error: err.code === 'ECONNABORTED' ? 'AI_PROCESSING_TIMEOUT' : 'AI_SERVICE_UNAVAILABLE',
     };
   }
 };
@@ -137,7 +145,10 @@ const analyzeVideo = async (videoFilePath) => {
     });
 
     const res = await axios.post(`${AI_SERVICE_URL}/api/ai/video-analyze`, form, {
-      headers: { ...form.getHeaders() },
+      headers: {
+        ...form.getHeaders(),
+        ...(AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}),
+      },
       timeout: AI_SERVICE_TIMEOUT,
     });
     return res.data?.data || res.data;
@@ -147,10 +158,11 @@ const analyzeVideo = async (videoFilePath) => {
       framesProcessed: 0,
       personDetectionRatio: null,
       modelStatus: 'ai_service_unavailable',
-      error: err.message,
+      error: err.code === 'ECONNABORTED' ? 'AI_PROCESSING_TIMEOUT' : 'AI_SERVICE_UNAVAILABLE',
     };
   }
 };
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PHASE 7 — MULTIMODAL EVALUATION (AI-side fusion, optional)

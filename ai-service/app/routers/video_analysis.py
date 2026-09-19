@@ -25,13 +25,27 @@ async def video_analyze(video: UploadFile = File(...)):
     """
     suffix = os.path.splitext(video.filename or "video.webm")[-1] or ".webm"
     tmp_path = None
+    MAX_VIDEO_SIZE = 100 * 1024 * 1024  # 100 MB limit
+    CHUNK_SIZE = 1024 * 1024  # 1 MB chunk
+
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            content = await video.read()
-            if len(content) == 0:
-                raise HTTPException(status_code=400, detail={"success": False, "error": "EMPTY_VIDEO", "message": "Video file is empty."})
-            tmp.write(content)
             tmp_path = tmp.name
+            total_bytes = 0
+            while chunk := await video.read(CHUNK_SIZE):
+                total_bytes += len(chunk)
+                if total_bytes > MAX_VIDEO_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail={"success": False, "error": "FILE_TOO_LARGE", "message": "Video exceeds 100MB limit."},
+                    )
+                tmp.write(chunk)
+
+            if total_bytes == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"success": False, "error": "EMPTY_VIDEO", "message": "Video file is empty."},
+                )
 
         result = video_service.analyze_video(tmp_path)
         return {"success": True, "data": result}
@@ -45,6 +59,7 @@ async def video_analyze(video: UploadFile = File(...)):
                 os.unlink(tmp_path)
             except Exception:
                 pass
+
 
 
 @router.get("/video-model-info")

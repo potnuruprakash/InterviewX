@@ -12,6 +12,11 @@ export function normalizeTranscriptJoin(existingText, newPhrase) {
   if (!cleanExisting) return cleanNew
   if (!cleanNew) return cleanExisting
 
+  // If the new phrase is already present at the end of cleanExisting, avoid duplicating it
+  if (cleanNew.length > 5 && cleanExisting.endsWith(cleanNew)) {
+    return cleanExisting
+  }
+
   // Check if existing text ends with punctuation or closing quote/parenthesis
   const endsWithPunctuation = /[.?!,;:\-"')]$/.test(cleanExisting)
 
@@ -36,7 +41,7 @@ export function normalizeTranscriptJoin(existingText, newPhrase) {
  * 6. Protection against duplicate recognition instances and InvalidStateErrors.
  * 7. flushAndStop() to commit any pending final speech before submit/skip/timer.
  */
-export function useSpeechRecognition({ onFinalTranscript } = {}) {
+export function useSpeechRecognition({ onFinalTranscript, lang = 'en-US' } = {}) {
   const [isListening, setIsListening] = useState(false)
   const [interimTranscript, setInterimTranscript] = useState('')
   const [status, setStatus] = useState('idle') // 'idle' | 'listening' | 'restarting' | 'ready' | 'error' | 'unsupported'
@@ -44,7 +49,6 @@ export function useSpeechRecognition({ onFinalTranscript } = {}) {
 
   const recognitionRef = useRef(null)
   const shouldListenRef = useRef(false)
-  const fsmStateRef = useRef('IDLE') // 'IDLE' | 'LISTENING' | 'RESTARTING' | 'STOPPING' | 'ERROR'
   const isStartingRef = useRef(false)
   const isStoppingRef = useRef(false)
   const onFinalTranscriptRef = useRef(onFinalTranscript)
@@ -63,133 +67,193 @@ export function useSpeechRecognition({ onFinalTranscript } = {}) {
 
   const isSupported = Boolean(SpeechRecognitionClass)
 
-  // Initialize SpeechRecognition instance once
+  // Log browser capabilities on mount
   useEffect(() => {
-    if (!isSupported) {
-      setStatus('unsupported')
-      fsmStateRef.current = 'ERROR'
-      return
+    console.log('[STT] Browser:', {
+      speechRecognition: typeof window !== 'undefined' && !!window.SpeechRecognition,
+      webkitSpeechRecognition: typeof window !== 'undefined' && !!window.webkitSpeechRecognition,
+      isSecureContext: typeof window !== 'undefined' && !!window.isSecureContext,
+    })
+  }, [])
+
+  // Clean up recognition instance safely
+  const cleanupRecognition = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onstart = null
+        recognitionRef.current.onaudiostart = null
+        recognitionRef.current.onspeechstart = null
+        recognitionRef.current.onspeechend = null
+        recognitionRef.current.onresult = null
+        recognitionRef.current.onerror = null
+        recognitionRef.current.onend = null
+        recognitionRef.current.abort()
+      } catch (_) {}
+      recognitionRef.current = null
     }
+  }, [])
+
+  // Create clean SpeechRecognition instance
+  const createRecognition = useCallback(() => {
+    if (!isSupported) {
+      return null
+    }
+
+    cleanupRecognition()
 
     const recognition = new SpeechRecognitionClass()
     recognition.continuous = true
     recognition.interimResults = true
-    recognition.lang = 'en-US'
+    recognition.lang = lang || 'en-US'
     recognition.maxAlternatives = 1
 
     recognition.onstart = () => {
+      console.log('[STT] recognition started')
       isStartingRef.current = false
-      fsmStateRef.current = 'LISTENING'
       setError(null)
       setIsListening(true)
       setStatus('listening')
+      lastProcessedIndexRef.current = -1
+    }
+
+    recognition.onaudiostart = () => {
+      console.log('[STT] audio capture started')
+    }
+
+    recognition.onspeechstart = () => {
+      console.log('[STT] speech detected')
+    }
+
+    recognition.onspeechend = () => {
+      console.log('[STT] speech ended')
     }
 
     recognition.onresult = (event) => {
+      console.log('[STT] result received', event)
+      let finalTranscript = ''
       let currentInterim = ''
 
-      // Process results starting strictly from event.resultIndex
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const result = event.results[i]
-        const transcript = result[0]?.transcript || ''
-
-        if (result.isFinal) {
-          // Prevent processing the exact same final result index multiple times
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const item = event.results[i]
+        const transcript = item[0]?.transcript || ''
+        if (item.isFinal) {
           if (i > lastProcessedIndexRef.current) {
             lastProcessedIndexRef.current = i
-            const trimmedFinal = transcript.trim()
-            if (trimmedFinal) {
-              onFinalTranscriptRef.current?.(trimmedFinal)
-            }
+            finalTranscript += transcript
           }
         } else {
           currentInterim += transcript
         }
       }
 
+      if (finalTranscript.trim()) {
+        console.log('[STT] Final:', finalTranscript.trim())
+        onFinalTranscriptRef.current?.(finalTranscript.trim())
+      }
+
       const trimmedInterim = currentInterim.trim()
+      if (trimmedInterim) {
+        console.log('[STT] Interim:', trimmedInterim)
+      }
       interimTranscriptRef.current = trimmedInterim
       setInterimTranscript(trimmedInterim)
     }
 
     recognition.onerror = (event) => {
-      // Non-fatal pauses
+      console.error('[STT] error:', event.error, event)
+
       if (event.error === 'no-speech') {
+        // Non-fatal pause in speech; onend will automatically keep listening if shouldListenRef.current is true
         return
       }
 
-      console.warn('[SpeechRecognition] notice:', event.error)
+      if (event.error === 'aborted') {
+        // Normal during intentional stop/restart
+        return
+      }
 
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      if (
+        event.error === 'not-allowed' ||
+        event.error === 'service-not-allowed' ||
+        event.error === 'permission-denied'
+      ) {
         shouldListenRef.current = false
-        fsmStateRef.current = 'ERROR'
         setIsListening(false)
         setStatus('error')
-        setError('Microphone access is required for voice answers. You can type your answer instead.')
+        setError('Microphone access is required for voice answers. Please allow microphone permissions in your browser, or type your answer.')
       } else if (event.error === 'audio-capture') {
         shouldListenRef.current = false
-        fsmStateRef.current = 'ERROR'
         setIsListening(false)
         setStatus('error')
-        setError('No microphone detected. You can type your answer instead.')
+        setError('Could not capture audio from microphone. Please check your mic connection or continue with typing.')
       } else if (event.error === 'network') {
-        // Network errors in Web Speech API are often transient; trigger restart if active
         if (shouldListenRef.current) {
           setStatus('restarting')
         } else {
           setStatus('error')
           setError('Speech recognition network interruption. You can continue typing.')
         }
-      } else if (event.error === 'aborted') {
-        // Normal during stop/restart lifecycle
       }
     }
 
     recognition.onend = () => {
+      console.log('[STT] recognition ended')
       isStartingRef.current = false
       isStoppingRef.current = false
+
+      // Commit any lingering interim speech before restarting so spoken words are never lost
+      const lingering = (interimTranscriptRef.current || '').trim()
+      if (lingering) {
+        onFinalTranscriptRef.current?.(lingering)
+        interimTranscriptRef.current = ''
+      }
       setInterimTranscript('')
+      lastProcessedIndexRef.current = -1
 
-      // If active listening is desired, restart smoothly without creating duplicate instances
-      if (shouldListenRef.current && fsmStateRef.current !== 'STOPPING') {
-        fsmStateRef.current = 'RESTARTING'
+      // If active listening is desired, restart cleanly with a fresh instance
+      if (shouldListenRef.current && !isStoppingRef.current) {
         setStatus('restarting')
-
         clearTimeout(restartTimerRef.current)
         restartTimerRef.current = setTimeout(() => {
           if (shouldListenRef.current && !isStartingRef.current) {
-            isStartingRef.current = true
             try {
-              recognition.start()
+              const freshRec = createRecognition()
+              if (freshRec) {
+                isStartingRef.current = true
+                freshRec.start()
+              }
             } catch (err) {
               isStartingRef.current = false
-              // InvalidStateError means already started; ignore
-              if (err.name !== 'InvalidStateError') {
-                console.warn('[SpeechRecognition] restart recovery:', err.message)
-              }
+              console.warn('[STT] restart notice:', err.message)
             }
           }
-        }, 120)
+        }, 150)
       } else {
-        fsmStateRef.current = 'IDLE'
         setIsListening(false)
         setStatus('ready')
       }
     }
 
     recognitionRef.current = recognition
+    return recognition
+  }, [isSupported, lang, cleanupRecognition])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    if (!isSupported) {
+      setStatus('unsupported')
+      return
+    }
 
     return () => {
       shouldListenRef.current = false
-      fsmStateRef.current = 'STOPPING'
       clearTimeout(restartTimerRef.current)
-      try {
-        recognition.abort()
-      } catch (_) {}
+      cleanupRecognition()
     }
-  }, [isSupported])
+  }, [isSupported, cleanupRecognition])
 
   const startListening = useCallback(() => {
+    console.log('[STT] Starting recognition')
     if (!isSupported) {
       setError('Speech recognition is not supported in this browser. You can type your answer.')
       setStatus('unsupported')
@@ -198,84 +262,74 @@ export function useSpeechRecognition({ onFinalTranscript } = {}) {
 
     setError(null)
     setInterimTranscript('')
+    interimTranscriptRef.current = ''
     shouldListenRef.current = true
+    isStoppingRef.current = false
     lastProcessedIndexRef.current = -1
 
-    if (fsmStateRef.current === 'LISTENING') {
-      return
-    }
-
-    fsmStateRef.current = 'LISTENING'
-    setStatus('listening')
-
-    if (!isStartingRef.current) {
-      isStartingRef.current = true
-      try {
-        recognitionRef.current?.start()
-      } catch (err) {
-        isStartingRef.current = false
-        if (err.name === 'InvalidStateError') {
-          // Already running or pending; abort and cleanly restart
-          try {
-            recognitionRef.current?.abort()
-            setTimeout(() => {
-              if (shouldListenRef.current) {
-                try {
-                  recognitionRef.current?.start()
-                } catch (_) {}
-              }
-            }, 100)
-          } catch (_) {}
-        } else {
-          setError('Microphone could not be initialized. You can type your answer.')
-        }
+    try {
+      const recognition = createRecognition()
+      if (recognition) {
+        isStartingRef.current = true
+        recognition.start()
       }
+    } catch (err) {
+      isStartingRef.current = false
+      console.error('[STT] start error:', err)
+      setError('Microphone could not be started. You can type your answer.')
     }
-  }, [isSupported])
+  }, [isSupported, createRecognition])
 
   const stopListening = useCallback(() => {
     shouldListenRef.current = false
     clearTimeout(restartTimerRef.current)
-    fsmStateRef.current = 'STOPPING'
     isStoppingRef.current = true
+
+    // Commit any lingering interim speech before stopping so spoken words are never lost
+    const lingering = (interimTranscriptRef.current || '').trim()
+    if (lingering) {
+      onFinalTranscriptRef.current?.(lingering)
+      interimTranscriptRef.current = ''
+    }
     setInterimTranscript('')
 
-    try {
-      recognitionRef.current?.stop()
-    } catch (_) {}
-
+    cleanupRecognition()
     setIsListening(false)
     setStatus('ready')
-  }, [])
+  }, [cleanupRecognition])
 
   /**
    * Commits any pending final recognition segment, stops recognition,
    * and ensures no residual speech leaks into the next question.
    */
   const flushAndStop = useCallback(() => {
-    const flushedText = interimTranscriptRef.current || ''
+    const flushedText = (interimTranscriptRef.current || '').trim()
     shouldListenRef.current = false
     clearTimeout(restartTimerRef.current)
-    fsmStateRef.current = 'STOPPING'
     isStoppingRef.current = true
     lastProcessedIndexRef.current = -1
     interimTranscriptRef.current = ''
     setInterimTranscript('')
 
-    try {
-      recognitionRef.current?.stop()
-    } catch (_) {}
+    if (flushedText) {
+      onFinalTranscriptRef.current?.(flushedText)
+    }
 
+    cleanupRecognition()
     setIsListening(false)
     setStatus('ready')
 
     return { flushedText }
+  }, [cleanupRecognition])
+
+  const clearInterim = useCallback(() => {
+    interimTranscriptRef.current = ''
+    setInterimTranscript('')
   }, [])
 
   const reset = useCallback(() => {
     shouldListenRef.current = false
     clearTimeout(restartTimerRef.current)
-    fsmStateRef.current = 'IDLE'
     isStartingRef.current = false
     isStoppingRef.current = false
     lastProcessedIndexRef.current = -1
@@ -283,13 +337,10 @@ export function useSpeechRecognition({ onFinalTranscript } = {}) {
     setInterimTranscript('')
     setError(null)
 
-    try {
-      recognitionRef.current?.abort()
-    } catch (_) {}
-
+    cleanupRecognition()
     setIsListening(false)
     setStatus('idle')
-  }, [])
+  }, [cleanupRecognition])
 
   return {
     isSupported,
@@ -300,6 +351,7 @@ export function useSpeechRecognition({ onFinalTranscript } = {}) {
     startListening,
     stopListening,
     flushAndStop,
+    clearInterim,
     reset,
   }
 }

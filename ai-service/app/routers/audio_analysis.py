@@ -32,17 +32,40 @@ async def audio_analyze(audio: UploadFile = File(...)):
         if not audio.filename or not any(audio.filename.endswith(ext) for ext in [".webm", ".ogg", ".wav", ".mp4", ".mp3"]):
             raise HTTPException(status_code=400, detail={"success": False, "error": "INVALID_AUDIO", "message": "Unsupported audio format."})
 
-    # Save to temp file
+    # Save to temp file using chunked streaming
     suffix = os.path.splitext(audio.filename or "audio.webm")[-1] or ".webm"
     tmp_path = None
+    MAX_AUDIO_SIZE = 50 * 1024 * 1024  # 50 MB limit
+    CHUNK_SIZE = 1024 * 1024  # 1 MB chunk
+
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            content = await audio.read()
-            tmp.write(content)
             tmp_path = tmp.name
+            total_bytes = 0
+            while chunk := await audio.read(CHUNK_SIZE):
+                total_bytes += len(chunk)
+                if total_bytes > MAX_AUDIO_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail={"success": False, "error": "FILE_TOO_LARGE", "message": "Audio exceeds 50MB limit."},
+                    )
+                tmp.write(chunk)
+
+            if total_bytes == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"success": False, "error": "EMPTY_AUDIO", "message": "Audio file is empty."},
+                )
 
         result = audio_service.extract_features(tmp_path)
+        if not result.get("audioFeaturesAvailable", True):
+            raise HTTPException(
+                status_code=400,
+                detail={"success": False, "error": "CORRUPTED_AUDIO", "message": result.get("reason", "Could not process audio.")},
+            )
         return {"success": True, "data": result}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail={"success": False, "error": "AUDIO_ERROR", "message": str(e)})
     finally:
@@ -51,3 +74,4 @@ async def audio_analyze(audio: UploadFile = File(...)):
                 os.unlink(tmp_path)
             except Exception:
                 pass
+

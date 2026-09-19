@@ -25,6 +25,8 @@ const http = require('http');
 const axios = require('axios');
 const mongoose = require('mongoose');
 
+process.env.NODE_ENV = 'test';
+process.env.TEST_AUTH_ENABLED = 'true';
 require('dotenv').config();
 const app = require('../app');
 const AIConversation = require('../models/AIConversation');
@@ -55,8 +57,8 @@ async function runChatbotSeparationTests() {
   const userA = 'user_chat_test_A_' + Date.now();
   const userB = 'user_chat_test_B_' + Date.now();
 
-  const userAHeaders = { 'x-dev-clerk-user-id': userA };
-  const userBHeaders = { 'x-dev-clerk-user-id': userB };
+  const userAHeaders = { 'x-test-clerk-user-id': userA };
+  const userBHeaders = { 'x-test-clerk-user-id': userB };
 
   const testResults = [];
   function assertTest(name, condition, details = '') {

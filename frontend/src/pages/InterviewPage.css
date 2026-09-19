@@ -544,6 +544,22 @@
   transition: all var(--transition-base);
 }
 
+button.media-status-chip {
+  outline: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button.media-status-chip:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.15);
+}
+
+button.media-status-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .media-status-chip.active {
   color: #34d399;
   background: rgba(16, 185, 129, 0.08);

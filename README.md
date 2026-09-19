@@ -153,39 +153,64 @@ VITE_API_URL=http://localhost:5000
 ```env
 PORT=8000
 BACKEND_URL=http://localhost:5000
+AI_SERVICE_SECRET_KEY=your_internal_ai_secret_key_here
 SBERT_MODEL_NAME=all-MiniLM-L6-v2
 YOLO_MODEL_PATH=yolov8n.pt
-VIDEO_FRAME_SAMPLE_FPS=1
-AUDIO_MODEL_PATH=
 ```
+
+### Docker Deployment (Production Multi-Container)
+
+You can launch the entire stack using Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Services started:
+- `frontend`: React SPA served via Nginx on port `80`
+- `backend`: Node.js Express API on port `5000`
+- `ai-service`: Python FastAPI microservice on port `8000`
+- `mongodb`: MongoDB 7.0 persistent container on port `27017`
 
 ---
 
-### 2. Start Services
+## 🔒 Security Architecture & Data Isolation
 
-#### Step 1: Start Backend
+1. **Authentication Enforcement**:
+   - Clerk session verification enforced via `@clerk/express` `getAuth(req)`.
+   - Removed manual, unverified base64 JWT parsing and development header bypasses.
+   - Test mode strictly guarded behind `NODE_ENV === 'test'` and `TEST_AUTH_ENABLED === 'true'`.
+
+2. **Multi-Tenant Scoping**:
+   - Every single MongoDB model query enforces `{ _id, clerkUserId }`.
+   - Compound unique index on responses (`{ interviewId: 1, questionId: 1, clerkUserId: 1 }`) eliminates race conditions and duplicate answers.
+   - Resource access between tenants strictly returns 404 (IDOR prevention).
+
+3. **Secure File Streaming Layer**:
+   - Public static file exposure removed.
+   - Protected streaming routes mounted at `/api/files/resume/:id`, `/api/files/audio/:id`, `/api/files/video/:id`.
+   - Implements authentication validation, ownership checks, path traversal guards (`path.resolve` containment), and HTTP 206 Partial Content range requests for media playback.
+
+4. **Internal AI Microservice Security**:
+   - AI service endpoints validate `X-Internal-Service-Key` matching `AI_SERVICE_SECRET_KEY`.
+   - CORS restricted to backend origin.
+   - Request streaming in 1MB chunks prevents memory exhaustion / DoS.
+
+---
+
+## 🧪 Automated Testing
+
+InterviewX includes an automated production verification suite:
+
 ```bash
 cd backend
-npm install
-npm run dev
+npm test
 ```
-*Backend runs on `http://localhost:5000`*
 
-#### Step 2: Start AI Service
-```bash
-cd ai-service
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-*AI service runs on `http://localhost:8000` (API Docs at `http://localhost:8000/docs`)*
-
-#### Step 3: Start Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-*Frontend runs on `http://localhost:5173`*
+Suites executed:
+1. **Auth & Route Verification**: Rejection of forged JWTs, unauthenticated requests, verified identity flow.
+2. **Multi-Tenant Security & Isolation**: IDOR protection, cross-tenant file streaming blocks, compound unique index duplicate prevention, skipped vs answered separation, adaptive question ceiling.
+3. **Chatbot Architecture & Context Separation**: Grounded context injection, zero cross-session history pollution, session title generation.
 
 ---
 
@@ -210,13 +235,11 @@ npm run dev
 3. **Physical Expression & Head Pose**:
    - Bounding-box regions from YOLO detection are forwarded to the modular video analysis pipeline (`app/video/`).
    - Head orientation is estimated into observable spatial angles (`centered`, `left`, `right`, `up`, `down`).
-   - Facial movements are tracked as physical observable cues (e.g. smile curvature, expressive transitions).
+   - Facial movements are tracked as physical observable cues using OpenCV Haar Cascade detection (`mouth_region_activity`).
    - If custom-trained classification weights (`yolov8-cls` or custom CNN) are configured via `EXPRESSION_MODEL_PATH`, the classifier loads them plug-and-play. In their absence, the system never fabricates psychological conclusions.
-4. **Model Confidence vs. Candidate Confidence**:
-   - `model_confidence` represents the statistical certainty of the convolutional network on image features.
-   - **It is NEVER mapped to "Candidate Confidence"**. InterviewX strictly reports "Expression Classification Confidence".
-5. **Generalization Warning**:
-   - Acted laboratory datasets (RAVDESS) exhibit a domain shift when applied to natural webcam interview footage. Performance on laboratory benchmarks does not translate to natural interviews without actor-independent cross-validation.
+4. **Observable Indicators Calibration**:
+   - SBERT similarity metrics are strictly named `responseCompletenessIndicator` and calibrated using empirical thresholds (`SEMANTIC_SCORE_SCALE = 115.0`, `CONCEPT_MATCH_THRESHOLD = 0.35`).
+   - Confidence is never conflated with candidate psychological states.
 
 ### Video Pipeline Architecture
 ```

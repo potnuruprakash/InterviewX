@@ -6,6 +6,8 @@ const http = require('http');
 const axios = require('axios');
 const mongoose = require('mongoose');
 
+process.env.NODE_ENV = 'test';
+process.env.TEST_AUTH_ENABLED = 'true';
 require('dotenv').config();
 const app = require('../app');
 
@@ -39,7 +41,7 @@ async function testAuthPipeline() {
     console.log('\n2. Testing authenticated GET /api/interviews with verified identity...');
     const testUserId = 'user_clerk_verified_' + Date.now();
     const authRes = await client.get('/api/interviews', {
-      headers: { 'x-dev-clerk-user-id': testUserId },
+      headers: { 'x-test-clerk-user-id': testUserId },
     });
 
     console.log(`Status: ${authRes.status}`);
@@ -51,7 +53,7 @@ async function testAuthPipeline() {
     // 3. Test authenticated GET /api/progress
     console.log('\n3. Testing authenticated GET /api/progress...');
     const progressRes = await client.get('/api/progress', {
-      headers: { 'x-dev-clerk-user-id': testUserId },
+      headers: { 'x-test-clerk-user-id': testUserId },
     });
 
     console.log(`Status: ${progressRes.status}`);

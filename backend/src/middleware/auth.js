@@ -18,8 +18,9 @@ const hasValidClerkKeys = () => {
 const clerkAuth = clerkMiddleware();
 
 /**
- * Route-level middleware to enforce authentication.
+ * Route-level middleware to enforce authentication and authorization.
  * Derives user identity exclusively from verified Clerk session via getAuth(req).
+ * Never trusts unsigned JWT payloads or arbitrary client headers.
  */
 const requireAuth = (req, res, next) => {
   let userId = null;
@@ -30,38 +31,14 @@ const requireAuth = (req, res, next) => {
       userId = auth.userId;
     }
   } catch (err) {
-    console.warn('[requireAuth] getAuth error:', err.message);
+    console.warn('[requireAuth] Clerk verification error:', err.message);
   }
 
-  // Fallback 1: Decode verified Clerk JWT from Authorization Bearer header
-  if (!userId && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-    const rawToken = req.headers.authorization.slice(7).trim();
-    if (rawToken) {
-      try {
-        const parts = rawToken.split('.');
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-          if (payload && payload.sub && payload.sub.startsWith('user_')) {
-            const nowSeconds = Math.floor(Date.now() / 1000);
-            // Allow 5 minutes clock skew tolerance for development
-            if (!payload.exp || payload.exp > (nowSeconds - 300)) {
-              userId = payload.sub;
-            } else {
-              console.warn('[requireAuth] Clerk bearer token expired. Exp:', payload.exp, 'Now:', nowSeconds);
-            }
-          }
-        }
-      } catch (decodeErr) {
-        console.warn('[requireAuth] Failed to decode bearer token:', decodeErr.message);
-      }
-    }
-  }
-
-  // Fallback 2: Automated backend test scripts / dev fallback in non-production environments
-  if (!userId && process.env.NODE_ENV !== 'production') {
-    const devUserId = req.headers['x-dev-clerk-user-id'];
-    if (devUserId && typeof devUserId === 'string' && devUserId.startsWith('user_')) {
-      userId = devUserId;
+  // Controlled test-environment fallback for isolated unit testing
+  if (!userId && process.env.NODE_ENV === 'test' && process.env.TEST_AUTH_ENABLED === 'true') {
+    const testHeader = req.headers['x-test-clerk-user-id'];
+    if (testHeader && typeof testHeader === 'string' && testHeader.startsWith('user_')) {
+      userId = testHeader;
     }
   }
 
@@ -79,3 +56,4 @@ const requireAuth = (req, res, next) => {
 };
 
 module.exports = { clerkAuth, requireAuth, hasValidClerkKeys };
+

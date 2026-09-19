@@ -63,6 +63,28 @@
   transition: all var(--transition-base);
 }
 
+button.mic-status-pill {
+  border: 1px solid transparent;
+  outline: none;
+  font-family: inherit;
+  cursor: default;
+}
+
+button.mic-status-pill.clickable {
+  cursor: pointer;
+}
+
+button.mic-status-pill.clickable:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+button.mic-status-pill:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 /* Idle */
 .mic-status-idle {
   color: var(--text-muted);
