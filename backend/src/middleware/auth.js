@@ -5,7 +5,10 @@ const { clerkMiddleware, getAuth } = require('@clerk/express');
  */
 const hasValidClerkKeys = () => {
   const secretKey = process.env.CLERK_SECRET_KEY;
-  const publishableKey = process.env.CLERK_PUBLISHABLE_KEY || process.env.VITE_CLERK_PUBLISHABLE_KEY;
+  const publishableKey =
+    process.env.CLERK_PUBLISHABLE_KEY ||
+    process.env.VITE_CLERK_PUBLISHABLE_KEY;
+
   return (
     Boolean(secretKey) &&
     secretKey.startsWith('sk_') &&
@@ -14,31 +17,60 @@ const hasValidClerkKeys = () => {
   );
 };
 
-// Global Clerk middleware instance
-const clerkAuth = clerkMiddleware();
+/**
+ * Global Clerk middleware.
+ *
+ * In CI/test mode, skip Clerk completely because the test suite
+ * uses x-test-clerk-user-id for controlled authentication.
+ */
+const clerkAuth = (req, res, next) => {
+  const isTestAuthEnabled =
+    process.env.NODE_ENV === 'test' &&
+    process.env.TEST_AUTH_ENABLED === 'true';
+
+  if (isTestAuthEnabled) {
+    return next();
+  }
+
+  return clerkMiddleware()(req, res, next);
+};
 
 /**
- * Route-level middleware to enforce authentication and authorization.
- * Derives user identity exclusively from verified Clerk session via getAuth(req).
- * Never trusts unsigned JWT payloads or arbitrary client headers.
+ * Route-level authentication and authorization.
  */
 const requireAuth = (req, res, next) => {
   let userId = null;
 
-  try {
-    const auth = getAuth(req);
-    if (auth && auth.userId) {
-      userId = auth.userId;
+  const isTestAuthEnabled =
+    process.env.NODE_ENV === 'test' &&
+    process.env.TEST_AUTH_ENABLED === 'true';
+
+  // Controlled test authentication
+  if (isTestAuthEnabled) {
+    const testHeader = req.headers['x-test-clerk-user-id'];
+
+    if (
+      testHeader &&
+      typeof testHeader === 'string' &&
+      testHeader.startsWith('user_')
+    ) {
+      userId = testHeader;
     }
-  } catch (err) {
-    console.warn('[requireAuth] Clerk verification error:', err.message);
   }
 
-  // Controlled test-environment fallback for isolated unit testing
-  if (!userId && process.env.NODE_ENV === 'test' && process.env.TEST_AUTH_ENABLED === 'true') {
-    const testHeader = req.headers['x-test-clerk-user-id'];
-    if (testHeader && typeof testHeader === 'string' && testHeader.startsWith('user_')) {
-      userId = testHeader;
+  // Production authentication through verified Clerk session
+  if (!userId) {
+    try {
+      const auth = getAuth(req);
+
+      if (auth && auth.userId) {
+        userId = auth.userId;
+      }
+    } catch (err) {
+      console.warn(
+        '[requireAuth] Clerk verification error:',
+        err.message
+      );
     }
   }
 
@@ -50,10 +82,12 @@ const requireAuth = (req, res, next) => {
     });
   }
 
-  // Attach verified user ID to request
   req.clerkUserId = userId;
   next();
 };
 
-module.exports = { clerkAuth, requireAuth, hasValidClerkKeys };
-
+module.exports = {
+  clerkAuth,
+  requireAuth,
+  hasValidClerkKeys,
+};
