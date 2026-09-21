@@ -7,6 +7,9 @@ on:
     branches: [main, master, develop]
 
 jobs:
+  # ============================================================
+  # BACKEND TEST SUITE
+  # ============================================================
   backend-test:
     name: Backend Test Suite
     runs-on: ubuntu-latest
@@ -18,20 +21,82 @@ jobs:
           - 27017:27017
 
     steps:
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
       - name: Check out repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------------
+      # Node.js
+      # --------------------------------------------------------
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: backend/package.json
 
-      - name: Install dependencies
+      # --------------------------------------------------------
+      # Python
+      # --------------------------------------------------------
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: ai-service/requirements.txt
+
+      # --------------------------------------------------------
+      # Backend dependencies
+      # --------------------------------------------------------
+      - name: Install backend dependencies
         working-directory: backend
         run: npm install
 
+      # --------------------------------------------------------
+      # AI service dependencies
+      # --------------------------------------------------------
+      - name: Install AI service dependencies
+        working-directory: ai-service
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # --------------------------------------------------------
+      # Start AI service
+      # --------------------------------------------------------
+      - name: Start AI service
+        working-directory: ai-service
+        env:
+          AI_SERVICE_SECRET_KEY: test_internal_ai_secret_key_ci
+        run: |
+          nohup python -m uvicorn app.main:app \
+            --host 127.0.0.1 \
+            --port 8000 \
+            > "$RUNNER_TEMP/ai-service.log" 2>&1 &
+
+          echo "Waiting for AI service on port 8000..."
+
+          for i in {1..30}; do
+            if (echo > /dev/tcp/127.0.0.1/8000) >/dev/null 2>&1; then
+              echo "AI service is ready."
+              break
+            fi
+
+            if [ "$i" -eq 30 ]; then
+              echo "AI service failed to start."
+              echo "===== AI SERVICE LOG ====="
+              cat "$RUNNER_TEMP/ai-service.log" || true
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+      # --------------------------------------------------------
+      # Backend tests
+      # --------------------------------------------------------
       - name: Run Backend Tests
         working-directory: backend
         env:
@@ -39,29 +104,55 @@ jobs:
           TEST_AUTH_ENABLED: 'true'
           MONGODB_URI: mongodb://localhost:27017/interviewx_test
           PORT: 5000
+          AI_SERVICE_URL: http://127.0.0.1:8000
           AI_SERVICE_SECRET_KEY: test_internal_ai_secret_key_ci
           JWT_SECRET: test_jwt_secret_for_ci_pipeline
         run: npm test
 
+      # --------------------------------------------------------
+      # AI service logs if tests fail
+      # --------------------------------------------------------
+      - name: Show AI service logs on failure
+        if: failure()
+        run: |
+          echo "===== AI SERVICE LOG ====="
+          cat "$RUNNER_TEMP/ai-service.log" || true
+
+
+  # ============================================================
+  # FRONTEND BUILD
+  # ============================================================
   frontend-build:
     name: Frontend Build & Verification
     runs-on: ubuntu-latest
 
     steps:
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
       - name: Check out repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------------
+      # Node.js
+      # --------------------------------------------------------
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: frontend/package.json
 
+      # --------------------------------------------------------
+      # Frontend dependencies
+      # --------------------------------------------------------
       - name: Install dependencies
         working-directory: frontend
         run: npm install
 
+      # --------------------------------------------------------
+      # Frontend build
+      # --------------------------------------------------------
       - name: Build Frontend Bundle
         working-directory: frontend
         env:
@@ -69,27 +160,43 @@ jobs:
           VITE_API_BASE_URL: http://localhost:5000
         run: npm run build
 
+
+  # ============================================================
+  # AI SERVICE VALIDATION
+  # ============================================================
   ai-service-check:
     name: AI Service Validation
     runs-on: ubuntu-latest
 
     steps:
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
       - name: Check out repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------------
+      # Python
+      # --------------------------------------------------------
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
+          cache: pip
           cache-dependency-path: ai-service/requirements.txt
 
+      # --------------------------------------------------------
+      # AI service dependencies
+      # --------------------------------------------------------
       - name: Install dependencies
         working-directory: ai-service
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # --------------------------------------------------------
+      # Python syntax validation
+      # --------------------------------------------------------
       - name: Compile and validate Python source
         working-directory: ai-service
         run: python -m compileall app
