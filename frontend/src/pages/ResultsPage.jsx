@@ -365,6 +365,8 @@ export default function ResultsPage() {
   const [roadmapLoading, setRoadmapLoading] = useState(() => !roadmapCache.has(id))
   const [error, setError] = useState(null)
   const [roadmapError, setRoadmapError] = useState(null)
+  const [retryTrigger, setRetryTrigger] = useState(0)
+  const [authTimeout, setAuthTimeout] = useState(false)
 
   // Question Accordion State & Filter
   const [expandedQuestions, setExpandedQuestions] = useState({})
@@ -375,6 +377,29 @@ export default function ResultsPage() {
   const [activeTrainingSession, setActiveTrainingSession] = useState(null)
   const [trainingLoading, setTrainingLoading] = useState(false)
   const activeFetchIdRef = useRef(null)
+
+  // Auth Timeout Guard: prevents infinite spinner if Clerk is blocked or slow
+  useEffect(() => {
+    if (isLoaded) {
+      setAuthTimeout(false)
+      return
+    }
+    const timer = setTimeout(() => {
+      if (!isLoaded) {
+        console.warn('[ResultsLifecycle] clerk_loaded_timeout: Clerk auth state pending > 6000ms')
+        setAuthTimeout(true)
+      }
+    }, 6000)
+    return () => clearTimeout(timer)
+  }, [isLoaded])
+
+  const handleManualRetry = () => {
+    console.log('[ResultsLifecycle] results_manual_retry_triggered', { interviewId: id })
+    setError(null)
+    setLoading(true)
+    setIsFinalizing(false)
+    setRetryTrigger((prev) => prev + 1)
+  }
 
   const handleTrainMe = async () => {
     setTrainingLoading(true)
@@ -393,8 +418,17 @@ export default function ResultsPage() {
   }
 
   useEffect(() => {
-    if (!isLoaded || !id) return
-    if (!isSignedIn) {
+    console.log('[ResultsLifecycle] clerk_state', {
+      interviewId: id,
+      isLoaded,
+      isSignedIn,
+      authTimeout,
+      retryTrigger,
+    })
+
+    if (!isLoaded && !authTimeout) return
+    if (!id) return
+    if (!isSignedIn && isLoaded) {
       setLoading(false)
       return
     }
@@ -431,13 +465,37 @@ export default function ResultsPage() {
 
     // Helper: fetch results with bounded exponential backoff for transient failures (1s, 2s, 4s, max 3 retries)
     const fetchResultsWithRetry = async (retryCount = 0) => {
+      const reqStart = performance.now()
+      console.log('[ResultsLifecycle] results_request_start', {
+        interviewId: id,
+        attempt: retryCount,
+      })
       try {
-        const res = await authApi.get(`/api/interviews/${id}/results`)
+        const res = await authApi.get(`/api/interviews/${id}/results`, { timeout: 15000 })
         const data = res.data?.data || res.data
+        const durationMs = Math.round(performance.now() - reqStart)
+        console.log('[ResultsLifecycle] results_request_success', {
+          interviewId: id,
+          status: data?.finalEvaluation?.status,
+          overallScore: data?.finalEvaluation?.overallScore,
+          durationMs,
+        })
         return data
       } catch (err) {
+        const durationMs = Math.round(performance.now() - reqStart)
+        console.warn('[ResultsLifecycle] results_request_failure', {
+          interviewId: id,
+          attempt: retryCount,
+          error: err.message,
+          durationMs,
+        })
         if (retryCount < 3 && isMounted && activeFetchIdRef.current === id) {
           const delay = Math.pow(2, retryCount) * 1000 // 1000ms, 2000ms, 4000ms
+          console.log('[ResultsLifecycle] results_retry', {
+            interviewId: id,
+            nextAttempt: retryCount + 1,
+            delayMs: delay,
+          })
           await new Promise((r) => setTimeout(r, delay))
           if (!isMounted || activeFetchIdRef.current !== id) return null
           return fetchResultsWithRetry(retryCount + 1)
@@ -464,6 +522,11 @@ export default function ResultsPage() {
             resultsCache.set(id, data)
             setResults(data)
             setIsFinalizing(false)
+            console.log('[ResultsLifecycle] results_ready', {
+              interviewId: id,
+              status: data.finalEvaluation.status,
+              overallScore: data.finalEvaluation.overallScore,
+            })
           } else {
             // Still pending: schedule next poll
             pollUntilReady(pollAttempt + 1)
@@ -477,6 +540,11 @@ export default function ResultsPage() {
     // 1. Fetch Primary Results
     const loadPrimary = async () => {
       if (cachedResults && cachedResults.finalEvaluation?.status === 'ready') {
+        console.log('[ResultsLifecycle] results_ready (cached)', {
+          interviewId: id,
+          status: cachedResults.finalEvaluation?.status,
+          overallScore: cachedResults.finalEvaluation?.overallScore,
+        })
         return
       }
 
@@ -495,9 +563,15 @@ export default function ResultsPage() {
           setIsFinalizing(false)
           setError(null)
           setLoading(false)
+          console.log('[ResultsLifecycle] results_ready', {
+            interviewId: id,
+            status: data.finalEvaluation?.status,
+            overallScore: data.finalEvaluation?.overallScore,
+          })
         }
       } catch (err) {
         if (isMounted && activeFetchIdRef.current === id) {
+          console.error('[ResultsLifecycle] results_error_state', { interviewId: id, error: err.message })
           setError(err.message || 'Could not load interview results.')
           setLoading(false)
           setIsFinalizing(false)
@@ -510,16 +584,22 @@ export default function ResultsPage() {
       if (cachedRoadmap) return
 
       setRoadmapLoading(true)
+      console.log('[ResultsLifecycle] roadmap_request_start', { interviewId: id })
       try {
-        const res = await authApi.get(`/api/interviews/${id}/roadmap`)
+        const res = await authApi.get(`/api/interviews/${id}/roadmap`, { timeout: 15000 })
         const data = res.data?.roadmap || res.data?.data?.roadmap || res.data
         if (isMounted && activeFetchIdRef.current === id && data) {
           roadmapCache.set(id, data)
           setRoadmap(data)
           setRoadmapError(null)
+          console.log('[ResultsLifecycle] roadmap_request_success', {
+            interviewId: id,
+            recommendationsCount: data?.recommendations?.length || 0,
+          })
         }
-      } catch {
+      } catch (err) {
         if (isMounted && activeFetchIdRef.current === id) {
+          console.warn('[ResultsLifecycle] roadmap_request_failure', { interviewId: id, error: err.message })
           setRoadmapError('Personalized roadmap currently unavailable.')
         }
       } finally {
@@ -536,9 +616,9 @@ export default function ResultsPage() {
       isMounted = false
       if (pollTimer) clearTimeout(pollTimer)
     }
-  }, [id, isLoaded, isSignedIn])
+  }, [id, isLoaded, isSignedIn, authTimeout, retryTrigger])
 
-  if (!isLoaded || (loading && !results && !isFinalizing)) {
+  if ((!isLoaded && !authTimeout) || (loading && !results && !isFinalizing)) {
     return <ResultsSkeleton />
   }
 
@@ -565,7 +645,7 @@ export default function ResultsPage() {
     )
   }
 
-  if (!isSignedIn) {
+  if (!isSignedIn && isLoaded) {
     return (
       <div className="results-page">
         <div className="results-container" style={{ paddingTop: '60px', alignItems: 'center' }}>
@@ -584,30 +664,55 @@ export default function ResultsPage() {
     )
   }
 
+  if (authTimeout && !isLoaded) {
+    return (
+      <div className="results-page">
+        <div className="results-container" style={{ paddingTop: '60px', alignItems: 'center' }}>
+          <div className="glass-card" style={{ maxWidth: '480px', width: '100%', padding: '32px', textAlign: 'center' }}>
+            <AlertCircle size={40} color="#f87171" style={{ margin: '0 auto 16px' }} />
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px', color: '#ffffff' }}>
+              Unable to load your interview results.
+            </h2>
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 20px', lineHeight: 1.5 }}>
+              Authentication service timed out. Please check your network connection and retry.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthTimeout(false)
+                  handleManualRetry()
+                }}
+                className="btn btn-primary btn-sm"
+              >
+                <RefreshCw size={14} /> Retry
+              </button>
+              <Link to="/dashboard" className="btn btn-secondary btn-sm">
+                Dashboard
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (error && !results) {
     return (
       <div className="results-page">
         <div className="results-container" style={{ paddingTop: '60px', alignItems: 'center' }}>
           <div className="glass-card" style={{ maxWidth: '480px', width: '100%', padding: '32px', textAlign: 'center' }}>
             <AlertCircle size={40} color="#f87171" style={{ margin: '0 auto 16px' }} />
-            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px', color: '#ffffff' }}>Results Unavailable</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px', color: '#ffffff' }}>
+              Unable to load your interview results.
+            </h2>
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 20px', lineHeight: 1.5 }}>
               {error}
             </p>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
               <button
-                onClick={() => {
-                  setLoading(true)
-                  setError(null)
-                  authApi.get(`/api/interviews/${id}/results`)
-                    .then((res) => {
-                      const data = res.data?.data || res.data
-                      resultsCache.set(id, data)
-                      setResults(data)
-                    })
-                    .catch((err) => setError(err.message))
-                    .finally(() => setLoading(false))
-                }}
+                type="button"
+                onClick={handleManualRetry}
                 className="btn btn-primary btn-sm"
               >
                 <RefreshCw size={14} /> Retry
@@ -639,13 +744,24 @@ export default function ResultsPage() {
         <div className="results-container" style={{ paddingTop: '60px', alignItems: 'center' }}>
           <div className="glass-card" style={{ maxWidth: '480px', width: '100%', padding: '32px', textAlign: 'center' }}>
             <AlertCircle size={40} color="#818cf8" style={{ margin: '0 auto 16px' }} />
-            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px', color: '#ffffff' }}>No Assessment Data</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px', color: '#ffffff' }}>
+              Unable to load your interview results.
+            </h2>
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 20px', lineHeight: 1.5 }}>
-              No interview results found for session <code>{id}</code>.
+              Assessment results could not be retrieved for session <code>{id}</code>.
             </p>
-            <Link to="/dashboard" className="btn btn-secondary btn-sm">
-              Back to Dashboard
-            </Link>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={handleManualRetry}
+                className="btn btn-primary btn-sm"
+              >
+                <RefreshCw size={14} /> Retry
+              </button>
+              <Link to="/dashboard" className="btn btn-secondary btn-sm">
+                Dashboard
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -680,6 +796,17 @@ export default function ResultsPage() {
   // Overall Score & Tier
   const overallScore = fe?.overallScore !== null && fe?.overallScore !== undefined ? Math.round(fe.overallScore) : null
   const scoreTier = getScoreTier(overallScore)
+
+  // Instrumentation: Log results_rendered when report is successfully rendered to DOM
+  useEffect(() => {
+    if (interview && overallScore !== null) {
+      console.log('[ResultsLifecycle] results_rendered', {
+        interviewId: id,
+        overallScore,
+        date: formattedDate,
+      })
+    }
+  }, [interview, overallScore, id, formattedDate])
 
   // Calculate the 5 Core Performance Metrics strictly from actual data
   const metrics = useMemo(() => {

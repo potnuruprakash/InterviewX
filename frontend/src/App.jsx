@@ -1,11 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { SignedIn, SignedOut } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, ClerkLoaded, ClerkLoading } from '@clerk/clerk-react'
 import { AlertCircle } from 'lucide-react'
 
 import { lazy, Suspense } from 'react'
 import Navbar from './components/Navbar'
-import AICoachDrawer from './components/AICoachDrawer'
 
+const AICoachDrawer = lazy(() => import('./components/AICoachDrawer'))
 const LandingPage = lazy(() => import('./pages/LandingPage'))
 const SignInPage = lazy(() => import('./pages/SignInPage'))
 const SignUpPage = lazy(() => import('./pages/SignUpPage'))
@@ -30,8 +30,15 @@ const ProtectedRoute = ({ children }) => {
   }
   return (
     <>
-      <SignedIn>{children}</SignedIn>
-      <SignedOut><Navigate to="/sign-in" replace /></SignedOut>
+      <ClerkLoading>
+        <div className="results-loading" style={{ minHeight: '60vh' }}>
+          <div className="spinner" />
+        </div>
+      </ClerkLoading>
+      <ClerkLoaded>
+        <SignedIn>{children}</SignedIn>
+        <SignedOut><Navigate to="/sign-in" replace /></SignedOut>
+      </ClerkLoaded>
     </>
   )
 }
@@ -124,7 +131,9 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
-        <AICoachDrawer />
+        <Suspense fallback={null}>
+          <AICoachDrawer />
+        </Suspense>
       </div>
     </BrowserRouter>
   )

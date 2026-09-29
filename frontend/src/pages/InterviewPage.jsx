@@ -157,15 +157,23 @@ export default function InterviewPage() {
     if (isListening) stopListening()
     setIsMediaRecording(false)
 
+    console.log('[InterviewLifecycle] completion_request_start', { interviewId: id, reason: 'time_expired' })
+    const compStart = performance.now()
     try {
       await authApi.post(`/api/interviews/${id}/complete`, {
         completionReason: 'time_expired',
       })
+      console.log('[InterviewLifecycle] completion_success', {
+        interviewId: id,
+        durationMs: Math.round(performance.now() - compStart),
+      })
+      console.log('[InterviewLifecycle] navigation_to_results', { interviewId: id })
       setTimeout(() => {
         navigate(`/interview/${id}/results`)
-      }, 1200)
+      }, 800)
     } catch (err) {
-      console.warn('[Interview] Timeout completion notice:', err.message)
+      console.warn('[InterviewLifecycle] Timeout completion notice:', err.message)
+      console.log('[InterviewLifecycle] navigation_to_results', { interviewId: id })
       navigate(`/interview/${id}/results`)
     }
   }, [id, isListening, stopListening, authApi, navigate, completing])
@@ -293,15 +301,24 @@ export default function InterviewPage() {
         interviewData?.currentQuestionIndex >= interviewData?.totalQuestions
 
       if (isFinished) {
-        setIsComplete(true)
-        setCurrentQuestion(null)
+        setCompleting(true)
+        const reason = interviewData?.completionReason || 'all_questions_completed'
+        console.log('[InterviewLifecycle] completion_request_start', { interviewId: id, reason })
+        const compStart = performance.now()
         try {
           await authApi.post(`/api/interviews/${id}/complete`, {
-            completionReason: interviewData?.completionReason || 'all_questions_completed',
+            completionReason: reason,
+          })
+          console.log('[InterviewLifecycle] completion_success', {
+            interviewId: id,
+            durationMs: Math.round(performance.now() - compStart),
           })
         } catch (e) {
-          // Already completed on backend, safe to proceed
+          console.warn('[InterviewLifecycle] completion_notice', e.message)
         }
+        setIsComplete(true)
+        setCurrentQuestion(null)
+        console.log('[InterviewLifecycle] navigation_to_results', { interviewId: id })
         navigate(`/interview/${id}/results`)
       } else {
         setCurrentQuestion(res.data.nextQuestion)
@@ -355,15 +372,24 @@ export default function InterviewPage() {
         interviewData?.currentQuestionIndex >= interviewData?.totalQuestions
 
       if (isFinished) {
-        setIsComplete(true)
-        setCurrentQuestion(null)
+        setCompleting(true)
+        const reason = interviewData?.completionReason || 'all_questions_completed'
+        console.log('[InterviewLifecycle] completion_request_start', { interviewId: id, reason: 'skipped_last' })
+        const compStart = performance.now()
         try {
           await authApi.post(`/api/interviews/${id}/complete`, {
-            completionReason: interviewData?.completionReason || 'all_questions_completed',
+            completionReason: reason,
+          })
+          console.log('[InterviewLifecycle] completion_success', {
+            interviewId: id,
+            durationMs: Math.round(performance.now() - compStart),
           })
         } catch (e) {
-          // Already completed on backend, safe to proceed
+          console.warn('[InterviewLifecycle] completion_notice', e.message)
         }
+        setIsComplete(true)
+        setCurrentQuestion(null)
+        console.log('[InterviewLifecycle] navigation_to_results', { interviewId: id })
         navigate(`/interview/${id}/results`)
       } else {
         setCurrentQuestion(res.data.nextQuestion)
@@ -378,6 +404,7 @@ export default function InterviewPage() {
       ) {
         setIsComplete(true)
         setCurrentQuestion(null)
+        console.log('[InterviewLifecycle] navigation_to_results', { interviewId: id })
         navigate(`/interview/${id}/results`)
       } else {
         setError(msg || 'Could not skip question. Please try again.')
@@ -396,12 +423,20 @@ export default function InterviewPage() {
     if (isListening) stopListening()
     setIsMediaRecording(false)
 
+    console.log('[InterviewLifecycle] completion_request_start', { interviewId: id, reason: 'user_ended' })
+    const compStart = performance.now()
     try {
       await authApi.post(`/api/interviews/${id}/complete`, {
         completionReason: 'user_ended',
       })
+      console.log('[InterviewLifecycle] completion_success', {
+        interviewId: id,
+        durationMs: Math.round(performance.now() - compStart),
+      })
+      console.log('[InterviewLifecycle] navigation_to_results', { interviewId: id })
       navigate(`/interview/${id}/results`)
     } catch (err) {
+      console.warn('[InterviewLifecycle] completion_error', err.message)
       setError(err.message || 'Failed to complete interview.')
       setCompleting(false)
     }
