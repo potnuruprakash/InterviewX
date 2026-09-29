@@ -69,29 +69,9 @@ const requireAuth = (req, res, next) => {
     }
   }
 
-  // Fallback 1: Decode verified Clerk JWT from Authorization Bearer header
-  if (!userId && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-    const rawToken = req.headers.authorization.slice(7).trim();
-    if (rawToken) {
-      try {
-        const parts = rawToken.split('.');
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-          if (payload && payload.sub && payload.sub.startsWith('user_')) {
-            const nowSeconds = Math.floor(Date.now() / 1000);
-            // Allow 5 minutes clock skew tolerance for development
-            if (!payload.exp || payload.exp > (nowSeconds - 300)) {
-              userId = payload.sub;
-            } else {
-              console.warn('[requireAuth] Clerk bearer token expired. Exp:', payload.exp, 'Now:', nowSeconds);
-            }
-          }
-        }
-      } catch (decodeErr) {
-        console.warn('[requireAuth] Failed to decode bearer token:', decodeErr.message);
-      }
-    }
-  }
+  // Production identity must come from verified Clerk authentication.
+  // Note: Unverified JWT payload decoding without cryptographic signature verification
+  // has been permanently removed to prevent forged token attacks.
 
   // Fallback 2: Automated backend test scripts / dev fallback in non-production environments
   if (!userId && process.env.NODE_ENV !== 'production') {

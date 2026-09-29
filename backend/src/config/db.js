@@ -12,13 +12,33 @@ let isConnected = false;
 
 const connectDB = async () => {
   // Use MONGODB_URI as primary, MONGO_URI as backward compatibility fallback
-  const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
+  let uri = process.env.MONGODB_URI || process.env.MONGO_URI;
+  const localUri = process.env.LOCAL_MONGO_URI || 'mongodb://127.0.0.1:27017/adaptive-ai-interviewer';
 
   if (!uri || uri.trim() === '') {
-    console.error('[DB] FATAL ERROR: No MongoDB URI configured.');
-    console.error('[DB] MONGODB_URI environment variable is missing.');
-    console.error('[DB] Please set MONGODB_URI in your .env file to a valid MongoDB Atlas connection string.');
-    process.exit(1);
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[DB] No MongoDB URI configured. Falling back to local MongoDB: ${localUri}`);
+      uri = localUri;
+    } else {
+      console.error('[DB] FATAL ERROR: No MongoDB URI configured.');
+      console.error('[DB] MONGODB_URI environment variable is missing.');
+      console.error('[DB] Please set MONGODB_URI in your .env file to a valid MongoDB Atlas connection string.');
+      process.exit(1);
+    }
+  }
+
+  // Check if URI still contains unpopulated placeholder like <db_password> or <password>
+  const hasPlaceholder = uri && (uri.includes('<db_password>') || uri.includes('<password>'));
+  if (hasPlaceholder) {
+    console.warn('[DB] NOTICE: Your Atlas connection string still contains the placeholder ("<db_password>").');
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[DB] Falling back to running local MongoDB instance (${localUri}) for local development.`);
+      console.warn('[DB] To connect to MongoDB Atlas, replace <db_password> in backend/.env with your actual Atlas password.');
+      uri = localUri;
+    } else {
+      console.error('[DB] FATAL ERROR: Replace <db_password> in your .env with your actual MongoDB Atlas password.');
+      process.exit(1);
+    }
   }
 
   // Prevent silent localhost fallback when Atlas is expected
@@ -52,6 +72,27 @@ const connectDB = async () => {
     return conn;
   } catch (error) {
     console.error(`[DB] MongoDB Connection failed: ${error.message}`);
+
+    // If Atlas auth or network fails in development, try local MongoDB fallback
+    if (process.env.NODE_ENV !== 'production' && !uri.includes('127.0.0.1') && !uri.includes('localhost')) {
+      console.warn(`[DB] Attempting fallback to local MongoDB (${localUri})...`);
+      try {
+        const localConn = await mongoose.connect(localUri, {
+          serverSelectionTimeoutMS: 4000,
+          autoIndex: true,
+        });
+        isConnected = true;
+        console.log(`[DB] Local MongoDB fallback connected successfully.`);
+        console.log(`[DB] Database name: ${localConn.connection.name}`);
+        return localConn;
+      } catch (localErr) {
+        console.error(`[DB] Local MongoDB fallback also failed: ${localErr.message}`);
+      }
+    }
+
+    if (error.message.includes('bad auth') || error.message.includes('authentication failed')) {
+      console.error('[DB] Authentication Failed: Please check your MongoDB Atlas password in backend/.env (ensure <db_password> is replaced with your real database password).');
+    }
     if (error.message.includes('whitelist') || error.message.includes('Could not connect to any servers')) {
       console.error('[DB] Atlas IP Whitelist Notice: Please ensure your current IP is whitelisted in MongoDB Atlas Network Access (or set to 0.0.0.0/0).');
     }

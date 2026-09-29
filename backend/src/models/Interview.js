@@ -69,6 +69,10 @@ const interviewSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    answeredQuestionsCount: {
+      type: Number,
+      default: 0,
+    },
 
     // Active question snapshot for immediate UI retrieval & state restoration
     currentQuestion: {

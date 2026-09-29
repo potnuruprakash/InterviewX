@@ -84,7 +84,8 @@ async function runAICoachTests() {
           email: 'alex@example.com',
           targetRole: 'Senior Backend Engineer',
         },
-        skills: [
+        skills: ['Node.js', 'System Design', 'Distributed Systems'],
+        detailedSkills: [
           { name: 'Node.js', canonicalName: 'Node.js', category: 'Backend' },
           { name: 'System Design', canonicalName: 'System Design', category: 'Architecture' },
           { name: 'Distributed Systems', canonicalName: 'Distributed Systems', category: 'Architecture' },

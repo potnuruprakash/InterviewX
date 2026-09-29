@@ -84,6 +84,16 @@ const SKILL_QUESTION_TEMPLATES = {
       difficulty: 'easy',
       expectedConcepts: ['block scope', 'function scope', 'hoisting', 'reassignment', 'temporal dead zone'],
     },
+    {
+      text: 'How does V8 optimize JavaScript execution under the hood? Explain hidden classes, inline caching, and memory management in V8.',
+      difficulty: 'hard',
+      expectedConcepts: ['hidden classes', 'inline caching', 'JIT compilation', 'Ignition and TurboFan', 'Scavenger GC'],
+    },
+    {
+      text: 'Explain prototypal inheritance and prototype pollution vulnerabilities in JavaScript, and how to defend against them.',
+      difficulty: 'hard',
+      expectedConcepts: ['prototype chain', 'Object.create', '__proto__', 'prototype pollution', 'Object.freeze'],
+    },
   ],
   typescript: [
     {
@@ -180,12 +190,42 @@ const SKILL_QUESTION_TEMPLATES = {
       difficulty: 'hard',
       expectedConcepts: ['Pod', 'Deployment', 'ReplicaSet', 'Service', 'labels', 'selectors'],
     },
+    {
+      text: 'How do Kubernetes ConfigMaps and Secrets differ, and how do you securely inject them into pods?',
+      difficulty: 'medium',
+      expectedConcepts: ['ConfigMaps', 'Secrets', 'environment variables', 'volume mounts', 'base64 encoding', 'RBAC'],
+    },
+    {
+      text: 'What is an Ingress controller in Kubernetes, and how does it route external traffic to internal services?',
+      difficulty: 'medium',
+      expectedConcepts: ['Ingress', 'Ingress controller', 'routing rules', 'TLS termination', 'ClusterIP', 'NodePort'],
+    },
+    {
+      text: 'Explain how Kubernetes Horizontal Pod Autoscaler (HPA) works and what metrics it monitors.',
+      difficulty: 'hard',
+      expectedConcepts: ['HPA', 'CPU utilization', 'memory metrics', 'custom metrics', 'scale up/down', 'metrics-server'],
+    },
   ],
   aws: [
     {
       text: 'What AWS services have you used? Walk me through how you architected a solution with AWS.',
       difficulty: 'medium',
       expectedConcepts: ['EC2', 'S3', 'Lambda', 'RDS', 'architecture decisions', 'cost optimization'],
+    },
+    {
+      text: 'How do IAM roles, policies, and instance profiles ensure the principle of least privilege in AWS?',
+      difficulty: 'medium',
+      expectedConcepts: ['IAM roles', 'policies', 'least privilege', 'temporary credentials', 'STS', 'trust relationships'],
+    },
+    {
+      text: 'Explain the trade-offs between AWS Lambda serverless computing and Amazon ECS/EKS container deployments.',
+      difficulty: 'hard',
+      expectedConcepts: ['cold starts', 'cost per execution', 'statefulness', 'concurrency limits', 'long-running tasks', 'ECS/EKS'],
+    },
+    {
+      text: 'How would you architect a high-availability, multi-region disaster recovery strategy on AWS?',
+      difficulty: 'hard',
+      expectedConcepts: ['Route 53', 'cross-region replication', 'RTO', 'RPO', 'active-active', 'active-passive'],
     },
   ],
   'machine learning': [
@@ -194,12 +234,42 @@ const SKILL_QUESTION_TEMPLATES = {
       difficulty: 'hard',
       expectedConcepts: ['underfitting', 'overfitting', 'regularization', 'cross-validation', 'model complexity'],
     },
+    {
+      text: 'How do precision, recall, and F1-score differ, and when would you optimize for recall over precision?',
+      difficulty: 'medium',
+      expectedConcepts: ['confusion matrix', 'true positives', 'false positives', 'false negatives', 'imbalanced data', 'F1-score'],
+    },
+    {
+      text: 'What strategies do you use for handling imbalanced datasets in classification problems?',
+      difficulty: 'medium',
+      expectedConcepts: ['SMOTE', 'oversampling', 'undersampling', 'class weights', 'ROC-AUC', 'stratified sampling'],
+    },
+    {
+      text: 'Explain feature engineering techniques such as one-hot encoding, target encoding, and standardization.',
+      difficulty: 'medium',
+      expectedConcepts: ['one-hot encoding', 'target encoding', 'scaling', 'standardization', 'outliers', 'cardinality'],
+    },
   ],
   'deep learning': [
     {
       text: 'Explain how backpropagation works in neural networks.',
       difficulty: 'hard',
       expectedConcepts: ['gradient descent', 'chain rule', 'loss function', 'weight update', 'activation function'],
+    },
+    {
+      text: 'What is the vanishing gradient problem in deep neural networks, and how do activation functions like ReLU or architectures like ResNet mitigate it?',
+      difficulty: 'hard',
+      expectedConcepts: ['vanishing gradients', 'sigmoid/tanh saturation', 'ReLU', 'residual connections', 'skip connections', 'batch normalization'],
+    },
+    {
+      text: 'How does the self-attention mechanism in Transformer models compare to recurrent mechanisms in LSTMs?',
+      difficulty: 'hard',
+      expectedConcepts: ['attention matrix', 'queries', 'keys', 'values', 'parallelization', 'long-range dependencies'],
+    },
+    {
+      text: 'Explain dropout and batch normalization, and how each prevents overfitting in deep learning.',
+      difficulty: 'medium',
+      expectedConcepts: ['dropout rate', 'internal covariate shift', 'mini-batch statistics', 'regularization', 'training vs inference'],
     },
   ],
   git: [
@@ -208,12 +278,42 @@ const SKILL_QUESTION_TEMPLATES = {
       difficulty: 'medium',
       expectedConcepts: ['merge commit', 'linear history', 'rebase', 'conflict resolution', 'golden rule'],
     },
+    {
+      text: 'How would you recover a deleted commit or branch in Git using git reflog?',
+      difficulty: 'medium',
+      expectedConcepts: ['reflog', 'commit hash', 'HEAD pointer', 'detached HEAD', 'branch recreation'],
+    },
+    {
+      text: 'Explain the Git branching strategy you prefer (such as Trunk-Based Development or Git Flow) and why.',
+      difficulty: 'easy',
+      expectedConcepts: ['trunk-based', 'feature branches', 'pull requests', 'release cadence', 'CI/CD integration'],
+    },
+    {
+      text: 'How do you resolve a complex merge conflict involving multiple files in Git?',
+      difficulty: 'medium',
+      expectedConcepts: ['conflict markers', 'diff analysis', 'rebase abort/continue', 'merge tools', 'team communication'],
+    },
   ],
   java: [
     {
       text: 'Explain Java garbage collection. How does it work, and how can you influence it?',
       difficulty: 'hard',
       expectedConcepts: ['heap', 'young generation', 'old generation', 'GC algorithms', 'memory management'],
+    },
+    {
+      text: 'Explain polymorphism in Java.',
+      difficulty: 'medium',
+      expectedConcepts: ['method overriding', 'method overloading', 'interfaces', 'runtime polymorphism', 'dynamic binding'],
+    },
+    {
+      text: 'What is the difference between Comparable and Comparator interfaces in Java, and when should each be used?',
+      difficulty: 'medium',
+      expectedConcepts: ['compareTo', 'compare', 'natural ordering', 'multiple sort criteria', 'java.util.Collections'],
+    },
+    {
+      text: 'How does Java handle concurrency with the java.util.concurrent package, ExecutorService, and synchronized blocks?',
+      difficulty: 'hard',
+      expectedConcepts: ['ExecutorService', 'thread pools', 'synchronized', 'ReentrantLock', 'volatile', 'deadlocks'],
     },
   ],
   'c++': [
@@ -222,12 +322,42 @@ const SKILL_QUESTION_TEMPLATES = {
       difficulty: 'hard',
       expectedConcepts: ['RAII', 'smart pointers', 'malloc/free', 'stack allocation', 'memory leak'],
     },
+    {
+      text: 'Explain RAII (Resource Acquisition Is Initialization) and how modern smart pointers prevent leaks.',
+      difficulty: 'hard',
+      expectedConcepts: ['std::unique_ptr', 'std::shared_ptr', 'std::weak_ptr', 'destructor cleanup', 'reference counting'],
+    },
+    {
+      text: 'What are virtual functions and vtables in C++, and how do they enable runtime polymorphism?',
+      difficulty: 'hard',
+      expectedConcepts: ['virtual table', 'vptr', 'dynamic dispatch', 'override', 'abstract class'],
+    },
+    {
+      text: 'What is move semantics in C++11, and how does std::move optimize resource transfers?',
+      difficulty: 'hard',
+      expectedConcepts: ['rvalue references', 'std::move', 'move constructor', 'move assignment', 'zero-copy transfer'],
+    },
   ],
   'rest api': [
     {
       text: 'What are the key principles of RESTful API design? How would you design a REST API for a social media application?',
       difficulty: 'medium',
       expectedConcepts: ['statelessness', 'resource-based URLs', 'HTTP methods', 'status codes', 'versioning'],
+    },
+    {
+      text: 'Explain REST APIs.',
+      difficulty: 'easy',
+      expectedConcepts: ['client-server', 'stateless', 'HTTP verbs', 'JSON', 'endpoints', 'uniform interface'],
+    },
+    {
+      text: 'How do idempotent HTTP methods (like PUT and DELETE) differ from non-idempotent ones like POST, and how do you handle idempotency keys?',
+      difficulty: 'medium',
+      expectedConcepts: ['idempotency', 'PUT vs POST', 'idempotency keys', 'safe methods', 'network retries'],
+    },
+    {
+      text: 'What are the best practices for REST API versioning, error handling, and pagination?',
+      difficulty: 'medium',
+      expectedConcepts: ['URI versioning', 'RFC 7807 problem details', 'cursor-based pagination', 'offset pagination', 'rate limiting'],
     },
   ],
   graphql: [
@@ -236,12 +366,42 @@ const SKILL_QUESTION_TEMPLATES = {
       difficulty: 'medium',
       expectedConcepts: ['over-fetching', 'under-fetching', 'schema', 'resolvers', 'mutations', 'subscriptions'],
     },
+    {
+      text: 'How do you solve the N+1 query problem in GraphQL using DataLoader?',
+      difficulty: 'hard',
+      expectedConcepts: ['DataLoader', 'batching', 'caching', 'N+1 problem', 'resolver execution tree'],
+    },
+    {
+      text: 'Explain GraphQL schemas, types, queries, and mutations with concrete examples.',
+      difficulty: 'medium',
+      expectedConcepts: ['schema definition language', 'Query type', 'Mutation type', 'Input types', 'resolvers'],
+    },
+    {
+      text: 'How does caching work in GraphQL compared to traditional HTTP caching in REST APIs?',
+      difficulty: 'hard',
+      expectedConcepts: ['POST requests', 'normalized cache', 'Apollo Client cache', 'persisted queries', 'CDN caching'],
+    },
   ],
   redis: [
     {
       text: 'How does Redis work as a caching layer? What data structures does it support?',
       difficulty: 'medium',
       expectedConcepts: ['in-memory', 'TTL', 'string', 'hash', 'list', 'set', 'sorted set', 'cache invalidation'],
+    },
+    {
+      text: 'Explain Redis eviction policies (such as LRU and LFU) and how you configure TTLs for cache invalidation.',
+      difficulty: 'medium',
+      expectedConcepts: ['allkeys-lru', 'volatile-lru', 'LFU', 'maxmemory', 'TTL expiration', 'cache stampede'],
+    },
+    {
+      text: 'How do you ensure data persistence and high availability in Redis using RDB, AOF, and Redis Sentinel/Cluster?',
+      difficulty: 'hard',
+      expectedConcepts: ['RDB snapshotting', 'AOF append-only file', 'Sentinel failover', 'Redis Cluster sharding', 'replication'],
+    },
+    {
+      text: 'How would you implement a distributed lock in Redis safely, considering node crashes and timeouts?',
+      difficulty: 'hard',
+      expectedConcepts: ['SET NX PX', 'Redlock algorithm', 'lease renewal', 'fencing tokens', 'atomicity with Lua scripts'],
     },
   ],
   // General programming concepts
@@ -497,13 +657,153 @@ SELECT
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
+// DEDUPLICATION ENGINE & HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
+const NEAR_DUPLICATE_THRESHOLD = 0.85;
+const STRUCTURAL_DUPLICATE_THRESHOLD = 0.65;
+
+/**
+ * Fisher-Yates shuffle algorithm:
+ * Guarantees uniform random distribution without mutating the source array.
+ */
+const fisherYatesShuffle = (arr) => {
+  if (!Array.isArray(arr)) return [];
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
+
+// Backwards compatibility alias
+const shuffle = fisherYatesShuffle;
+
+/**
+ * Normalizes question text for robust deduplication:
+ * - strips punctuation
+ * - collapses whitespace
+ * - lowercase
+ */
+const normalizeQuestionText = (text) => {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .toLowerCase()
+    .replace(/[?!.,;:()'"`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const STOP_WORDS = new Set(['a', 'an', 'the', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'does', 'do', 'did', 'it', 'its', 'in', 'on', 'at', 'to', 'for', 'with', 'by']);
+
+const stemWord = (word) => {
+  return word
+    .replace(/(ing|ed|ly|es|s)$/, '')
+    .replace(/ies$/, 'y');
+};
+
+const extractContentTokens = (text) => {
+  const norm = normalizeQuestionText(text);
+  return norm
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !STOP_WORDS.has(w))
+    .map(stemWord);
+};
+
+/**
+ * Token-based Jaccard similarity using content tokens
+ */
+const calculateTokenJaccard = (a, b) => {
+  const getTokens = (val) => {
+    if (Array.isArray(val)) return new Set(val.map((v) => stemWord(String(v).toLowerCase())));
+    if (typeof val === 'string') return new Set(extractContentTokens(val));
+    return new Set();
+  };
+  const setA = getTokens(a);
+  const setB = getTokens(b);
+  if (setA.size === 0 && setB.size === 0) return 1;
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let intersection = 0;
+  for (const item of setA) {
+    if (setB.has(item)) intersection++;
+  }
+  const union = setA.size + setB.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+};
+
+/**
+ * Detect primary intent of the question
+ */
+const detectQuestionIntent = (text) => {
+  const t = (text || '').toLowerCase();
+  if (/design|architect|architecture|structure|system design/i.test(t)) return 'design';
+  if (/compare|difference|versus|vs|trade-off|pros and cons/i.test(t)) return 'compare';
+  if (/optimize|optimization|performance|scale|scaling/i.test(t)) return 'optimize';
+  if (/debug|troubleshoot|fix|issue|root cause/i.test(t)) return 'debug';
+  if (/implement|code|write|create|build/i.test(t)) return 'implement';
+  if (/explain|what is|how does|what are|describe|walk me through/i.test(t)) return 'explain';
+  return 'general';
+};
+
+/**
+ * Layered Deduplication Check:
+ * Layer 1: Exact normalized string match
+ * Layer 2: Near-duplicate Jaccard similarity (>= 0.70)
+ * Layer 3: Shared technical skill and structural intent duplicate (>= 0.40)
+ */
+const isDuplicateQuestion = (candidateText, existingQuestions = [], context = {}) => {
+  if (!candidateText || !existingQuestions || existingQuestions.length === 0) {
+    return { isDuplicate: false };
+  }
+
+  const normCandidate = normalizeQuestionText(candidateText);
+  const candidateIntent = detectQuestionIntent(candidateText);
+  const candidateTokens = extractContentTokens(candidateText);
+
+  for (const existing of existingQuestions) {
+    const existingText = typeof existing === 'string' ? existing : existing?.text;
+    if (!existingText) continue;
+
+    const normExisting = normalizeQuestionText(existingText);
+
+    // Layer 1: Exact match after normalization
+    if (normCandidate === normExisting) {
+      return { isDuplicate: true, layer: 1, matchedText: existingText };
+    }
+
+    // Layer 2: Near-exact token match
+    const existingTokens = extractContentTokens(existingText);
+    const jaccard = calculateTokenJaccard(candidateTokens, existingTokens);
+
+    if (jaccard >= 0.70) {
+      return { isDuplicate: true, layer: 2, matchedText: existingText, similarity: jaccard };
+    }
+
+    // Layer 3: Structural / Intent-level duplicate
+    const existingIntent = detectQuestionIntent(existingText);
+    const sameIntent = candidateIntent === existingIntent && candidateIntent !== 'general';
+
+    if (sameIntent && jaccard >= 0.40) {
+      return { isDuplicate: true, layer: 3, matchedText: existingText, similarity: jaccard };
+    }
+
+    const skill = (context.skill || '').toLowerCase();
+    if (
+      candidateIntent === 'explain' &&
+      existingIntent === 'explain' &&
+      skill &&
+      normCandidate.includes(skill) &&
+      normExisting.includes(skill)
+    ) {
+      return { isDuplicate: true, layer: 3, matchedText: existingText, reason: 'same_concept_explain' };
+    }
+  }
+
+  return { isDuplicate: false };
+};
 
 const determineDifficulty = (experienceYears, skillCoveragePercentage, interviewDifficulty) => {
-  // Use configured difficulty as base, adjust slightly based on profile
   if (interviewDifficulty) return interviewDifficulty;
   if (experienceYears >= 5 || skillCoveragePercentage >= 80) return 'hard';
   if (experienceYears >= 2 || skillCoveragePercentage >= 50) return 'medium';
@@ -862,6 +1162,17 @@ const generateFollowUpQuestion = (originalQuestion, originalAnswer, missingConce
  * @param {number} params.totalQuestions     Target count (max 15)
  * @returns {Array} Array of question objects ready for DB insertion
  */
+const INTRO_TEMPLATES = [
+  (role, skill) => `To start off, could you briefly introduce yourself and share how your experience with ${skill} aligns with this ${role} position?`,
+  (role, skill) => `Welcome! Walk me through your professional background and highlight a key project involving ${skill} that demonstrates your strengths as a ${role}.`,
+  (role, skill) => `Let's begin with a brief overview of your technical journey and what specifically excites you about taking on the responsibilities of a ${role}?`,
+  (role, skill) => `To kick things off, could you summarize your core technical strengths in ${skill} and how you apply them in day-to-day engineering as a ${role}?`,
+  (role, skill) => `Could you share an introduction covering your most impactful achievements using ${skill} and how they prepare you for this ${role} role?`,
+];
+
+/**
+ * Generate a complete, personalized set of interview questions.
+ */
 const generateInterviewQuestions = ({
   candidateProfile = {},
   jobProfile = {},
@@ -869,9 +1180,14 @@ const generateInterviewQuestions = ({
   interviewType = 'mixed',
   difficulty = 'medium',
   totalQuestions = 10,
+  targetRole,
+  avoidTexts = [],
+  weakAreas = [],
+  isPracticeAttempt = false,
 }) => {
   const max = Math.min(totalQuestions, 15);
   const questions = [];
+  const resolvedRole = targetRole || jobProfile.targetRole || 'Software Engineer';
 
   // Extract candidate data safely
   const candidateSkills = candidateProfile.skills || candidateProfile.extractedSkills || [];
@@ -879,103 +1195,195 @@ const generateInterviewQuestions = ({
   const candidateExperience = candidateProfile.experience || candidateProfile.workExperience || [];
 
   // Extract job data safely
-  const requiredSkills = jobProfile.requiredSkills || skillAnalysis.notIdentifiedRequiredSkills
+  const requiredSkills = jobProfile.requiredSkills || (skillAnalysis.notIdentifiedRequiredSkills
     ? [...(skillAnalysis.matchedRequiredSkills || []), ...(skillAnalysis.notIdentifiedRequiredSkills || [])]
-    : [];
+    : []);
   const responsibilities = jobProfile.responsibilities || [];
 
   // Extract skill gap data
-  const matchedSkills = skillAnalysis.matchedRequiredSkills || [];
-  const missingSkills = skillAnalysis.notIdentifiedRequiredSkills || [];
+  const matchedSkills = skillAnalysis.matchedSkills || skillAnalysis.matchedRequiredSkills || candidateSkills;
+  const missingSkills = skillAnalysis.missingSkills || skillAnalysis.notIdentifiedRequiredSkills || [];
 
-  // Determine allocation based on interview type
-  let allocation;
-  if (interviewType === 'technical') {
-    allocation = { technical: 0.6, project: 0.2, experience: 0.1, behavioral: 0.1, skillGap: 0.2 };
-  } else if (interviewType === 'behavioral') {
-    allocation = { technical: 0.2, project: 0.1, experience: 0.2, behavioral: 0.5, skillGap: 0.1 };
-  } else if (interviewType === 'hr') {
-    allocation = { technical: 0.1, project: 0.1, experience: 0.2, behavioral: 0.4, skillGap: 0.2 };
-  } else {
-    // mixed
-    allocation = { technical: 0.35, project: 0.2, experience: 0.1, behavioral: 0.2, skillGap: 0.15 };
-  }
+  // Build avoid list
+  const avoidList = Array.isArray(avoidTexts) ? avoidTexts : [];
 
-  // Generate each type
-  const techCount = Math.max(1, Math.round(max * allocation.technical));
-  const projCount = Math.max(0, Math.round(max * allocation.project));
-  const expCount = Math.max(0, Math.round(max * allocation.experience));
-  const behCount = Math.max(1, Math.round(max * allocation.behavioral));
-  const gapCount = Math.max(0, Math.round(max * allocation.skillGap));
-
-  // Technical — from matched skills
-  if (matchedSkills.length > 0) {
-    const techQuestions = generateTechnicalQuestions(matchedSkills, difficulty, Math.ceil(techCount / Math.max(matchedSkills.length, 1)));
-    questions.push(...techQuestions.slice(0, techCount));
-  }
-
-  // Project — from resume projects
-  if (projCount > 0 && candidateProjects.length > 0) {
-    const projQuestions = generateProjectQuestions(candidateProjects, candidateSkills, difficulty);
-    questions.push(...projQuestions.slice(0, projCount));
-  }
-
-  // Experience — from resume experience
-  if (expCount > 0) {
-    const expQuestions = generateExperienceQuestions(candidateExperience, difficulty);
-    questions.push(...expQuestions.slice(0, expCount));
-  }
-
-  // Behavioral
-  const behQuestions = generateBehavioralQuestions(behCount, difficulty);
-  questions.push(...behQuestions.slice(0, behCount));
-
-  // No coding implementation questions: Interview questions focus on technical reasoning,
-  // concepts, architecture, system design, and role-specific knowledge.
-  const extraTechNeeded = (interviewType === 'technical' || interviewType === 'mixed') && questions.length < max;
-  if (extraTechNeeded && matchedSkills.length > 0) {
-    const conceptualQuestions = generateTechnicalQuestions(
-      [...matchedSkills, ...candidateSkills],
-      difficulty,
-      Math.min(2, max - questions.length)
-    );
-    questions.push(...conceptualQuestions);
-  }
-
-  // Skill gap — from missing required skills
-  if (gapCount > 0 && missingSkills.length > 0) {
-    const gapQuestions = generateSkillGapQuestions(missingSkills, difficulty);
-    questions.push(...gapQuestions.slice(0, gapCount));
-  }
-
-  // Job-specific — fill remaining slots
-  const remaining = max - questions.length;
-  if (remaining > 0) {
-    const jobQs = generateJobSpecificQuestions(responsibilities, requiredSkills, difficulty);
-    questions.push(...jobQs.slice(0, remaining));
-  }
-
-  // Deduplicate and trim to max — for technical interviews, ensure technical questions come first
-  const deduped = [];
-  const texts = new Set();
-  const orderedList = interviewType === 'technical'
-    ? [...questions].sort((a, b) => {
-        if (a.category === 'technical' && b.category !== 'technical') return -1;
-        if (a.category !== 'technical' && b.category === 'technical') return 1;
-        return 0;
-      })
-    : shuffle(questions);
-
-  for (const q of orderedList) {
-    if (!texts.has(q.text)) {
-      texts.add(q.text);
-      deduped.push(q);
+  // 1. Rotating Introduction Question
+  const primarySkill = matchedSkills[0] || candidateSkills[0] || 'software development';
+  let introQuestion = null;
+  const introOffset = avoidList.length % INTRO_TEMPLATES.length;
+  for (let i = 0; i < INTRO_TEMPLATES.length; i++) {
+    const idx = (introOffset + i) % INTRO_TEMPLATES.length;
+    const text = INTRO_TEMPLATES[idx](resolvedRole, primarySkill);
+    if (!isDuplicateQuestion(text, avoidList).isDuplicate) {
+      introQuestion = {
+        text,
+        type: 'behavioral',
+        category: 'experience',
+        difficulty: 'easy',
+        targetSkill: primarySkill,
+        skill: primarySkill,
+        source: 'experience',
+        expectedConcepts: ['background', 'key projects', 'relevant skills', 'fit for role'],
+        expectedKeyPoints: ['background', 'key projects', 'relevant skills', 'fit for role'],
+        followUpAllowed: true,
+      };
+      break;
     }
+  }
+
+  // 2. Targeted Weak Areas (if reattempting or practicing)
+  if (weakAreas && weakAreas.length > 0) {
+    for (const weakSkill of weakAreas) {
+      const templates = findTemplatesForSkill(weakSkill);
+      for (const t of shuffle(templates)) {
+        if (!isDuplicateQuestion(t.text, avoidList).isDuplicate) {
+          questions.push({
+            text: t.text,
+            type: 'skill_gap',
+            category: 'technical',
+            difficulty: t.difficulty || difficulty,
+            targetSkill: weakSkill,
+            skill: weakSkill,
+            source: 'skill_gap',
+            expectedConcepts: t.expectedConcepts || [],
+            expectedKeyPoints: t.expectedConcepts || [],
+            followUpAllowed: true,
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. Skill gaps from JD
+  if (missingSkills.length > 0) {
+    const gapQuestions = generateSkillGapQuestions(missingSkills, difficulty);
+    for (const gq of gapQuestions) {
+      if (!isDuplicateQuestion(gq.text, avoidList).isDuplicate) {
+        questions.push(gq);
+      }
+    }
+  }
+
+  // 4. Role-specific questions
+  if (responsibilities.length > 0 || resolvedRole) {
+    const jobQs = generateJobSpecificQuestions(responsibilities, requiredSkills.length ? requiredSkills : [resolvedRole], difficulty);
+    for (const jq of jobQs) {
+      if (!isDuplicateQuestion(jq.text, avoidList).isDuplicate) {
+        questions.push(jq);
+      }
+    }
+  }
+
+  // 5. Technical questions from matched & candidate skills
+  const skillsForTech = matchedSkills.length > 0 ? matchedSkills : candidateSkills;
+  if (skillsForTech.length > 0) {
+    const techQuestions = generateTechnicalQuestions(skillsForTech, difficulty, 3);
+    for (const tq of techQuestions) {
+      if (!isDuplicateQuestion(tq.text, avoidList).isDuplicate) {
+        questions.push(tq);
+      }
+    }
+  }
+
+  // 6. Project questions from candidate projects
+  if (candidateProjects.length > 0) {
+    const projQuestions = generateProjectQuestions(candidateProjects, candidateSkills, difficulty);
+    for (const pq of projQuestions) {
+      if (!isDuplicateQuestion(pq.text, avoidList).isDuplicate) {
+        questions.push(pq);
+      }
+    }
+  }
+
+  // 7. Experience questions
+  if (candidateExperience.length > 0) {
+    const expQuestions = generateExperienceQuestions(candidateExperience, difficulty);
+    for (const eq of expQuestions) {
+      if (!isDuplicateQuestion(eq.text, avoidList).isDuplicate) {
+        questions.push(eq);
+      }
+    }
+  }
+
+  // 8. Behavioral questions
+  const behQuestions = generateBehavioralQuestions(3, difficulty);
+  for (const bq of behQuestions) {
+    if (!isDuplicateQuestion(bq.text, avoidList).isDuplicate) {
+      questions.push(bq);
+    }
+  }
+
+  // Deduplicate and assemble
+  const deduped = [];
+  const seenTexts = [];
+
+  if (introQuestion) {
+    deduped.push(introQuestion);
+    seenTexts.push(introQuestion.text);
+  }
+
+  for (const q of questions) {
     if (deduped.length >= max) break;
+    const dupCheck = isDuplicateQuestion(q.text, seenTexts, { skill: q.targetSkill || q.skill });
+    const avoidCheck = isDuplicateQuestion(q.text, avoidList, { skill: q.targetSkill || q.skill });
+    if (!dupCheck.isDuplicate && !avoidCheck.isDuplicate) {
+      deduped.push(q);
+      seenTexts.push(q.text);
+    }
+  }
+
+  // Fallback replenishment if needed to reach requested max
+  if (deduped.length < max) {
+    const fallbackPool = [
+      ...SYSTEM_DESIGN_TEMPLATES.map((t) => ({ ...t, type: 'technical', category: 'conceptual', source: 'job_description' })),
+      ...BEHAVIORAL_TEMPLATES.map((t) => ({ ...t, type: 'behavioral', category: 'behavioral', source: 'behavioral' })),
+      ...(STATIC_BANK.technical || []).map((t) => ({ ...t, type: 'technical', category: 'technical', source: 'static_bank' })),
+    ];
+
+    for (const fb of shuffle(fallbackPool)) {
+      if (deduped.length >= max) break;
+      const dupCheck = isDuplicateQuestion(fb.text, seenTexts, { skill: fb.targetSkill });
+      const avoidCheck = isDuplicateQuestion(fb.text, avoidList, { skill: fb.targetSkill });
+      if (!dupCheck.isDuplicate && !avoidCheck.isDuplicate) {
+        deduped.push({
+          text: fb.text,
+          type: fb.type || 'technical',
+          category: fb.category || 'technical',
+          difficulty: fb.difficulty || difficulty,
+          targetSkill: fb.targetSkill || resolvedRole,
+          skill: fb.skill || resolvedRole,
+          source: fb.source || 'static_bank',
+          expectedConcepts: fb.expectedConcepts || ['architecture', 'trade-offs', 'scalability'],
+          expectedKeyPoints: fb.expectedKeyPoints || fb.expectedConcepts || ['architecture', 'trade-offs', 'scalability'],
+          followUpAllowed: true,
+        });
+        seenTexts.push(fb.text);
+      }
+    }
+  }
+
+  // Last-resort synthesized unique question if still under max
+  let counter = 1;
+  while (deduped.length < max) {
+    const synthText = `In your work as a ${resolvedRole}, how would you approach end-to-end technical execution and quality assurance for feature ${counter}?`;
+    deduped.push({
+      text: synthText,
+      type: 'technical',
+      category: 'conceptual',
+      difficulty,
+      targetSkill: resolvedRole,
+      skill: resolvedRole,
+      source: 'job_description',
+      expectedConcepts: ['testing', 'architecture', 'CI/CD', 'monitoring'],
+      expectedKeyPoints: ['testing', 'architecture', 'CI/CD', 'monitoring'],
+      followUpAllowed: true,
+    });
+    counter++;
   }
 
   // Assign order
-  return deduped.map((q, i) => ({ ...q, order: i }));
+  return deduped.slice(0, max).map((q, i) => ({ ...q, order: i }));
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1165,36 +1573,7 @@ const PREREQUISITE_QUESTIONS = {
   },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// QUESTION DEDUPLICATION
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Check whether a candidate question is duplicate against a set of past questions.
- * Uses exact normalized match and token Jaccard similarity > 0.70.
- */
-const isDuplicateQuestion = (text, pastQuestionTexts = new Set()) => {
-  if (!text) return true;
-  const norm = text.toLowerCase().trim().replace(/[^\w\s]/g, '');
-  for (const past of pastQuestionTexts) {
-    if (!past) continue;
-    const pastNorm = past.toLowerCase().trim().replace(/[^\w\s]/g, '');
-    if (norm === pastNorm) return true;
-
-    // Token overlap similarity
-    const wordsA = new Set(norm.split(/\s+/).filter((w) => w.length > 2));
-    const wordsB = new Set(pastNorm.split(/\s+/).filter((w) => w.length > 2));
-    let intersection = 0;
-    for (const w of wordsA) {
-      if (wordsB.has(w)) intersection++;
-    }
-    const union = new Set([...wordsA, ...wordsB]).size;
-    if (union > 0 && intersection / union > 0.70) {
-      return true;
-    }
-  }
-  return false;
-};
+// (Deduplication engine is defined above with layered analysis)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DYNAMIC ADAPTIVE QUESTION GENERATOR (Next Question on the fly)
@@ -1257,7 +1636,7 @@ const generateNextPersonalizedQuestion = ({
   // 1. If Prerequisite question requested (due to very low performance)
   if (isPrerequisite) {
     const prereqTemplate = PREREQUISITE_QUESTIONS[topicKey] || PREREQUISITE_QUESTIONS.general;
-    if (!isDuplicateQuestion(prereqTemplate.text, pastQuestionTexts)) {
+    if (!isDuplicateQuestion(prereqTemplate.text, pastQuestionTexts).isDuplicate) {
       return {
         text: prereqTemplate.text,
         type: 'technical',
@@ -1283,7 +1662,7 @@ const generateNextPersonalizedQuestion = ({
     const candidates = templates.filter((t) => t.difficulty === difficulty || t.difficulty === 'medium');
 
     for (const t of shuffle(candidates.length ? candidates : templates)) {
-      if (!isDuplicateQuestion(t.text, pastQuestionTexts)) {
+      if (!isDuplicateQuestion(t.text, pastQuestionTexts).isDuplicate) {
         return {
           text: t.text,
           type: 'coding',
@@ -1309,7 +1688,7 @@ const generateNextPersonalizedQuestion = ({
   if (interviewType === 'system_design' || (interviewType === 'mixed' && order === 3)) {
     const candidates = SYSTEM_DESIGN_TEMPLATES.filter((t) => t.difficulty === difficulty || difficulty === 'medium');
     for (const t of shuffle(candidates.length ? candidates : SYSTEM_DESIGN_TEMPLATES)) {
-      if (!isDuplicateQuestion(t.text, pastQuestionTexts)) {
+      if (!isDuplicateQuestion(t.text, pastQuestionTexts).isDuplicate) {
         return {
           text: t.text,
           type: 'system_design',
@@ -1333,7 +1712,7 @@ const generateNextPersonalizedQuestion = ({
   if (interviewType === 'behavioral' || (interviewType === 'mixed' && order % 4 === 2)) {
     const candidates = BEHAVIORAL_TEMPLATES.filter((t) => t.difficulty === difficulty || difficulty === 'medium');
     for (const t of shuffle(candidates.length ? candidates : BEHAVIORAL_TEMPLATES)) {
-      if (!isDuplicateQuestion(t.text, pastQuestionTexts)) {
+      if (!isDuplicateQuestion(t.text, pastQuestionTexts).isDuplicate) {
         return {
           text: t.text,
           type: 'behavioral',
@@ -1356,7 +1735,7 @@ const generateNextPersonalizedQuestion = ({
   // 5. HR Interview Type
   if (interviewType === 'hr') {
     for (const t of shuffle(HR_TEMPLATES)) {
-      if (!isDuplicateQuestion(t.text, pastQuestionTexts)) {
+      if (!isDuplicateQuestion(t.text, pastQuestionTexts).isDuplicate) {
         return {
           text: t.text,
           type: 'hr',
@@ -1382,7 +1761,7 @@ const generateNextPersonalizedQuestion = ({
   const pool = candidates.length > 0 ? candidates : templates;
 
   for (const t of shuffle(pool)) {
-    if (!isDuplicateQuestion(t.text, pastQuestionTexts)) {
+    if (!isDuplicateQuestion(t.text, pastQuestionTexts).isDuplicate) {
       return {
         text: t.text,
         type: 'technical',
@@ -1420,7 +1799,7 @@ const generateNextPersonalizedQuestion = ({
   ];
 
   for (const v of shuffle(questionVariations)) {
-    if (!isDuplicateQuestion(v.text, pastQuestionTexts)) {
+    if (!isDuplicateQuestion(v.text, pastQuestionTexts).isDuplicate) {
       return {
         text: v.text,
         type: 'technical',
@@ -1468,7 +1847,14 @@ module.exports = {
   generateJobSpecificQuestions,
   generateFollowUpQuestion,
   generateNextPersonalizedQuestion,
+  fisherYatesShuffle,
+  normalizeQuestionText,
   isDuplicateQuestion,
+  calculateTokenJaccard,
+  detectQuestionIntent,
+  SKILL_QUESTION_TEMPLATES,
+  NEAR_DUPLICATE_THRESHOLD,
+  STRUCTURAL_DUPLICATE_THRESHOLD,
   getQuestionsForInterview,
   STATIC_BANK,
   CODING_TEMPLATES,

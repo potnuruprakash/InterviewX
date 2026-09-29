@@ -260,12 +260,17 @@ const evaluateAudio = async (audioFilePath) => {
     const rawResult = await aiService.analyzeAudio(audioFilePath);
     const speakingDuration = rawResult.speakingDuration || 0;
     const pauseDuration = rawResult.pauseDuration || 0;
-    const speechRate = rawResult.speechRate || (speakingDuration > 0 ? Math.round(130 + Math.random() * 20) : null);
+    const speechRate = rawResult.speechRate ?? (rawResult.speakingPace ?? null);
     
     // Observable metrics
-    const pauseFrequency = pauseDuration > 0 ? Number((pauseDuration / Math.max(1, speakingDuration)).toFixed(2)) : 0.15;
-    const fillerWords = ['um', 'uh', 'like'];
-    const fillerWordsCount = Math.floor(Math.random() * 3);
+    const pauseFrequency = pauseDuration > 0 && speakingDuration > 0
+      ? Number((pauseDuration / speakingDuration).toFixed(2))
+      : (rawResult.pauseFrequency ?? null);
+
+    const fillerWords = Array.isArray(rawResult.fillerWords) ? rawResult.fillerWords : [];
+    const fillerWordsCount = typeof rawResult.fillerWordsCount === 'number'
+      ? rawResult.fillerWordsCount
+      : fillerWords.length;
 
     let feedback = 'Speech delivered at an even pace with clear articulation.';
     if (speechRate && speechRate < 110) {
@@ -283,20 +288,24 @@ const evaluateAudio = async (audioFilePath) => {
       pauseFrequency,
       fillerWordsCount,
       fillerWords,
-      speechContinuity: pauseFrequency > 0.35 ? 'frequent_pauses' : 'steady_continuity',
-      feedback,
+      speechContinuity: pauseFrequency !== null ? (pauseFrequency > 0.35 ? 'frequent_pauses' : 'steady_continuity') : null,
+      feedback: rawResult.feedback || feedback,
       audioFeaturesAvailable: rawResult.audioFeaturesAvailable !== false,
       modelStatus: rawResult.modelStatus || 'processed',
     };
   } catch (err) {
     return {
       audioFeaturesAvailable: false,
-      modelStatus: 'audio_processing_fallback',
-      speakingPace: 135,
-      pauseFrequency: 0.18,
-      fillerWordsCount: 1,
-      speechContinuity: 'steady_continuity',
-      feedback: 'Observable speaking pace maintained steady response continuity.',
+      modelStatus: 'unavailable',
+      speakingDuration: 0,
+      pauseDuration: 0,
+      speakingPace: null,
+      speechRate: null,
+      pauseFrequency: null,
+      fillerWordsCount: 0,
+      fillerWords: [],
+      speechContinuity: null,
+      feedback: 'Audio analysis unavailable for this response.',
     };
   }
 };
@@ -319,15 +328,15 @@ const evaluateVideo = async (videoFilePath) => {
 
   try {
     const rawResult = await aiService.analyzeVideo(videoFilePath);
-    const faceRatio = rawResult.faceVisibilityRatio ?? 0.92;
-    const personRatio = rawResult.personDetectionRatio ?? 0.96;
+    const faceRatio = rawResult.faceVisibilityRatio ?? null;
+    const personRatio = rawResult.personDetectionRatio ?? null;
 
-    const gazeAttentionRatio = Number(Math.min(1, Math.max(0.6, faceRatio * 0.95)).toFixed(2));
-    const postureStability = personRatio > 0.85 ? 'stable_posture' : 'frequent_repositioning';
-    const cameraEngagement = gazeAttentionRatio > 0.8 ? 'direct_camera_engagement' : 'periodic_gaze_shift';
+    const gazeAttentionRatio = faceRatio !== null ? Number(Math.min(1, Math.max(0, faceRatio * 0.95)).toFixed(2)) : null;
+    const postureStability = personRatio !== null ? (personRatio > 0.85 ? 'stable_posture' : 'frequent_repositioning') : null;
+    const cameraEngagement = gazeAttentionRatio !== null ? (gazeAttentionRatio > 0.8 ? 'direct_camera_engagement' : 'periodic_gaze_shift') : null;
 
     let feedback = 'Candidate maintained consistent camera engagement and stable posture throughout the response.';
-    if (gazeAttentionRatio < 0.75) {
+    if (gazeAttentionRatio !== null && gazeAttentionRatio < 0.75) {
       feedback = 'Periodic gaze shifts were observed during technical explanation, typical of recalling architectural details.';
     }
 
@@ -336,17 +345,19 @@ const evaluateVideo = async (videoFilePath) => {
       gazeAttentionRatio,
       postureStability,
       cameraEngagement,
-      feedback,
+      feedback: rawResult.feedback || feedback,
       modelStatus: rawResult.modelStatus || 'processed',
     };
   } catch (err) {
     return {
-      framesProcessed: 30,
-      modelStatus: 'video_processing_fallback',
-      gazeAttentionRatio: 0.88,
-      postureStability: 'stable_posture',
-      cameraEngagement: 'direct_camera_engagement',
-      feedback: 'Posture remained stable with direct camera engagement observed.',
+      framesProcessed: 0,
+      modelStatus: 'unavailable',
+      gazeAttentionRatio: null,
+      postureStability: null,
+      cameraEngagement: null,
+      faceVisibilityRatio: null,
+      personDetectionRatio: null,
+      feedback: 'Video analysis unavailable for this response.',
     };
   }
 };

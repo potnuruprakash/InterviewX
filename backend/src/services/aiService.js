@@ -20,7 +20,11 @@ const path = require('path');
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 const AI_SERVICE_TIMEOUT = parseInt(process.env.AI_SERVICE_TIMEOUT || '60000', 10);
-const AI_SERVICE_SECRET_KEY = process.env.AI_SERVICE_SECRET_KEY || 'ix_sec_key_e37b901a8f4c2e';
+const AI_SERVICE_SECRET_KEY = process.env.AI_SERVICE_SECRET_KEY;
+
+if (!AI_SERVICE_SECRET_KEY && process.env.NODE_ENV === 'production') {
+  console.error('[AI Service] CRITICAL: AI_SERVICE_SECRET_KEY is not defined in environment variables.');
+}
 
 const aiClient = axios.create({
   baseURL: AI_SERVICE_URL,
