@@ -227,8 +227,25 @@
 }
 
 /* ============================================================
-   2. THREE-COLUMN MAIN LAYOUT
+   COCKPIT MAIN INTERVIEW AREA
    ============================================================ */
+.interview-cockpit-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 24px 100px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.interview-content-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .interview-main-layout {
   display: grid;
   grid-template-columns: 1fr 1.15fr 340px;

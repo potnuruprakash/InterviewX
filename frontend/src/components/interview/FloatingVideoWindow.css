@@ -1,0 +1,333 @@
+/* ============================================================
+   FLOATING VIDEO WINDOW COMPONENT STYLES
+   ============================================================ */
+
+.floating-video-window {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  will-change: transform;
+}
+
+.floating-video-window:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(99, 102, 241, 0.2);
+}
+
+.floating-video-window.is-dragging {
+  cursor: grabbing;
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.65), 0 0 0 2px #6366f1;
+  opacity: 0.95;
+  transition: none;
+}
+
+/* ── Window Header ────────────────────────────────────────────── */
+.fvw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.88);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  user-select: none;
+}
+
+.fvw-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fvw-drag-handle {
+  color: #64748b;
+  display: flex;
+  align-items: center;
+}
+
+.fvw-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+  letter-spacing: 0.02em;
+}
+
+.fvw-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fvw-control-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 3px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.fvw-control-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f1f5f9;
+}
+
+/* ── 16:9 Viewport ────────────────────────────────────────────── */
+.fvw-viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #020617;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fvw-viewport video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* mirror preview */
+}
+
+/* Camera-Off Placeholder */
+.fvw-placeholder-avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(145deg, #090d16 0%, #1e1b4b 100%);
+}
+
+.avatar-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1.5px solid rgba(99, 102, 241, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c7d2fe;
+}
+
+.avatar-text {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.avatar-label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Permission Notice */
+.fvw-permission-notice {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  right: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.9);
+  color: #fff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1.2;
+}
+
+/* ── Footer Controls ─────────────────────────────────────────── */
+.fvw-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fvw-device-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fvw-media-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  transition: all 0.15s ease;
+}
+
+.fvw-media-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.fvw-media-btn.is-active {
+  color: #818cf8;
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.fvw-media-btn.is-muted,
+.fvw-media-btn.is-off {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.fvw-stream-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.fvw-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.dot-live {
+  background-color: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.dot-recording {
+  background-color: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
+  animation: pulseRec 1.5s infinite;
+}
+
+.dot-standby {
+  background-color: #64748b;
+}
+
+@keyframes pulseRec {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.9); }
+}
+
+/* ── Minimized Floating Bubble ────────────────────────────────── */
+.floating-video-bubble {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #0f172a;
+  border: 2px solid #6366f1;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  will-change: transform;
+  transition: transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.floating-video-bubble:hover {
+  transform: scale(1.08);
+  box-shadow: 0 12px 28px rgba(99, 102, 241, 0.35);
+}
+
+.floating-video-bubble.is-dragging {
+  cursor: grabbing;
+  transform: scale(1.05);
+}
+
+.bubble-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bubble-cam-icon.live {
+  color: #10b981;
+}
+
+.bubble-initials {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.bubble-status-dots {
+  position: absolute;
+  bottom: 2px;
+  display: flex;
+  gap: 3px;
+}
+
+.status-pip {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+
+.status-pip.active {
+  background: #10b981;
+}
+
+.status-pip.muted,
+.status-pip.off {
+  background: #ef4444;
+}
+
+/* ── Responsive / Mobile ──────────────────────────────────────── */
+@media (max-width: 768px) {
+  .floating-video-window {
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 320px;
+    margin: 12px auto;
+    border-radius: 10px;
+  }
+
+  .floating-video-bubble {
+    position: fixed;
+    right: 16px;
+    bottom: 80px;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+  }
+}

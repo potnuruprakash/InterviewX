@@ -1,0 +1,93 @@
+/* ============================================================
+   INTERVIEW TIMER COMPONENT STYLES
+   ============================================================ */
+
+.interview-timer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #e2e8f0;
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+.timer-badge-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+
+.timer-badge-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.timer-badge-digits {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-badge-remaining {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  text-transform: lowercase;
+}
+
+/* Normal State */
+.timer-status-normal {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Warning State (<= 5 minutes): Amber urgency without flashing */
+.timer-status-warning {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fcd34d;
+}
+.timer-status-warning .timer-badge-icon {
+  color: #fbbf24;
+}
+.timer-status-warning .timer-badge-remaining {
+  color: #fde68a;
+}
+
+/* Urgent State (<= 1 minute): Red strong warning, subtle glow */
+.timer-status-urgent {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.2);
+}
+.timer-status-urgent .timer-badge-icon {
+  color: #f87171;
+}
+.timer-status-urgent .timer-badge-remaining {
+  color: #fca5a5;
+}
+
+.timer-badge-urgent-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+/* Expired State */
+.timer-status-expired {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #f87171;
+  font-weight: 800;
+}
