@@ -1046,14 +1046,20 @@ const completeInterview = async (req, res) => {
 
 const getResults = async (req, res) => {
   try {
-    const interview = await Interview.findOne({ _id: req.params.id, clerkUserId: req.clerkUserId });
+    const interview = await Interview.findOne({ _id: req.params.id, clerkUserId: req.clerkUserId }).lean();
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
 
-    const allQuestions = await Question.find({ interviewId: interview._id }).sort({ order: 1 });
-    const responses = await Response.find({
-      interviewId: interview._id,
-      clerkUserId: req.clerkUserId,
-    });
+    // Parallel fetch questions, responses, and skill analysis with .lean() for maximum query speed
+    const [allQuestions, responses, skillAnalysis] = await Promise.all([
+      Question.find({ interviewId: interview._id }).sort({ order: 1 }).lean(),
+      Response.find({
+        interviewId: interview._id,
+        clerkUserId: req.clerkUserId,
+      }).lean(),
+      interview.skillAnalysisId
+        ? SkillAnalysis.findById(interview.skillAnalysisId).lean()
+        : null,
+    ]);
 
     const responseByQuestionId = new Map();
     for (const r of responses) {
@@ -1064,14 +1070,66 @@ const getResults = async (req, res) => {
     const skippedCount = allQuestions.filter((q) => q.status === 'skipped').length;
     const totalCount = allQuestions.length || interview.totalQuestions;
 
-    // Filter responses that have valid evaluated scores for aggregation
-    const scoredResponses = responses.filter(
-      (r) => (r.textEvaluation?.textScore !== null && r.textEvaluation?.textScore !== undefined) ||
-             (r.evaluation?.score !== null && r.evaluation?.score !== undefined)
-    );
+    // Check if evaluation was already calculated & persisted on the interview
+    let finalEval = interview.finalEvaluation;
+    const hasStoredEvaluation =
+      finalEval &&
+      finalEval.overallScore !== null &&
+      finalEval.overallScore !== undefined;
 
-    const aggregated = aggregateInterviewScore(scoredResponses);
-    const fusion = aggregateInterviewFusion(scoredResponses);
+    let fusion;
+    let aggregated;
+
+    if (hasStoredEvaluation) {
+      fusion = {
+        overallScore: finalEval.overallScore,
+        technicalScore: finalEval.technicalScore,
+        audioScore: finalEval.audioScore,
+        videoScore: finalEval.videoScore,
+        modalitiesUsed: finalEval.modalitiesUsed || ['text'],
+      };
+      aggregated = {
+        isDevelopmentEvaluation: finalEval.isDevelopmentEvaluation,
+        sbertEvaluated: finalEval.sbertEvaluated || 0,
+        notice: finalEval.notice,
+      };
+    } else {
+      // Filter responses that have valid evaluated scores for aggregation
+      const scoredResponses = responses.filter(
+        (r) => (r.textEvaluation?.textScore !== null && r.textEvaluation?.textScore !== undefined) ||
+               (r.evaluation?.score !== null && r.evaluation?.score !== undefined)
+      );
+
+      aggregated = aggregateInterviewScore(scoredResponses);
+      fusion = aggregateInterviewFusion(scoredResponses);
+
+      finalEval = {
+        overallScore: fusion.overallScore,
+        technicalScore: fusion.technicalScore,
+        audioScore: fusion.audioScore,
+        videoScore: fusion.videoScore,
+        modalitiesUsed: fusion.modalitiesUsed,
+        skillScores: interview.interviewState?.skillPerformance || {},
+        strongAreas: interview.interviewState?.strongAreas || [],
+        weakAreas: interview.interviewState?.weakAreas || [],
+        skillGaps: interview.skillAnalysis?.missingSkills || [],
+        questionsAnswered: answeredCount,
+        questionsSkipped: skippedCount,
+        totalQuestions: totalCount,
+        completionReason: interview.completionReason,
+        isDevelopmentEvaluation: aggregated.isDevelopmentEvaluation,
+        sbertEvaluated: aggregated.sbertEvaluated || 0,
+        notice: aggregated.notice,
+      };
+
+      // Persist finalEvaluation cache asynchronously if interview is completed so future views don't re-aggregate
+      if (interview.status === 'completed') {
+        Interview.updateOne(
+          { _id: interview._id },
+          { $set: { finalEvaluation: finalEval } }
+        ).catch((err) => console.warn('[Interview] Failed to cache finalEvaluation:', err.message));
+      }
+    }
 
     // Build per-question breakdown for all questions (including skipped)
     const questionBreakdown = allQuestions.map((q, i) => {
@@ -1109,9 +1167,6 @@ const getResults = async (req, res) => {
     // Job readiness
     let jobReadiness = null;
     try {
-      const skillAnalysis = interview.skillAnalysisId
-        ? await SkillAnalysis.findById(interview.skillAnalysisId)
-        : null;
       jobReadiness = calculateJobReadiness({
         skillCoveragePercentage: skillAnalysis?.skillCoveragePercentage || 0,
         overallScore: fusion.overallScore || 0,
@@ -1119,26 +1174,6 @@ const getResults = async (req, res) => {
         totalQuestions: totalCount,
       });
     } catch (e) { /* not critical */ }
-
-    // Build final evaluation
-    const finalEval = {
-      overallScore: fusion.overallScore,
-      technicalScore: fusion.technicalScore,
-      audioScore: fusion.audioScore,
-      videoScore: fusion.videoScore,
-      modalitiesUsed: fusion.modalitiesUsed,
-      skillScores: skillPerformance,
-      strongAreas: interview.interviewState?.strongAreas || [],
-      weakAreas: interview.interviewState?.weakAreas || [],
-      skillGaps: skillAnalysisData.missingSkills || [],
-      questionsAnswered: answeredCount,
-      questionsSkipped: skippedCount,
-      totalQuestions: totalCount,
-      completionReason: interview.completionReason,
-      isDevelopmentEvaluation: aggregated.isDevelopmentEvaluation,
-      sbertEvaluated: aggregated.sbertEvaluated || 0,
-      notice: aggregated.notice,
-    };
 
     return sendSuccess(res, {
       interview: {
@@ -1172,11 +1207,11 @@ const getResults = async (req, res) => {
 
 const getRoadmap = async (req, res) => {
   try {
-    const interview = await Interview.findOne({ _id: req.params.id, clerkUserId: req.clerkUserId });
+    const interview = await Interview.findOne({ _id: req.params.id, clerkUserId: req.clerkUserId }).lean();
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
 
     const skillAnalysis = interview.skillAnalysisId
-      ? await SkillAnalysis.findById(interview.skillAnalysisId)
+      ? await SkillAnalysis.findById(interview.skillAnalysisId).lean()
       : null;
 
     const skillPerformance = interview.interviewState?.skillPerformance || {};

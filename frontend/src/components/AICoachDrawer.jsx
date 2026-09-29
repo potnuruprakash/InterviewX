@@ -15,21 +15,23 @@ export default function AICoachDrawer({ activeInterviewId = null, currentQuestio
   const messagesEndRef = useRef(null)
   const textareaRef = useRef(null)
 
-  // Load conversation state on open or mount
+  // Load conversation state only when drawer is explicitly opened by the user
+  const stateLoadedRef = useRef(false)
   useEffect(() => {
-    if (!isSignedIn || !isLoaded) return
+    if (!isSignedIn || !isLoaded || !isOpen || stateLoadedRef.current) return
     const fetchState = async () => {
       try {
         const res = await authApi.get('/api/coach/state')
         if (res.data?.conversation?.messages) {
           setMessages(res.data.conversation.messages)
+          stateLoadedRef.current = true
         }
       } catch (err) {
         console.warn('Could not load coach state:', err.message)
       }
     }
     fetchState()
-  }, [isSignedIn, isLoaded])
+  }, [isSignedIn, isLoaded, isOpen])
 
   // Scroll to bottom on new message
   useEffect(() => {

@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { useAuth } from '@clerk/clerk-react'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '')
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const hasClerkKey = Boolean(PUBLISHABLE_KEY && PUBLISHABLE_KEY.startsWith('pk_'))
 
@@ -18,6 +18,24 @@ export const authApi = axios.create({
   timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
 })
+
+// In-flight GET promise deduplication to prevent duplicate concurrent network calls
+const inFlightGetPromises = new Map()
+const originalAuthGet = authApi.get.bind(authApi)
+authApi.get = (url, config = {}) => {
+  if (!config.params && !config.responseType) {
+    const key = `${url}`
+    if (inFlightGetPromises.has(key)) {
+      return inFlightGetPromises.get(key)
+    }
+    const promise = originalAuthGet(url, config).finally(() => {
+      inFlightGetPromises.delete(key)
+    })
+    inFlightGetPromises.set(key, promise)
+    return promise
+  }
+  return originalAuthGet(url, config)
+}
 
 // Global active token and user ID getters (set by useAuthApi)
 let currentTokenGetter = null
