@@ -22,6 +22,7 @@ const coachRoutes = require('./routes/coach');
 const aiCoachRoutes = require('./routes/aiCoach');
 const chatRoutes = require('./routes/chat');
 const fileRoutes = require('./routes/files');
+const practiceRoutes = require('./routes/practice');
 
 const app = express();
 
@@ -181,6 +182,7 @@ app.use('/api/coach', coachRoutes);
 app.use('/api/ai/coach', aiCoachRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/practice', practiceRoutes);
 
 // 404 handler
 

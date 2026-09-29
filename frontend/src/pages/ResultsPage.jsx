@@ -11,6 +11,7 @@ import './ResultsPage.css'
 
 // Lazy load heavy modal to keep initial bundle and render lean
 const TrainMeModal = lazy(() => import('../components/TrainMeModal'))
+const PracticeModal = lazy(() => import('../components/PracticeModal'))
 
 // Session-level memory cache for instantaneous back-navigation & zero-delay re-renders
 const resultsCache = new Map()
@@ -381,10 +382,18 @@ export default function ResultsPage() {
   const [expandedQuestions, setExpandedQuestions] = useState({})
   const [questionFilter, setQuestionFilter] = useState('all') // 'all', 'strong', 'needs_work', 'technical', 'behavioral', 'coding'
 
-  // Train Me Interactive Modal
+  // Train Me Interactive Modal & Practice / Mock Test Modal
   const [showTrainModal, setShowTrainModal] = useState(false)
   const [activeTrainingSession, setActiveTrainingSession] = useState(null)
   const [trainingLoading, setTrainingLoading] = useState(false)
+
+  // Dedicated Topic Practice & Combined Weak-Area Mock Test
+  const [showPracticeModal, setShowPracticeModal] = useState(false)
+  const [practiceMode, setPracticeMode] = useState('topic_practice')
+  const [practiceSkill, setPracticeSkill] = useState('')
+  const [practiceTopics, setPracticeTopics] = useState([])
+  const [reInterviewLoading, setReInterviewLoading] = useState(false)
+
   const activeFetchIdRef = useRef(null)
 
   // Auth Timeout Guard: prevents infinite spinner if Clerk is blocked or slow
@@ -410,19 +419,44 @@ export default function ResultsPage() {
     setRetryTrigger((prev) => prev + 1)
   }
 
-  const handleTrainMe = async () => {
-    setTrainingLoading(true)
+  // Topic-specific practice test triggered from each skill card
+  const handlePracticeNow = (skillName, skillTopics = []) => {
+    console.log('[ResultsPage] Opening topic practice for:', skillName, skillTopics)
+    setPracticeMode('topic_practice')
+    setPracticeSkill(skillName || 'Technical Skill')
+    setPracticeTopics(Array.isArray(skillTopics) ? skillTopics : [])
+    setShowPracticeModal(true)
+  }
+
+  // Combined weak-area mock test triggered from "Train Me (Targeted Practice)"
+  const handleTrainMe = () => {
+    console.log('[ResultsPage] Opening combined weak-area targeted mock test')
+    const areas = targetedPractice?.map((p) => p.skill).filter(Boolean) || []
+    setPracticeMode('targeted_mock')
+    setPracticeSkill(areas.length > 0 ? areas.join(', ') : 'Targeted Weak Areas')
+    setPracticeTopics(areas)
+    setShowPracticeModal(true)
+  }
+
+  // Re-Interview: Creates a fresh interview attempt preserving profile and JD
+  const handleReInterview = async () => {
+    if (reInterviewLoading) return
+    setReInterviewLoading(true)
     try {
-      const res = await authApi.post(`/api/interviews/${id}/train`)
-      if (res.data?.trainingSession) {
-        setActiveTrainingSession(res.data.trainingSession)
-        setShowTrainModal(true)
+      console.log('[ResultsPage] Initiating re-interview for session:', id)
+      const res = await authApi.post(`/api/interviews/${id}/re-interview`)
+      const newInterviewId = res.data?.data?.interviewId || res.data?.interviewId
+      if (newInterviewId) {
+        navigate(`/interview/${newInterviewId}`)
+      } else {
+        navigate('/create-interview')
       }
     } catch (err) {
-      console.error('Error generating training:', err)
-      alert('Unable to generate targeted training session at this time. Please try again.')
+      console.error('[ResultsPage] Error initiating re-interview:', err)
+      alert(err.response?.data?.message || 'Unable to create re-interview session. Navigating to interview setup.')
+      navigate('/create-interview')
     } finally {
-      setTrainingLoading(false)
+      setReInterviewLoading(false)
     }
   }
 
@@ -1046,10 +1080,15 @@ export default function ResultsPage() {
               <Sparkles size={13} />
               <span>{trainingLoading ? 'Preparing...' : 'Train Me'}</span>
             </button>
-            <Link to="/create-interview" className="btn-nav-action action-new">
+            <button
+              onClick={handleReInterview}
+              disabled={reInterviewLoading}
+              className="btn-nav-action action-new"
+              title="Start a fresh interview attempt"
+            >
               <Zap size={13} />
-              <span>New Interview</span>
-            </Link>
+              <span>{reInterviewLoading ? 'Setting up...' : 'Re-Interview'}</span>
+            </button>
           </div>
         </header>
 
@@ -1581,8 +1620,7 @@ export default function ResultsPage() {
 
                 <div className="practice-card-footer">
                   <button
-                    onClick={handleTrainMe}
-                    disabled={trainingLoading}
+                    onClick={() => handlePracticeNow(rec.skill, rec.topics)}
                     className="btn-practice-cta"
                   >
                     <Play size={12} /> Practice Now
@@ -1599,7 +1637,6 @@ export default function ResultsPage() {
         <footer className="results-actions animate-fade-in" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px' }}>
           <button
             onClick={handleTrainMe}
-            disabled={trainingLoading}
             className="btn btn-primary btn-lg"
             style={{
               background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
@@ -1610,11 +1647,16 @@ export default function ResultsPage() {
             }}
           >
             <Sparkles size={18} />
-            {trainingLoading ? 'Building Masterclass...' : 'Train Me (Targeted Practice)'}
+            Train Me (Targeted Practice)
           </button>
-          <Link to="/create-interview" className="btn btn-secondary btn-lg">
-            <Zap size={16} /> Start New Interview
-          </Link>
+          <button
+            onClick={handleReInterview}
+            disabled={reInterviewLoading}
+            className="btn btn-secondary btn-lg"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+          >
+            <Zap size={16} /> {reInterviewLoading ? 'Creating Session...' : 'Re-Interview'}
+          </button>
           <Link to="/progress" className="btn btn-secondary">
             <TrendingUp size={16} /> View Progress
           </Link>
@@ -1622,6 +1664,20 @@ export default function ResultsPage() {
             <Home size={16} /> Dashboard
           </Link>
         </footer>
+
+        {/* Lazy-loaded Topic Practice & Targeted Mock MCQ Modal */}
+        {showPracticeModal && (
+          <Suspense fallback={<div className="modal-loading-fallback"><div className="spinner" /></div>}>
+            <PracticeModal
+              mode={practiceMode}
+              skill={practiceSkill}
+              topics={practiceTopics}
+              interviewId={id}
+              authApi={authApi}
+              onClose={() => setShowPracticeModal(false)}
+            />
+          </Suspense>
+        )}
 
         {/* Lazy-loaded Interactive Train Me Modal */}
         {showTrainModal && activeTrainingSession && (

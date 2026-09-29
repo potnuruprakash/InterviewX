@@ -17,6 +17,7 @@ const {
   getRoadmap,
   trainInterview,
   getTrainingSession,
+  reInterview,
 } = require('../controllers/interviewController');
 
 router.use(requireAuth);
@@ -42,10 +43,11 @@ router.post('/:id/skip', skipQuestion);
 // Interview lifecycle
 router.post('/:id/complete', completeInterview);
 
-// Results + Roadmap + Train Me (Targeted Learning)
+// Results + Roadmap + Train Me (Targeted Learning) + Re-Interview
 router.get('/:id/results', getResults);
 router.get('/:id/roadmap', getRoadmap);
 router.post('/:id/train', trainInterview);
 router.get('/training/:id', getTrainingSession);
+router.post('/:id/re-interview', reInterview);
 
 module.exports = router;

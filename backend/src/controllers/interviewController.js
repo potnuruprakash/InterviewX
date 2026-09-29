@@ -1463,6 +1463,166 @@ const getTrainingSession = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/interviews/:id/re-interview
+ *
+ * Creates a brand new Interview attempt preserving candidate context,
+ * generating fresh questions while avoiding questions from the previous attempt.
+ */
+const reInterview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const clerkUserId = req.clerkUserId;
+
+    const prevInterview = await Interview.findOne({ _id: id, clerkUserId });
+    if (!prevInterview) {
+      return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Previous interview not found or unauthorized.');
+    }
+
+    // Retrieve previous questions for deduplication
+    const prevQuestions = await Question.find({ interviewId: prevInterview._id }).select('text');
+    const prevQuestionTexts = new Set(prevQuestions.map((q) => q.text.toLowerCase().trim()));
+
+    // Load resume & JD if available to preserve candidate context
+    let resume = null;
+    let job = null;
+    let skillAnalysis = null;
+
+    if (prevInterview.resumeId) {
+      resume = await Resume.findOne({ _id: prevInterview.resumeId, clerkUserId });
+    }
+    if (prevInterview.jobDescriptionId) {
+      job = await JobDescription.findOne({ _id: prevInterview.jobDescriptionId, clerkUserId });
+    }
+    if (prevInterview.skillAnalysisId) {
+      skillAnalysis = await SkillAnalysis.findOne({ _id: prevInterview.skillAnalysisId, clerkUserId });
+    }
+
+    const candidateProfile = resume?.analysis || resume?.parsedData || {};
+    const jobProfile = job?.analysis || job?.parsedData || {};
+
+    const totalQuestions = prevInterview.totalQuestions || 10;
+    const difficulty = prevInterview.difficulty || 'medium';
+    const interviewType = prevInterview.interviewType || 'mixed';
+    const durationMinutes = prevInterview.durationMinutes || 30;
+
+    // Create the new interview attempt
+    const newInterview = await Interview.create({
+      clerkUserId,
+      resumeId: prevInterview.resumeId || null,
+      jobDescriptionId: prevInterview.jobDescriptionId || null,
+      skillAnalysisId: prevInterview.skillAnalysisId || null,
+      targetRole: prevInterview.targetRole || job?.targetRole || 'Software Engineer',
+      interviewType,
+      difficulty,
+      totalQuestions: Math.min(totalQuestions, 15),
+      durationMinutes,
+      status: 'created',
+      skillAnalysis: prevInterview.skillAnalysis || {},
+    });
+
+    // Generate personalized questions
+    let questionData = [];
+    const hasPersonalizationData = (
+      candidateProfile.skills?.length > 0 ||
+      candidateProfile.extractedSkills?.length > 0 ||
+      skillAnalysis !== null
+    );
+
+    if (hasPersonalizationData) {
+      questionData = generateInterviewQuestions({
+        candidateProfile,
+        jobProfile,
+        skillAnalysis: skillAnalysis || {},
+        interviewType,
+        difficulty,
+        totalQuestions: newInterview.totalQuestions * 2, // oversample to allow deduplication against prior interview
+      });
+    }
+
+    // Deduplicate against previous interview questions
+    let filteredQuestions = questionData.filter((q) => !prevQuestionTexts.has(q.text.toLowerCase().trim()));
+
+    // If we need more questions, pull from bank and filter out previously asked questions
+    if (filteredQuestions.length < newInterview.totalQuestions) {
+      const { getQuestionsForInterview } = require('../services/questionService');
+      const fallback = getQuestionsForInterview(interviewType, difficulty, newInterview.totalQuestions * 3);
+      for (const q of fallback) {
+        if (!prevQuestionTexts.has(q.text.toLowerCase().trim())) {
+          filteredQuestions.push({
+            ...q,
+            type: q.category || 'technical',
+            source: 'static_bank',
+            targetSkill: q.skill,
+            expectedConcepts: q.expectedKeyPoints || [],
+            followUpAllowed: true,
+            contextNote: null,
+          });
+        }
+        if (filteredQuestions.length >= newInterview.totalQuestions) break;
+      }
+    }
+
+    // If still insufficient (e.g. extremely small static bank), allow any remaining unique questions
+    if (filteredQuestions.length < newInterview.totalQuestions) {
+      for (const q of questionData) {
+        if (!filteredQuestions.some((fq) => fq.text === q.text)) {
+          filteredQuestions.push(q);
+        }
+        if (filteredQuestions.length >= newInterview.totalQuestions) break;
+      }
+    }
+
+    // Ensure within-set uniqueness and trim
+    const seen = new Set();
+    const unique = [];
+    for (const q of filteredQuestions) {
+      if (!seen.has(q.text)) {
+        seen.add(q.text);
+        unique.push(q);
+      }
+      if (unique.length >= newInterview.totalQuestions) break;
+    }
+
+    await Question.insertMany(
+      unique.map((q, index) => ({
+        interviewId: newInterview._id,
+        clerkUserId,
+        text: q.text,
+        type: q.type || q.category || 'technical',
+        category: q.category || 'technical',
+        difficulty: q.difficulty || difficulty,
+        targetSkill: q.targetSkill || q.skill || null,
+        skill: q.skill || q.targetSkill || 'general',
+        source: q.source || 'static_bank',
+        sourceProject: q.sourceProject || null,
+        expectedConcepts: q.expectedConcepts || q.expectedKeyPoints || [],
+        expectedKeyPoints: q.expectedKeyPoints || q.expectedConcepts || [],
+        followUpAllowed: q.followUpAllowed !== false,
+        contextNote: q.contextNote || null,
+        starterCode: q.starterCode || null,
+        language: q.language || 'javascript',
+        order: index + 1,
+        status: 'pending',
+      }))
+    );
+
+    newInterview.totalQuestions = unique.length;
+    await newInterview.save();
+
+    console.log(`[InterviewController] Re-Interview created: new interview "${newInterview._id}" (from previous "${prevInterview._id}") with ${unique.length} fresh questions.`);
+
+    return sendSuccess(res, {
+      message: 'New interview session created successfully.',
+      interviewId: newInterview._id,
+      interview: newInterview,
+    }, 201);
+  } catch (err) {
+    console.error('[InterviewController] Re-interview error:', err);
+    return sendError(res, 500, 'RE_INTERVIEW_FAILED', 'Could not create new interview session.', err.message);
+  }
+};
+
 module.exports = {
   createInterview,
   getUserInterviews,
@@ -1478,5 +1638,6 @@ module.exports = {
   getRoadmap,
   trainInterview,
   getTrainingSession,
+  reInterview,
   computeAndPersistFinalEvaluation,
 };
