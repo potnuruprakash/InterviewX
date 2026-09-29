@@ -1276,6 +1276,22 @@ const getResults = async (req, res) => {
       } catch (e) { /* not critical */ }
     }
 
+    // ── Cache headers ──────────────────────────────────────────────────────────
+    // Completed interviews are immutable: their results will never change.
+    // Give browsers a private, long-lived cache so repeated visits / back-navigation
+    // hit memory/disk cache without making a network round-trip at all.
+    // Pending evaluations must NOT be cached – polling needs a fresh response every time.
+    if (interview.status === 'completed' && finalEval?.status === 'ready') {
+      // private: per-user, not shared CDN-cacheable (Clerk auth header differentiates users)
+      // max-age=31536000: 1 year – effectively immutable
+      // immutable: tells browser never to revalidate during its lifetime
+      res.set('Cache-Control', 'private, max-age=31536000, immutable');
+      res.set('Vary', 'Authorization'); // key cache per-session so different users don't share
+    } else {
+      // Pending evaluation: no caching – ResultsPage must poll for fresh status
+      res.set('Cache-Control', 'no-store');
+    }
+
     return sendSuccess(res, {
       interview: {
         id: interview._id,

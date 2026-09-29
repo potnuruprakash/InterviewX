@@ -133,6 +133,27 @@ const uploadLimiter = rateLimit({
 });
 app.use('/api/resumes/upload', uploadLimiter);
 
+// AI Service availability probe — runs at startup so Render logs reveal SBERT status immediately.
+// Does NOT block startup; failures are logged as warnings only.
+const { checkHealth: checkAiServiceHealth } = require('./services/aiService');
+let aiServiceStatus = 'checking';
+(async () => {
+  try {
+    const health = await checkAiServiceHealth();
+    aiServiceStatus = health?.status === 'ok' || health?.status === 'healthy' ? 'available' : (health?.status || 'degraded');
+    if (aiServiceStatus === 'available') {
+      console.log('[AI Service] SBERT/AI service is reachable and healthy — production scoring active.');
+    } else {
+      console.warn('[AI Service] SBERT/AI service probe returned:', health);
+      console.warn('[AI Service] Fallback keyword scoring will be used until AI service is available.');
+    }
+  } catch (err) {
+    aiServiceStatus = 'unavailable';
+    console.warn('[AI Service] Could not reach AI service at startup:', err.message);
+    console.warn('[AI Service] Fallback keyword scoring active. Set AI_SERVICE_URL correctly if SBERT scoring is required in production.');
+  }
+})();
+
 // Health check — no auth required
 app.get('/health', (req, res) => {
   const isDbConnected = mongoose.connection.readyState === 1;
@@ -142,6 +163,7 @@ app.get('/health', (req, res) => {
     phase: 2,
     status: isDbConnected ? 'ok' : 'degraded',
     database: isDbConnected ? 'connected' : 'disconnected',
+    aiService: aiServiceStatus,
     timestamp: new Date().toISOString(),
   });
 });
