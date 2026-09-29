@@ -1,46 +1,27 @@
 const mongoose = require('mongoose');
 
-const aiConversationStateSchema = new mongoose.Schema(
+const chatMessageSchema = new mongoose.Schema(
   {
-    goal: { type: String, default: null },
-    learningTrack: { type: String, default: null },
-    currentMode: {
+    role: {
       type: String,
-      enum: [
-        'general_chat',
-        'results_coaching',
-        'interview_practice',
-        'answer_evaluation',
-        'interview_prep',
-        'training_drill',
-        'plan_review',
-        'rapid_fire',
-      ],
-      default: 'general_chat',
+      enum: ['user', 'assistant', 'system'],
+      required: true,
     },
-    currentDay: { type: Number, default: null },
-    currentTopic: { type: String, default: null },
-    currentQuestion: {
-      id: { type: String, default: null },
-      text: { type: String, default: null },
-      topic: { type: String, default: null },
-      difficulty: { type: String, default: 'Intermediate' },
-      hint: { type: String, default: null },
-      solution: { type: String, default: null },
-      prerequisites: { type: String, default: null },
-      questionNumber: { type: Number, default: 1 },
+    content: {
+      type: String,
+      required: true,
     },
-    currentExercise: {
-      id: { type: String, default: null },
-      type: { type: String, default: null },
-      status: { type: String, default: null },
+    action: {
+      type: String,
+      default: null, // e.g. 'start_mock', 'give_hint', 'adjust_difficulty', 'explain_result', 'train_topic'
     },
-    activeInterviewId: { type: String, default: null },
-    resumeProfileId: { type: String, default: null },
-    plan: {
-      goal: { type: String, default: null },
-      days: { type: mongoose.Schema.Types.Mixed, default: null },
-      createdAt: { type: Date, default: null },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
     },
   },
   { _id: false }
@@ -53,57 +34,55 @@ const aiConversationSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    title: {
+    goal: {
       type: String,
-      required: true,
-      default: 'New Chat',
+      default: 'General interview preparation and technical skill improvement',
     },
-    contextType: {
+    learningTrack: {
       type: String,
-      enum: ['dashboard', 'results', 'training', 'general'],
-      default: 'dashboard',
+      default: null,
     },
-
-    sourceInterviewId: {
+    currentMode: {
+      type: String,
+      enum: [
+        'general',
+        'learning',
+        'mock_interview',
+        'practice',
+        'resume_analysis',
+        'results_training',
+      ],
+      default: 'general',
+    },
+    activeTopic: {
+      type: String,
+      default: null,
+    },
+    currentDifficulty: {
+      type: String,
+      enum: ['easy', 'medium', 'hard'],
+      default: 'medium',
+    },
+    activeInterviewId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Interview',
       default: null,
-      index: true,
     },
-    topic: {
-      type: String,
-      default: 'General Technical Preparation',
-    },
-    difficulty: {
-      type: String,
-      enum: ['Beginner', 'Intermediate', 'Advanced', 'Interview-level'],
-      default: 'Intermediate',
-    },
-    status: {
-      type: String,
-      enum: ['active', 'archived'],
-      default: 'active',
-    },
-    pinned: {
-      type: Boolean,
-      default: false,
-    },
-    lastMessagePreview: {
-      type: String,
-      default: '',
-    },
-    summary: {
-      type: String,
+    activeTrainingSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TrainingSession',
       default: null,
     },
-    state: {
-      type: aiConversationStateSchema,
-      default: () => ({}),
+    currentQuestion: {
+      id: { type: String, default: null },
+      text: { type: String, default: null },
+      topic: { type: String, default: null },
+      difficulty: { type: String, default: null },
+      type: { type: String, default: null },
     },
+    messages: [chatMessageSchema],
   },
   { timestamps: true }
 );
-
-aiConversationSchema.index({ clerkUserId: 1, updatedAt: -1 });
 
 module.exports = mongoose.model('AIConversation', aiConversationSchema);

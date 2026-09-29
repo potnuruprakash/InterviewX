@@ -26,6 +26,11 @@ const skillAnalysisSchema = new mongoose.Schema(
     matchedPreferredSkills: [{ type: String }],
     notIdentifiedPreferredSkills: [{ type: String }],
 
+    // Tri-state skill gap engine fields
+    strongSkills: [{ type: String }],
+    partialSkills: [{ type: String }],
+    missingSkills: [{ type: String }],
+
     // Candidate has skills not listed in JD at all
     additionalSkills: [{ type: String }],
 
@@ -39,7 +44,11 @@ const skillAnalysisSchema = new mongoose.Schema(
     // Analysis version (allows detecting staleness)
     analysisVersion: { type: Number, default: 1 },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
 
 // Compound index for efficient upsert by resumeId + jobDescriptionId + user

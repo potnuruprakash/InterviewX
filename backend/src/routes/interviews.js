@@ -15,6 +15,8 @@ const {
   completeInterview,
   getResults,
   getRoadmap,
+  trainInterview,
+  getTrainingSession,
 } = require('../controllers/interviewController');
 
 router.use(requireAuth);
@@ -40,8 +42,10 @@ router.post('/:id/skip', skipQuestion);
 // Interview lifecycle
 router.post('/:id/complete', completeInterview);
 
-// Results + Roadmap (Phase 9, 10)
+// Results + Roadmap + Train Me (Targeted Learning)
 router.get('/:id/results', getResults);
 router.get('/:id/roadmap', getRoadmap);
+router.post('/:id/train', trainInterview);
+router.get('/training/:id', getTrainingSession);
 
 module.exports = router;

@@ -23,10 +23,12 @@ const Resume = require('../models/Resume');
 const JobDescription = require('../models/JobDescription');
 
 const { evaluateResponse } = require('../services/evaluationService');
-const { updateSkillPerformance, determineAdaptiveAction } = require('../services/adaptiveEngineService');
+const { updateSkillPerformance, determineAdaptiveDifficulty } = require('../services/adaptiveEngineService');
 const { buildEvaluation } = require('../services/multimodalFusionService');
+const dns = require('dns');
+try { dns.setServers(['8.8.8.8', '1.1.1.1']); } catch (e) {}
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/adaptive-ai-interviewer';
+const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/adaptive-ai-interviewer';
 
 async function runTest() {
   console.log('==================================================');
@@ -144,12 +146,11 @@ async function runTest() {
     // Update adaptive engine
     const score = textEvaluation.textScore || 75;
     let updatedState = updateSkillPerformance(interview.interviewState, question1.targetSkill, score);
-    const { shouldFollowUp, nextDifficulty } = determineAdaptiveAction({
-      score,
-      currentQuestion: question1,
-      textEvaluation,
-      currentState: updatedState,
-    });
+    const { nextDifficulty } = determineAdaptiveDifficulty(
+      interview.interviewState?.currentDifficulty || 'medium',
+      interview.interviewState?.recentPerformance || [],
+      score
+    );
 
     interview.currentQuestionIndex += 1;
     interview.interviewState = {

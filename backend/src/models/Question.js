@@ -17,15 +17,15 @@ const questionSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    // Phase 3 & Structured Question Engine
+    // Phase 3 & Coding — expanded type system
     type: {
       type: String,
-      enum: ['introduction', 'resume', 'technical', 'coding', 'project', 'experience', 'behavioral', 'job_specific', 'skill_gap', 'follow_up'],
+      enum: ['technical', 'coding', 'project', 'experience', 'behavioral', 'hr', 'system_design', 'job_specific', 'skill_gap', 'follow_up'],
       default: 'technical',
     },
     category: {
       type: String,
-      enum: ['introduction', 'resume', 'project', 'technical', 'coding', 'behavioral', 'hr', 'conceptual', 'situational', 'skill_gap', 'experience', 'follow_up', 'job_description'],
+      enum: ['technical', 'coding', 'behavioral', 'hr', 'project', 'system_design', 'conceptual', 'situational', 'skill_gap', 'experience', 'follow_up'],
       default: 'technical',
     },
     difficulty: {
@@ -43,10 +43,10 @@ const questionSchema = new mongoose.Schema(
       type: String,
       default: 'general',
     },
-    // Phase 3 & Master Prompt — question source
+    // Phase 3 — question source
     source: {
       type: String,
-      enum: ['resume', 'project', 'job_description', 'skill_gap', 'behavioral', 'experience', 'previous_answer', 'general_pool', 'static_bank'],
+      enum: ['resume', 'job_description', 'skill_gap', 'behavioral', 'experience', 'static_bank'],
       default: 'static_bank',
     },
     // Phase 3 — which project from resume this references
@@ -54,11 +54,7 @@ const questionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    // Master Prompt & SBERT evaluation
-    expectedTopics: {
-      type: [String],
-      default: [],
-    },
+    // Phase 4 — expected concepts for SBERT evaluation
     expectedConcepts: {
       type: [String],
       default: [],
@@ -100,10 +96,10 @@ const questionSchema = new mongoose.Schema(
       type: String,
       default: 'javascript',
     },
-    // Question Status (e.g. pending, answered, skipped, timeout)
+    // Question Status (e.g. pending, answered, skipped)
     status: {
       type: String,
-      enum: ['pending', 'answered', 'skipped', 'timeout'],
+      enum: ['pending', 'answered', 'skipped'],
       default: 'pending',
     },
     skippedAt: {
@@ -118,8 +114,4 @@ const questionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-questionSchema.index({ interviewId: 1, order: 1 });
-questionSchema.index({ clerkUserId: 1, interviewId: 1 });
-
 module.exports = mongoose.model('Question', questionSchema);
-

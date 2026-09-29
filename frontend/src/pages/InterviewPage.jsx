@@ -7,16 +7,14 @@ import {
   TrendingUp, Zap, BookOpen, Layers, Target, ShieldCheck,
   SkipForward, AlertTriangle, Send, Loader2, Video, VideoOff, Mic, MicOff
 } from 'lucide-react'
-import useSpeechRecognition, { normalizeTranscriptJoin } from '../hooks/useSpeechRecognition'
+import useSpeechRecognition from '../hooks/useSpeechRecognition'
 import AnswerComposer from '../components/AnswerComposer'
 import VideoRecorder from '../components/VideoRecorder'
 import AudioRecorder from '../components/AudioRecorder'
-import FloatingCamera from '../components/FloatingCamera'
+import AICoachDrawer from '../components/AICoachDrawer'
 import './InterviewPage.css'
 
 const CATEGORY_COLORS = {
-  introduction: 'badge-cyan',
-  resume: 'badge-green',
   technical: 'badge-purple',
   coding: 'badge-purple',
   behavioral: 'badge-cyan',
@@ -27,7 +25,6 @@ const CATEGORY_COLORS = {
   skill_gap: 'badge-red',
   experience: 'badge-green',
   follow_up: 'badge-yellow',
-  job_description: 'badge-purple',
 }
 
 const DIFFICULTY_COLORS = {
@@ -37,8 +34,6 @@ const DIFFICULTY_COLORS = {
 }
 
 const TYPE_ICONS = {
-  introduction: '👋',
-  resume: '📄',
   technical: '⚙️',
   coding: '💻',
   project: '🏗️',
@@ -49,15 +44,11 @@ const TYPE_ICONS = {
   follow_up: '↩️',
 }
 
-// Helper to calculate exact remaining seconds based on server expiresAt or started timestamp
-const calculateRemainingSeconds = (startedAt, durationMinutes = 30, expiresAt = null) => {
-  if (expiresAt) {
-    const end = new Date(expiresAt).getTime()
-    return Math.max(0, Math.floor((end - Date.now()) / 1000))
-  }
-  if (!startedAt) return (durationMinutes || 30) * 60
+// Helper to calculate exact remaining seconds based on interview started timestamp
+const calculateRemainingSeconds = (startedAt, durationMinutes = 30) => {
+  if (!startedAt) return durationMinutes * 60
   const startTime = new Date(startedAt).getTime()
-  const endTime = startTime + (durationMinutes || 30) * 60 * 1000
+  const endTime = startTime + durationMinutes * 60 * 1000
   const remaining = Math.floor((endTime - Date.now()) / 1000)
   return Math.max(0, remaining)
 }
@@ -101,20 +92,13 @@ export default function InterviewPage() {
   // Track whether speech was auto-started for this question
   const autoStartedSpeechRef = useRef(false)
 
-  // Ref to always track latest answer text for speech recognition callbacks (stale closure protection)
-  const answerRef = useRef('')
-  useEffect(() => {
-    answerRef.current = answer
-  }, [answer])
-
   // Speech-to-Text Integration
-  // When a final speech segment is confirmed, append non-destructively with punctuation awareness
+  // When a final speech segment is confirmed, append non-destructively
   const handleFinalTranscript = useCallback((phrase) => {
     setAnswer((prev) => {
-      const current = prev !== undefined ? prev : answerRef.current
-      const updated = normalizeTranscriptJoin(current, phrase)
-      answerRef.current = updated
-      return updated
+      const trimmed = prev.trimEnd()
+      if (!trimmed) return phrase
+      return `${trimmed} ${phrase}`
     })
   }, [])
 
@@ -126,28 +110,8 @@ export default function InterviewPage() {
     error: speechError,
     startListening,
     stopListening,
-    flushAndStop,
-    clearInterim,
     reset: resetSpeech,
   } = useSpeechRecognition({ onFinalTranscript: handleFinalTranscript })
-
-  // Microphone Controls: Candidate starts/stops microphone by clicking the speech control
-  const handleStartListening = useCallback(() => {
-    startListening()
-  }, [startListening])
-
-  const handleStopListening = useCallback(() => {
-    stopListening()
-  }, [stopListening])
-
-  // Cleanup speech recognition on unmount
-  useEffect(() => {
-    return () => {
-      try {
-        resetSpeech()
-      } catch (_) {}
-    }
-  }, [resetSpeech])
 
   // Initialize Interview Session
   useEffect(() => {
@@ -168,17 +132,12 @@ export default function InterviewPage() {
         setInterview(data.interview)
         setCurrentQuestion(data.currentQuestion)
 
-        if (data.interview?.videoModeEnabled) {
-          setVideoEnabled(true)
-        }
-
-        const totalAllowed = data.interview?.configuredQuestionCount || data.interview?.totalQuestions || 5
         const isInterviewDone =
           data.isComplete ||
           data.interview?.status === 'completed' ||
           data.interview?.isComplete ||
           !data.currentQuestion ||
-          (data.interview?.currentQuestionIndex >= totalAllowed)
+          (data.interview?.currentQuestionIndex >= data.interview?.totalQuestions)
 
         setIsComplete(isInterviewDone)
 
@@ -187,12 +146,8 @@ export default function InterviewPage() {
           return
         }
 
-        // Calculate exact remaining time from backend startedAt, durationMinutes & expiresAt
-        const rem = calculateRemainingSeconds(
-          data.interview?.startedAt,
-          data.interview?.durationMinutes,
-          data.interview?.expiresAt || data.expiresAt
-        )
+        // Calculate exact remaining time from backend startedAt & durationMinutes
+        const rem = calculateRemainingSeconds(data.interview?.startedAt, data.interview?.durationMinutes)
         setRemainingSeconds(rem)
       } catch (err) {
         const msg = err.message || ''
@@ -210,8 +165,23 @@ export default function InterviewPage() {
     init()
   }, [id, isLoaded, isSignedIn])
 
-  // Workspace ref for bounding floating draggable camera
-  const workspaceRef = useRef(null)
+  // Auto-start speech recognition when a new question becomes active
+  useEffect(() => {
+    if (!currentQuestion || loading || isComplete) return
+    // Only auto-start if speech is supported and not already listening
+    if (!isSpeechSupported) return
+    if (isListening) return
+    // Prevent duplicate starts for the same question
+    if (autoStartedSpeechRef.current === currentQuestion.id) return
+
+    autoStartedSpeechRef.current = currentQuestion.id
+    // Small delay to allow question animation to settle
+    const timer = setTimeout(() => {
+      startListening()
+      setIsMediaRecording(true)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [currentQuestion?.id, loading, isComplete, isSpeechSupported])
 
   // Real-time Countdown Timer (persists on refresh, never resets on re-render)
   useEffect(() => {
@@ -219,7 +189,7 @@ export default function InterviewPage() {
 
     const tick = () => {
       setQuestionTimer((t) => t + 1)
-      const rem = calculateRemainingSeconds(interview.startedAt, interview.durationMinutes, interview.expiresAt)
+      const rem = calculateRemainingSeconds(interview.startedAt, interview.durationMinutes)
       setRemainingSeconds(rem)
 
       // When timer hits 00:00, execute timeout auto-completion exactly once
@@ -235,37 +205,22 @@ export default function InterviewPage() {
     timerRef.current = setInterval(tick, 1000)
 
     return () => clearInterval(timerRef.current)
-  }, [isComplete, loading, interview?.startedAt, interview?.durationMinutes, interview?.expiresAt])
+  }, [isComplete, loading, interview?.startedAt, interview?.durationMinutes])
 
   // Automatic interview completion when timer hits 00:00
   const handleTimeoutAutoEnd = async () => {
     setTimeoutNotice(true)
-    // Flush any pending interim speech and stop dictation
-    if (flushAndStop) {
-      flushAndStop()
-    } else if (isListening) {
-      stopListening()
-    }
+    // Stop speech recognition and media capture
+    if (isListening) stopListening()
     setIsMediaRecording(false)
 
     try {
-      // Auto-save draft answer if candidate typed anything
-      const draft = (answer || '').trim()
-      if (draft && currentQuestion) {
-        const qId = currentQuestion.id || currentQuestion._id
-        await authApi.post(`/api/interviews/${id}/responses`, {
-          questionId: qId,
-          answerText: draft,
-          responseType: 'text',
-        }).catch((e) => console.warn('[Interview] Draft auto-submit on timeout:', e.message))
-      }
-
       await authApi.post(`/api/interviews/${id}/complete`, {
         completionReason: 'time_expired',
       })
       setTimeout(() => {
         navigate(`/interview/${id}/results`)
-      }, 1200)
+      }, 1500)
     } catch (err) {
       console.warn('[Interview] Timeout complete notice:', err.message)
       navigate(`/interview/${id}/results`)
@@ -294,21 +249,19 @@ export default function InterviewPage() {
 
   // Clear Answer
   const handleClearAnswer = () => {
-    if (flushAndStop) {
-      flushAndStop()
-    } else if (isListening) {
+    if (isListening) {
       stopListening()
+      setIsMediaRecording(false)
     }
-    setIsMediaRecording(false)
     setAnswer('')
     setAudioBlob(null)
     setVideoBlob(null)
-    if (clearInterim) clearInterim()
     resetSpeech()
     // Restart speech after clear
     setTimeout(() => {
       if (isSpeechSupported && !isListening) {
         startListening()
+        setIsMediaRecording(true)
       }
     }, 200)
   }
@@ -351,65 +304,35 @@ export default function InterviewPage() {
   const handleSubmit = async () => {
     if (!currentQuestion) return
 
-    // Flush any pending speech buffer and stop
-    let textToSubmit = answer || ''
-    try {
-      if (typeof flushAndStop === 'function') {
-        const flushResult = flushAndStop()
-        const flushed = flushResult?.flushedText || interimTranscript || ''
-        if (flushed && flushed.trim()) {
-          textToSubmit = normalizeTranscriptJoin(textToSubmit, flushed.trim())
-        }
-      } else if (isListening) {
-        stopListening()
-      }
-    } catch (e) {
-      console.warn('[Interview] flush error on submit:', e)
-    }
+    // Stop speech recognition and media recording
+    if (isListening) stopListening()
     setIsMediaRecording(false)
 
-    textToSubmit = (textToSubmit || '').trim()
-    if (!textToSubmit) {
-      setError('Please provide an answer before submitting.')
-      return
-    }
+    const textToSubmit = answer.trim()
+    if (!textToSubmit) return
 
     setSubmitting(true)
     setError(null)
     setQuestionTimer(0)
 
     try {
-      const qId = currentQuestion.id || currentQuestion._id
       const payload = {
-        questionId: qId,
+        questionId: currentQuestion.id,
         answerText: textToSubmit,
         responseType: 'text',
         code: null,
         language: null,
       }
 
-      // Stop video recorder and get confirmed blob
-      let currentVideo = videoBlob
-      if (videoEnabled && videoRecorderRef.current?.stopAndGetBlob) {
-        try {
-          const recorded = await videoRecorderRef.current.stopAndGetBlob()
-          if (recorded && recorded.size > 0) {
-            currentVideo = recorded
-          }
-        } catch (e) {
-          console.warn('[InterviewPage] error stopping video recorder:', e)
-        }
-      }
-
       const res = await authApi.post(`/api/interviews/${id}/responses`, payload)
 
-      const responseId = res.data.response?.id || res.data.response?._id
+      const responseId = res.data.response?.id
+      const questionId = currentQuestion.id
       const currentAudio = audioBlob
+      const currentVideo = videoBlob
 
       // Concurrently submit supporting audio/video modalities
-      if (responseId && (currentAudio || currentVideo)) {
-        await submitMedia(responseId, qId, currentAudio, currentVideo)
-      }
+      submitMedia(responseId, questionId, currentAudio, currentVideo)
 
       // Update UI state & next question
       setLastEval(res.data.response)
@@ -422,37 +345,22 @@ export default function InterviewPage() {
       autoStartedSpeechRef.current = null
 
       const interviewData = res.data?.interview
-      const nextQ = res.data?.nextQuestion
-      const totalAllowed = interviewData?.configuredQuestionCount || interviewData?.totalQuestions || totalQ
       const isFinished =
         res.data?.isComplete ||
         interviewData?.isComplete ||
         interviewData?.status === 'completed' ||
-        !nextQ ||
-        (interviewData?.currentQuestionIndex >= totalAllowed)
+        !res.data?.nextQuestion ||
+        (interviewData?.currentQuestionIndex >= interviewData?.totalQuestions)
 
       if (isFinished) {
         setIsComplete(true)
         setCurrentQuestion(null)
         navigate(`/interview/${id}/results`)
       } else {
-        setCurrentQuestion(nextQ)
+        setCurrentQuestion(res.data.nextQuestion)
       }
     } catch (err) {
-      console.error('[Interview] Submit error:', err)
-      const msg = err.response?.data?.message || err.message || ''
-      if (
-        msg.includes('already completed') ||
-        msg.includes('INTERVIEW_COMPLETED') ||
-        msg.includes('RESPONSE_EXISTS') ||
-        msg.includes('already submitted')
-      ) {
-        setIsComplete(true)
-        setCurrentQuestion(null)
-        navigate(`/interview/${id}/results`)
-        return
-      }
-      setError(msg || 'Could not submit answer. Please try again.')
+      setError(err.message || 'Could not submit answer. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -475,12 +383,8 @@ export default function InterviewPage() {
     setSkipping(true)
     setError(null)
 
-    // Stop active dictation and media capture cleanly
-    if (flushAndStop) {
-      flushAndStop()
-    } else if (isListening) {
-      stopListening()
-    }
+    // Stop active dictation and media capture
+    if (isListening) stopListening()
     setIsMediaRecording(false)
 
     try {
@@ -498,13 +402,12 @@ export default function InterviewPage() {
       autoStartedSpeechRef.current = null
 
       const interviewData = res.data?.interview
-      const totalAllowed = interviewData?.configuredQuestionCount || interviewData?.totalQuestions || totalQ
       const isFinished =
         res.data?.isComplete ||
         interviewData?.isComplete ||
         interviewData?.status === 'completed' ||
         !res.data?.nextQuestion ||
-        (interviewData?.currentQuestionIndex >= totalAllowed)
+        (interviewData?.currentQuestionIndex >= interviewData?.totalQuestions)
 
       if (isFinished) {
         setIsComplete(true)
@@ -519,7 +422,8 @@ export default function InterviewPage() {
         msg.includes('already been skipped') ||
         msg.includes('already completed') ||
         msg.includes('ALREADY_SKIPPED') ||
-        msg.includes('INTERVIEW_COMPLETED')
+        msg.includes('INTERVIEW_COMPLETED') ||
+        currentQIndex >= totalQ - 1
       ) {
         // If question was already skipped or interview is done, finish gracefully
         setIsComplete(true)
@@ -549,7 +453,7 @@ export default function InterviewPage() {
   }
 
   // Progress calculations
-  const totalQ = interview?.configuredQuestionCount || interview?.totalQuestions || 5
+  const totalQ = interview?.totalQuestions || 10
   const currentQIndex = interview?.currentQuestionIndex ?? 0
   const skippedCount = interview?.skippedQuestionsCount || 0
   const answeredCount = Math.max(0, currentQIndex - skippedCount)
@@ -651,28 +555,13 @@ export default function InterviewPage() {
 
   // ─── Main Interview UI ────────────────────────────────────────────────────
   return (
-    <div className="interview-page" ref={workspaceRef}>
+    <div className="interview-page">
       {/* Background Audio Recorder (silent capture when speech/audio active) */}
       <AudioRecorder
         ref={audioRecorderRef}
         isRecording={isMediaRecording && !videoEnabled}
         onRecordingComplete={(blob) => setAudioBlob(blob)}
         disabled={submitting || skipping}
-      />
-
-      {/* Floating Draggable Candidate Camera Feed */}
-      <FloatingCamera
-        interviewId={id}
-        containerRef={workspaceRef}
-        videoEnabled={videoEnabled}
-        onToggleVideo={handleToggleVideo}
-        isListening={isListening}
-        isMediaRecording={isMediaRecording}
-        speechError={speechError}
-        isSpeechSupported={isSpeechSupported}
-        videoRecorderRef={videoRecorderRef}
-        onVideoBlob={setVideoBlob}
-        disabled={submitting || skipping || isTimeExpired}
       />
 
       {/* Timeout notification banner */}
@@ -745,18 +634,6 @@ export default function InterviewPage() {
           </div>
 
           <div className="topbar-right">
-            {/* Camera feed toggle button */}
-            <button
-              type="button"
-              className={`btn-topbar-camera ${videoEnabled ? 'active' : ''}`}
-              onClick={handleToggleVideo}
-              disabled={submitting || skipping || isTimeExpired}
-              title={videoEnabled ? 'Disable camera feed' : 'Enable candidate camera'}
-            >
-              {videoEnabled ? <Video size={14} /> : <VideoOff size={14} />}
-              <span>{videoEnabled ? 'Camera On' : 'Camera Off'}</span>
-            </button>
-
             {/* Persistent Countdown Timer */}
             <div
               className={`timer-display ${isTimeExpired ? 'timer-expired' : isUrgentTime ? 'timer-urgent' : isWarningTime ? 'timer-warning' : ''}`}
@@ -799,7 +676,7 @@ export default function InterviewPage() {
       {/* ── 3-Column Main Layout ─────────────────────────────────────────── */}
       <main className="interview-main-layout">
 
-        {/* ── LEFT PANEL: Question + Guidance ──────────────────────────────── */}
+        {/* ── LEFT PANEL: Question + Video ──────────────────────────────── */}
         <section className="interview-left-panel">
 
           {/* Active Question Card */}
@@ -839,18 +716,6 @@ export default function InterviewPage() {
                 {currentQuestion.text}
               </h2>
 
-              {/* Expected Topics / Focus Areas */}
-              {currentQuestion.expectedTopics && currentQuestion.expectedTopics.length > 0 && (
-                <div className="question-topics-box">
-                  <span className="topics-label">Key Topics Expected:</span>
-                  <div className="topics-list">
-                    {currentQuestion.expectedTopics.map((topic, i) => (
-                      <span key={i} className="topic-chip">{topic}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Question Assessment Source */}
               {currentQuestion.source && currentQuestion.source !== 'static_bank' && (
                 <div className="question-source-indicator">
@@ -868,67 +733,67 @@ export default function InterviewPage() {
             </div>
           )}
 
-          {/* Question Guidance & Actions Card */}
-          <div className="question-meta-card glass-card">
-            <div className="meta-card-header">
-              <span className="meta-card-title">Candidate Controls</span>
-              <div className="media-status-row">
-                <button
-                  type="button"
-                  className={`media-status-chip ${isListening ? 'active' : speechError ? 'error' : ''} clickable`}
-                  onClick={() => {
-                    if (submitting || skipping || isTimeExpired) return
-                    if (isListening) {
-                      handleStopListening()
-                    } else {
-                      handleStartListening()
-                    }
-                  }}
-                  title={
-                    isListening
-                      ? 'Click to stop microphone'
-                      : isSpeechSupported && !speechError
-                      ? 'Click to start microphone'
-                      : speechError || 'Microphone unavailable'
-                  }
-                  disabled={!isSpeechSupported || Boolean(speechError)}
-                >
-                  <span className={`status-dot ${isListening ? 'live' : ''}`} />
-                  {isListening ? 'Mic live (Click to stop)' : speechError ? 'Mic unavailable' : isSpeechSupported ? 'Mic ready (Click to speak)' : 'Mic off'}
-                </button>
-                {videoEnabled && (
-                  <span className="media-status-chip active">
-                    <span className="status-dot live" />
-                    Cam live
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <p className="meta-card-desc">
-              Answer with concrete technical reasoning, architectural decisions, and trade-offs. You may type or use dictation.
-            </p>
-
-            <div className="meta-card-actions">
+          {/* Video Preview Panel */}
+          <div className="video-panel glass-card">
+            <div className="video-panel-header">
+              <span className="video-panel-title">Candidate Camera</span>
               <button
                 type="button"
-                className="btn btn-skip-left"
-                onClick={handleInitiateSkip}
+                className={`btn-video-toggle ${videoEnabled ? 'active' : ''}`}
+                onClick={handleToggleVideo}
                 disabled={submitting || skipping || isTimeExpired}
-                id="skip-question-btn"
-                title="Skip question without penalty"
+                title={videoEnabled ? 'Disable camera' : 'Enable camera'}
               >
-                {skipping ? (
-                  <><Loader2 size={15} className="spin" /><span>Skipping...</span></>
-                ) : (
-                  <><SkipForward size={15} /><span>Skip Question</span></>
-                )}
+                {videoEnabled ? <Video size={14} /> : <VideoOff size={14} />}
+                <span>{videoEnabled ? 'Camera On' : 'Enable Camera'}</span>
               </button>
-              <span className="skip-hint-text">
-                Skipping advances to the next question without lowering your evaluation score.
+            </div>
+
+            {videoEnabled ? (
+              <VideoRecorder
+                ref={videoRecorderRef}
+                isRecording={isMediaRecording && videoEnabled}
+                onRecordingComplete={(blob) => setVideoBlob(blob)}
+                disabled={submitting || skipping || isTimeExpired}
+                autoStartStream={true}
+              />
+            ) : (
+              <div className="video-placeholder">
+                <VideoOff size={28} className="video-off-icon" />
+                <p>Camera is off</p>
+                <span>Enable for video analysis</span>
+              </div>
+            )}
+
+            {/* Status Indicators */}
+            <div className="media-status-row">
+              {videoEnabled && (
+                <span className="media-status-chip active">
+                  <span className="status-dot live" />
+                  Camera active
+                </span>
+              )}
+              <span className={`media-status-chip ${isListening ? 'active' : speechError ? 'error' : ''}`}>
+                <span className={`status-dot ${isListening ? 'live' : ''}`} />
+                {isListening ? 'Listening...' : speechError ? 'Mic unavailable' : isSpeechSupported ? 'Mic ready' : 'Mic unsupported'}
               </span>
             </div>
           </div>
+
+          {/* Skip button in left panel */}
+          <button
+            type="button"
+            className="btn btn-skip-left"
+            onClick={handleInitiateSkip}
+            disabled={submitting || skipping || isTimeExpired}
+            id="skip-question-btn"
+          >
+            {skipping ? (
+              <><Loader2 size={15} className="spin" /><span>Skipping...</span></>
+            ) : (
+              <><SkipForward size={15} /><span>Skip Question</span></>
+            )}
+          </button>
         </section>
 
         {/* ── CENTER PANEL: Answer / Input ──────────────────────────────── */}
@@ -941,9 +806,6 @@ export default function InterviewPage() {
             speechStatus={speechStatus}
             speechError={speechError}
             isSpeechSupported={isSpeechSupported}
-            onStartListening={handleStartListening}
-            onStopListening={handleStopListening}
-            onClearInterim={clearInterim}
             onSubmit={handleSubmit}
             onSkip={handleInitiateSkip}
             onClear={handleClearAnswer}
@@ -1133,6 +995,9 @@ export default function InterviewPage() {
           </div>
         </aside>
       </main>
+
+      {/* Floating AI Coach contextual drawer with active interview & question reference */}
+      <AICoachDrawer activeInterviewId={id} currentQuestion={currentQuestion} />
     </div>
   )
 }

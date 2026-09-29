@@ -28,7 +28,10 @@ const { initializeInterviewState, updateSkillPerformance, determineAdaptiveActio
 const { generateRoadmap, calculateJobReadiness } = require('../services/roadmapService');
 const aiService = require('../services/aiService');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/interviewx';
+const dns = require('dns');
+try { dns.setServers(['8.8.8.8', '1.1.1.1']); } catch (e) {}
+
+const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/interviewx';
 
 const RESULTS = {};
 

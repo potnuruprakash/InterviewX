@@ -1,228 +1,111 @@
 /**
  * Skill Matching Service — Phase 2
  *
- * Deterministic, explainable skill matching with transferable skill detection.
+ * Deterministic, explainable skill matching.
+ * No SBERT. No embeddings. No LLM.
  *
  * Compares candidate canonical skill names against JD required/preferred skills.
  * Coverage is based ONLY on required skills.
  * Preferred skills are reported separately.
- *
- * Transferable skills: skills the candidate has that belong to the same category
- * as a missing required skill (e.g., Python → Backend even if Node.js is required).
  */
 
-// ─── Skill Category Taxonomy ─────────────────────────────────────────────────
-// Maps canonical skill names (lowercase) to their domain category.
-// Used to detect "transferable" skills (same category, different tool).
-
-const SKILL_CATEGORIES = {
-  // Frontend
-  'html': 'frontend',
-  'css': 'frontend',
-  'javascript': 'frontend',
-  'typescript': 'frontend',
-  'react': 'frontend_framework',
-  'vue.js': 'frontend_framework',
-  'angular': 'frontend_framework',
-  'next.js': 'frontend_framework',
-  'svelte': 'frontend_framework',
-  'jquery': 'frontend',
-  'sass': 'frontend',
-  'tailwind css': 'frontend',
-  'bootstrap': 'frontend',
-  'webpack': 'frontend_tooling',
-  'vite': 'frontend_tooling',
-
-  // Backend
-  'node.js': 'backend',
-  'express.js': 'backend',
-  'python': 'backend',
-  'django': 'backend_framework',
-  'flask': 'backend_framework',
-  'fastapi': 'backend_framework',
-  'java': 'backend',
-  'spring boot': 'backend_framework',
-  'c#': 'backend',
-  '.net': 'backend_framework',
-  'ruby': 'backend',
-  'ruby on rails': 'backend_framework',
-  'go': 'backend',
-  'rust': 'backend',
-  'php': 'backend',
-  'laravel': 'backend_framework',
-
-  // Database
-  'sql': 'database',
-  'mysql': 'database',
-  'postgresql': 'database',
-  'sqlite': 'database',
-  'mongodb': 'database_nosql',
-  'redis': 'database_nosql',
-  'dynamodb': 'database_nosql',
-  'cassandra': 'database_nosql',
-  'firebase': 'database_nosql',
-
-  // Cloud / DevOps
-  'aws': 'cloud',
-  'azure': 'cloud',
-  'gcp': 'cloud',
-  'google cloud': 'cloud',
-  'docker': 'devops',
-  'kubernetes': 'devops',
-  'terraform': 'devops',
-  'ansible': 'devops',
-  'jenkins': 'devops',
-  'github actions': 'devops',
-  'ci/cd': 'devops',
-
-  // API / Integration
-  'rest api': 'api',
-  'graphql': 'api',
-  'grpc': 'api',
-  'websocket': 'api',
-
-  // Version Control
-  'git': 'version_control',
-  'github': 'version_control',
-  'gitlab': 'version_control',
-  'bitbucket': 'version_control',
-
-  // Testing
-  'jest': 'testing',
-  'pytest': 'testing',
-  'mocha': 'testing',
-  'cypress': 'testing',
-  'selenium': 'testing',
-  'unit testing': 'testing',
-
-  // Data Science / ML
-  'machine learning': 'ml',
-  'deep learning': 'ml',
-  'tensorflow': 'ml_framework',
-  'pytorch': 'ml_framework',
-  'scikit-learn': 'ml_framework',
-  'pandas': 'data_science',
-  'numpy': 'data_science',
-  'data analysis': 'data_science',
-
-  // Soft Skills
-  'communication': 'soft_skill',
-  'teamwork': 'soft_skill',
-  'problem solving': 'soft_skill',
-  'leadership': 'soft_skill',
-};
-
-// Map category → its parent super-category (for broader transferability)
-const CATEGORY_SUPER_MAP = {
-  'frontend': 'web',
-  'frontend_framework': 'web',
-  'frontend_tooling': 'web',
-  'backend': 'web',
-  'backend_framework': 'web',
-  'database': 'data_storage',
-  'database_nosql': 'data_storage',
-  'cloud': 'infrastructure',
-  'devops': 'infrastructure',
-  'api': 'web',
-  'version_control': 'engineering',
-  'testing': 'engineering',
-  'ml': 'data_science',
-  'ml_framework': 'data_science',
-  'data_science': 'data_science',
-};
+// Related skill families for detecting partial skill competency
+const RELATED_SKILL_FAMILIES = [
+  ['javascript', 'typescript', 'ecmascript'],
+  ['react', 'nextjs', 'redux', 'react native', 'vue', 'angular'],
+  ['html', 'css', 'sass', 'tailwind css', 'bootstrap'],
+  ['python', 'django', 'flask', 'fastapi'],
+  ['node.js', 'express.js', 'nestjs'],
+  ['java', 'spring boot', 'hibernate', 'kotlin'],
+  ['sql', 'mysql', 'postgresql', 'sqlite', 'oracle', 'database design'],
+  ['mongodb', 'nosql', 'dynamodb', 'cassandra'],
+  ['docker', 'kubernetes', 'containerization'],
+  ['aws', 'azure', 'gcp', 'cloud'],
+  ['git', 'github', 'gitlab', 'ci/cd'],
+  ['rest apis', 'restful apis', 'graphql', 'api development', 'microservices'],
+  ['machine learning', 'deep learning', 'pytorch', 'tensorflow', 'scikit-learn', 'pandas', 'numpy'],
+];
 
 /**
- * Get the category for a skill (checks lowercase canonical name).
- * @param {string} skillName
- * @returns {string|null}
+ * Check if candidate possesses a related skill in the same family/category.
  */
-const getSkillCategory = (skillName) => {
-  if (!skillName) return null;
-  return SKILL_CATEGORIES[skillName.toLowerCase().trim()] || null;
-};
+const hasRelatedSkill = (candidateSet, targetSkill, targetCategory, candidateSkills) => {
+  const targetLower = targetSkill.toLowerCase().trim();
 
-/**
- * Check if two skills are in the same category or super-category.
- * @param {string} skillA
- * @param {string} skillB
- * @returns {boolean}
- */
-const areSkillsRelated = (skillA, skillB) => {
-  const catA = getSkillCategory(skillA);
-  const catB = getSkillCategory(skillB);
-  if (!catA || !catB) return false;
-  if (catA === catB) return true;
-  const superA = CATEGORY_SUPER_MAP[catA];
-  const superB = CATEGORY_SUPER_MAP[catB];
-  return Boolean(superA && superB && superA === superB);
-};
-
-const extractCanonical = (s) => {
-  if (!s) return null;
-  if (typeof s === 'string') return s.trim();
-  if (typeof s === 'object') {
-    return (s.canonicalName || s.name || s.skill || '').trim() || null;
+  // Check defined families
+  for (const family of RELATED_SKILL_FAMILIES) {
+    const isTargetInFamily = family.some((member) => member === targetLower || targetLower.includes(member));
+    if (isTargetInFamily) {
+      for (const member of family) {
+        if (member !== targetLower && candidateSet.has(member)) {
+          return true;
+        }
+      }
+    }
   }
-  return null;
+
+  // Check category match if category is specific
+  if (targetCategory && targetCategory !== 'other' && targetCategory !== 'concept') {
+    const matchesCategory = candidateSkills.some(
+      (s) => (s.category || '').toLowerCase() === targetCategory.toLowerCase() &&
+             s.canonicalName.toLowerCase() !== targetLower
+    );
+    if (matchesCategory) return true;
+  }
+
+  return false;
 };
 
 /**
  * Match candidate skills against required and preferred JD skills.
+ * Produces tri-state matching: strongSkills, partialSkills, missingSkills.
  *
- * @param {Array<{ canonicalName: string }|string>} candidateSkills
- * @param {Array<{ canonicalName: string }|string>} requiredSkills
- * @param {Array<{ canonicalName: string }|string>} preferredSkills
+ * @param {Array<{ canonicalName: string, category: string }>} candidateSkills
+ * @param {Array<{ canonicalName: string, category: string }>} requiredSkills
+ * @param {Array<{ canonicalName: string, category: string }>} preferredSkills
  * @returns {Object} Matching result
  */
 const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
+  // Support passing candidateProfile object
+  const skillsList = Array.isArray(candidateSkills)
+    ? candidateSkills
+    : (candidateSkills && Array.isArray(candidateSkills.skills) ? candidateSkills.skills : []);
+
   // Build a set of candidate canonical skill names (lowercase for safety)
   const candidateSet = new Set(
-    (candidateSkills || [])
-      .map(extractCanonical)
-      .filter(Boolean)
-      .map((s) => s.toLowerCase())
+    skillsList
+      .filter((s) => s && (s.canonicalName || s.name || typeof s === 'string'))
+      .map((s) => (typeof s === 'string' ? s : (s.canonicalName || s.name)).toLowerCase().trim())
   );
 
-  const candidateNames = Array.from(candidateSet);
+  // Normalize inputs to array of skill objects
+  const reqList = (requiredSkills || []).map((s) =>
+    typeof s === 'string' ? { canonicalName: s, name: s, category: 'other' } : s
+  );
+  const prefList = (preferredSkills || []).map((s) =>
+    typeof s === 'string' ? { canonicalName: s, name: s, category: 'other' } : s
+  );
 
-  // Build sets for required and preferred
-  const requiredCanonicals = (requiredSkills || [])
-    .map(extractCanonical)
-    .filter(Boolean);
-
-  const preferredCanonicals = (preferredSkills || [])
-    .map(extractCanonical)
-    .filter(Boolean);
-
-  // All JD skills (required + preferred) — for computing additionalSkills
-  const allJDSkillSet = new Set([
-    ...requiredCanonicals.map((s) => s.toLowerCase()),
-    ...preferredCanonicals.map((s) => s.toLowerCase()),
-  ]);
-
-  // ── Required skill matching ──────────────────────────────────────
   const matchedRequiredSkills = [];
   const notIdentifiedRequiredSkills = [];
-  const transferableSkills = []; // candidate has a related skill but not exact match
 
-  for (const skill of requiredCanonicals) {
-    const lower = skill.toLowerCase().trim();
+  const strongSkills = [];
+  const partialSkills = [];
+  const missingSkills = [];
+
+  for (const skill of reqList) {
+    const skillName = skill.name || skill.canonicalName;
+    const lower = (skill.canonicalName || skillName).toLowerCase().trim();
+
     if (candidateSet.has(lower)) {
-      matchedRequiredSkills.push(skill);
+      matchedRequiredSkills.push(skillName);
+      strongSkills.push(skillName);
+    } else if (hasRelatedSkill(candidateSet, skillName, skill.category, candidateSkills || [])) {
+      notIdentifiedRequiredSkills.push(skillName);
+      partialSkills.push(skillName);
     } else {
-      // Check if any candidate skill is in the same domain (transferable)
-      const isTransferable = candidateNames.some((candidateName) =>
-        areSkillsRelated(candidateName, lower)
-      );
-
-      if (isTransferable) {
-        // The candidate doesn't have the exact skill but has a related one
-        // Count as "not identified" for coverage, but flag as transferable
-        transferableSkills.push(skill);
-        notIdentifiedRequiredSkills.push(skill);
-      } else {
-        notIdentifiedRequiredSkills.push(skill);
-      }
+      notIdentifiedRequiredSkills.push(skillName);
+      missingSkills.push(skillName);
     }
   }
 
@@ -230,65 +113,68 @@ const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
   const matchedPreferredSkills = [];
   const notIdentifiedPreferredSkills = [];
 
-  for (const skill of preferredCanonicals) {
-    if (candidateSet.has(skill.toLowerCase().trim())) {
-      matchedPreferredSkills.push(skill);
+  for (const skill of prefList) {
+    const skillName = skill.name || skill.canonicalName;
+    const lower = (skill.canonicalName || skillName).toLowerCase().trim();
+
+    if (candidateSet.has(lower)) {
+      matchedPreferredSkills.push(skillName);
     } else {
-      notIdentifiedPreferredSkills.push(skill);
+      notIdentifiedPreferredSkills.push(skillName);
     }
   }
 
   // ── Additional candidate skills ──────────────────────────────────
-  // Skills the candidate has that aren't in required OR preferred
+  const allJDSkillSet = new Set([
+    ...reqList.map((s) => (s.canonicalName || s.name).toLowerCase().trim()),
+    ...prefList.map((s) => (s.canonicalName || s.name).toLowerCase().trim()),
+  ]);
+
   const additionalSkills = [];
-  for (const s of candidateSkills || []) {
-    if (!s || !s.canonicalName) continue;
-    const lower = s.canonicalName.toLowerCase().trim();
-    if (!allJDSkillSet.has(lower)) {
-      additionalSkills.push(s.canonicalName);
+  for (const s of skillsList) {
+    const skillName = typeof s === 'string' ? s : (s.canonicalName || s.name);
+    if (!skillName) continue;
+    const lower = skillName.toLowerCase().trim();
+    if (!allJDSkillSet.has(lower) && !additionalSkills.includes(skillName)) {
+      additionalSkills.push(skillName);
     }
   }
 
-  // Pure missing skills (required skills with no match and no transferable related skills)
-  const missingSkills = notIdentifiedRequiredSkills.filter(
-    (skill) => !transferableSkills.some((ts) => ts.toLowerCase().trim() === skill.toLowerCase().trim())
-  );
-
   return {
-    matchedSkills: matchedRequiredSkills,
-    partiallyMatchedSkills: transferableSkills,
-    missingSkills,
     matchedRequiredSkills,
     notIdentifiedRequiredSkills,
-    transferableSkills,       // skills candidate has in the same domain as missing required
     matchedPreferredSkills,
     notIdentifiedPreferredSkills,
+    strongSkills,
+    partialSkills,
+    missingSkills,
     additionalSkills,
   };
 };
 
 /**
  * Calculate skill coverage and gap.
- * Coverage is based ONLY on required skills.
- * Preferred skills do NOT affect the main coverage score.
+ * Coverage is based on required skills with strong skills at 100% and partial skills at 50%.
  *
  * @param {string[]} matchedRequired
  * @param {string[]} allRequired
+ * @param {string[]} partialSkills
  * @returns {{ requiredSkillCount, matchedRequiredSkillCount, notIdentifiedRequiredSkillCount, skillCoveragePercentage, skillGapPercentage }}
  */
-const calculateCoverage = (matchedRequired, allRequired) => {
+const calculateCoverage = (matchedRequired, allRequired, partialSkills = []) => {
   const requiredSkillCount = (allRequired || []).length;
   const matchedRequiredSkillCount = (matchedRequired || []).length;
+  const partialCount = (partialSkills || []).length;
   const notIdentifiedRequiredSkillCount = requiredSkillCount - matchedRequiredSkillCount;
 
   let skillCoveragePercentage = 0;
   let skillGapPercentage = 100;
 
   if (requiredSkillCount > 0) {
-    skillCoveragePercentage = Math.round(
-      (matchedRequiredSkillCount / requiredSkillCount) * 100
-    );
-    skillGapPercentage = 100 - skillCoveragePercentage;
+    // Weighted coverage: strong = 1.0, partial = 0.5
+    const effectivePoints = matchedRequiredSkillCount + (partialCount * 0.5);
+    skillCoveragePercentage = Math.min(100, Math.round((effectivePoints / requiredSkillCount) * 100));
+    skillGapPercentage = Math.max(0, 100 - skillCoveragePercentage);
   }
 
   return {
@@ -309,8 +195,19 @@ const calculateCoverage = (matchedRequired, allRequired) => {
  * @returns {Object} Full analysis result
  */
 const analyzeSkillGap = (candidateSkills, requiredSkills, preferredSkills) => {
-  const matching = matchSkills(candidateSkills, requiredSkills, preferredSkills);
-  const coverage = calculateCoverage(matching.matchedRequiredSkills, requiredSkills);
+  let req = requiredSkills;
+  let pref = preferredSkills;
+  if (requiredSkills && !Array.isArray(requiredSkills) && requiredSkills.requiredSkills) {
+    req = requiredSkills.requiredSkills;
+    pref = requiredSkills.preferredSkills || preferredSkills || [];
+  }
+
+  const matching = matchSkills(candidateSkills, req, pref);
+  const coverage = calculateCoverage(
+    matching.matchedRequiredSkills,
+    req,
+    matching.partialSkills
+  );
 
   return {
     ...matching,
@@ -318,4 +215,5 @@ const analyzeSkillGap = (candidateSkills, requiredSkills, preferredSkills) => {
   };
 };
 
-module.exports = { matchSkills, calculateCoverage, analyzeSkillGap, getSkillCategory, areSkillsRelated };
+module.exports = { matchSkills, calculateCoverage, analyzeSkillGap };
+

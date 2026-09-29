@@ -26,16 +26,25 @@ const jobDescriptionSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    // Phase 2 — structured JD profile
+    // Structured JD profile
     parsedData: {
+      title: { type: String, default: null },
       jobTitle: { type: String, default: null },
       company: { type: String, default: null },
       location: { type: String, default: null },
       experienceRequirement: { type: String, default: null },
       requiredSkills: [jdSkillSchema],
       preferredSkills: [jdSkillSchema],
+      requiredSkillNames: [{ type: String }],
+      preferredSkillNames: [{ type: String }],
+      roleExpectations: [{ type: String }],
       responsibilities: [{ type: String }],
       softSkills: [{ type: String }],
+    },
+    // Backwards compatibility alias for components expecting job.analysis
+    analysis: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
     processingStatus: {
       type: String,
@@ -47,10 +56,17 @@ const jobDescriptionSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
 
-jobDescriptionSchema.index({ clerkUserId: 1, createdAt: -1 });
+// Virtual alias: job.profile -> job.parsedData
+jobDescriptionSchema.virtual('profile').get(function () {
+  return this.parsedData || this.analysis || {};
+});
 
 module.exports = mongoose.model('JobDescription', jobDescriptionSchema);
 

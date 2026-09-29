@@ -135,6 +135,7 @@ const analyzeJob = async (req, res) => {
       { _id: job._id },
       {
         parsedData: jdProfile,
+        analysis: jdProfile,
         processingStatus: 'completed',
         processingError: null,
       }
@@ -146,6 +147,8 @@ const analyzeJob = async (req, res) => {
         id: job._id,
         processingStatus: 'completed',
         parsedData: jdProfile,
+        analysis: jdProfile,
+        profile: jdProfile,
       },
     });
   } catch (error) {
@@ -182,6 +185,8 @@ const getJobAnalysis = async (req, res) => {
         processingStatus: job.processingStatus,
         processingError: job.processingError,
         parsedData: job.parsedData || null,
+        analysis: job.parsedData || null,
+        profile: job.parsedData || null,
         analyzedAt: job.updatedAt,
       },
     });

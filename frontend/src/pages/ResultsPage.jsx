@@ -1,61 +1,103 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuthApi } from '../services/api'
 import {
-  ArrowLeft, RefreshCw, AlertCircle, Award, Activity, Video, Mic,
-  Layers, FileText, BookOpen, ChevronRight, PlusCircle, Compass, Target, Bot, BarChart2
+  CheckCircle, AlertCircle, TrendingUp, Home, BarChart2,
+  Target, BookOpen, Mic, Video, Brain, ChevronDown, ChevronUp,
+  Award, Zap, ArrowRight, Sparkles
 } from 'lucide-react'
-
-import { adaptResults } from '../utils/resultsAdapter'
-import ResultsChatbot from '../components/chat/ResultsChatbot'
-
-// Modular Components
-import ResultsHero from '../components/results/ResultsHero'
-import ScoreSummary from '../components/results/ScoreSummary'
-import StrengthsAndImprovements from '../components/results/StrengthsAndImprovements'
-import ProgressComparison from '../components/results/ProgressComparison'
-import RecommendedPractice from '../components/results/RecommendedPractice'
-import QuestionReview from '../components/results/QuestionReview'
-import CommunicationAnalysis from '../components/results/CommunicationAnalysis'
-import VideoPresenceAnalysis from '../components/results/VideoPresenceAnalysis'
-import DetailedEvaluation from '../components/results/DetailedEvaluation'
-import InterviewTranscript from '../components/results/InterviewTranscript'
-import MethodologyPanel from '../components/results/MethodologyPanel'
-import CollapsibleSection from '../components/results/CollapsibleSection'
-import EvidenceModal from '../components/results/EvidenceModal'
-
+import TrainMeModal from '../components/TrainMeModal'
 import './ResultsPage.css'
+
+const ScoreRing = ({ score, size = 120, label = '' }) => {
+  if (score === null || score === undefined) {
+    return (
+      <div className="score-ring-wrap" style={{ width: size, height: size }}>
+        <div className="score-ring-unavailable">
+          <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94a3b8' }}>Pending</span>
+          {label && <small>{label}</small>}
+        </div>
+      </div>
+    )
+  }
+  const pct = Math.max(0, Math.min(100, score))
+  const color = pct >= 75 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444'
+  const r = 44
+  const circ = 2 * Math.PI * r
+  const dash = circ * (pct / 100)
+
+  return (
+    <div className="score-ring-wrap" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
+        <circle
+          cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="8"
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+          transform="rotate(-90 50 50)"
+          style={{ transition: 'stroke-dasharray 1s ease' }}
+        />
+      </svg>
+      <div className="score-ring-text">
+        <span className="ring-score" style={{ color }}>{Math.round(pct)}</span>
+        {label && <small>{label}</small>}
+      </div>
+    </div>
+  )
+}
+
+const SkillBar = ({ skill, score, maxScore = 100 }) => {
+  const pct = Math.max(0, Math.min(100, (score / maxScore) * 100))
+  const color = pct >= 75 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444'
+  return (
+    <div className="skill-bar-row">
+      <span className="skill-bar-name">{skill}</span>
+      <div className="skill-bar-track">
+        <div className="skill-bar-fill" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="skill-bar-score" style={{ color }}>{Math.round(score)}</span>
+    </div>
+  )
+}
+
+const PriorityBadge = ({ priority }) => {
+  const colors = { High: '#ef4444', Medium: '#f59e0b', Low: '#10b981' }
+  return (
+    <span className="priority-badge" style={{ background: `${colors[priority]}22`, color: colors[priority], border: `1px solid ${colors[priority]}44` }}>
+      {priority}
+    </span>
+  )
+}
 
 export default function ResultsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { authApi, isLoaded, isSignedIn } = useAuthApi()
-
   const [results, setResults] = useState(null)
   const [roadmap, setRoadmap] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showEvidenceModal, setShowEvidenceModal] = useState(false)
-  const [coachOpen, setCoachOpen] = useState(false)
+  const [expanded, setExpanded] = useState({})
+  const [showTrainModal, setShowTrainModal] = useState(false)
+  const [activeTrainingSession, setActiveTrainingSession] = useState(null)
+  const [trainingLoading, setTrainingLoading] = useState(false)
   const fetchedRef = useRef(null)
 
-  // Consolidated state for progressive disclosure sections (default closed)
-  const [expandedSections, setExpandedSections] = useState({
-    communication: false,
-    video: false,
-    details: false,
-    transcript: false,
-    methodology: false,
-  })
-
-  const toggleSection = (key) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }))
+  const handleTrainMe = async () => {
+    setTrainingLoading(true)
+    try {
+      const res = await authApi.post(`/api/interviews/${id}/train`)
+      if (res.data?.trainingSession) {
+        setActiveTrainingSession(res.data.trainingSession)
+        setShowTrainModal(true)
+      }
+    } catch (err) {
+      console.error('Error generating training:', err)
+      alert('Unable to generate training session at this time. Please try again.')
+    } finally {
+      setTrainingLoading(false)
+    }
   }
 
-  // Load results and roadmap from backend
   useEffect(() => {
     if (!isLoaded || !id) return
     if (!isSignedIn) {
@@ -65,9 +107,8 @@ export default function ResultsPage() {
     if (fetchedRef.current === id) return
     fetchedRef.current = id
 
-    const loadData = async () => {
+    const load = async () => {
       setLoading(true)
-      setError(null)
       try {
         const [resRes, roadRes] = await Promise.all([
           authApi.get(`/api/interviews/${id}/results`),
@@ -76,283 +117,372 @@ export default function ResultsPage() {
         setResults(resRes.data)
         setRoadmap(roadRes.data?.roadmap || null)
       } catch (err) {
-        console.error('[ResultsPage] Error fetching results:', err)
-        setError(err.message || 'Could not retrieve interview evaluation data.')
+        setError(err.message)
       } finally {
         setLoading(false)
       }
     }
-
-    loadData()
+    load()
   }, [id, isLoaded, isSignedIn])
 
-  // Adapt backend data into presentation structure via pure adapter
-  const adapted = useMemo(() => {
-    if (!results) return null
-    return adaptResults(results, roadmap)
-  }, [results, roadmap])
+  if (loading) return (
+    <div className="results-loading"><div className="spinner" /><p>Building your results...</p></div>
+  )
 
-  // ── LOADING STATE ──────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="results-page-loading">
-        <div className="results-loading-card glass-card animate-fade-in">
-          <div className="loading-spinner" />
-          <h2 className="loading-title">Generating Assessment Report</h2>
-          <p className="loading-sub">
-            Aggregating technical semantics, communicative pacing, and verified presence metrics...
-          </p>
-        </div>
-      </div>
-    )
-  }
+  if (error) return (
+    <div className="results-loading">
+      <AlertCircle size={24} color="#f87171" />
+      <p style={{ color: '#f87171' }}>{error}</p>
+    </div>
+  )
 
-  // ── ERROR STATE ────────────────────────────────────────────────────────────
-  if (error || !adapted) {
-    return (
-      <div className="results-page-error">
-        <div className="results-error-card glass-card animate-fade-in">
-          <AlertCircle size={36} className="error-icon" />
-          <h2 className="error-title">Assessment Report Unavailable</h2>
-          <p className="error-sub">{error || 'Interview session data could not be loaded.'}</p>
-          <div className="error-actions-row">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                fetchedRef.current = null
-                window.location.reload()
-              }}
-            >
-              <RefreshCw size={14} /> Retry
-            </button>
-            <Link to="/dashboard" className="btn btn-primary">
-              Return to Dashboard
-            </Link>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const { interview, finalEvaluation: fe, jobReadiness, skillPerformance, questionBreakdown, resumeSkillAlignment } = results || {}
 
-  const {
-    interviewId,
-    hero,
-    scoreSummary,
-    strengths,
-    topImprovements,
-    progress,
-    recommendedPractice,
-    questions,
-    communication,
-    video,
-    detailedEvaluation,
-    transcript,
-    methodology,
-  } = adapted
-
-  const practiceUrl = `/create-interview?practiceFrom=${interviewId}`
+  const toggle = (key) => setExpanded((v) => ({ ...v, [key]: !v[key] }))
 
   return (
     <div className="results-page">
-      <div className="results-container">
-        {/* ── TOP NAV BAR ─────────────────────────────────────────────────── */}
-        <nav className="results-nav-bar" aria-label="Results Navigation">
-          <Link to="/dashboard" className="back-link">
-            <ArrowLeft size={14} />
-            <span>Dashboard</span>
-          </Link>
-          <div className="nav-actions-right">
-            <button
-              type="button"
-              className="btn-nav-action action-train-me"
-              onClick={() => setCoachOpen(true)}
-              title="Analyze interview results with Results AI"
-              id="results-page-analyze-ai-btn"
-            >
-              <BarChart2 size={13} />
-              <span>📊 Analyze Results AI</span>
-            </button>
-            <Link to={practiceUrl} className="btn-nav-action action-practice">
-              <Compass size={13} />
-              <span>Practice Weak Areas</span>
-            </Link>
-            <Link to="/create-interview" className="btn-nav-action action-new">
-              <PlusCircle size={13} />
-              <span>New Interview</span>
-            </Link>
-          </div>
-        </nav>
-
-        {/* ── 1. RESULTS HERO ─────────────────────────────────────────────── */}
-        <ResultsHero
-          hero={hero}
-          onOpenEvidence={() => setShowEvidenceModal(true)}
-        />
-
-        {/* ── 2. SCORE SUMMARY (4 KEY CARDS) ──────────────────────────────── */}
-        <ScoreSummary scoreSummary={scoreSummary} />
-
-        {/* ── 3. STRENGTHS & TOP 3 IMPROVEMENTS ───────────────────────────── */}
-        <StrengthsAndImprovements
-          strengths={strengths}
-          topImprovements={topImprovements}
-          interviewId={interviewId}
-        />
-
-        {/* ── 4. PROGRESS VS PREVIOUS INTERVIEW ───────────────────────────── */}
-        <ProgressComparison progress={progress} />
-
-        {/* ── 5. RECOMMENDED PRACTICE ─────────────────────────────────────── */}
-        <RecommendedPractice
-          recommendedPractice={recommendedPractice}
-          interviewId={interviewId}
-        />
-
-        {/* ── 6. QUESTION REVIEW (ACCORDION) ──────────────────────────────── */}
-        <QuestionReview questions={questions} />
-
-        {/* ── PROGRESSIVE DISCLOSURE SECTIONS (DEFAULT COLLAPSED) ─────────── */}
-        <div className="progressive-sections-wrap">
-          <div className="progressive-header">
-            <h2 className="progressive-title">Deep Dive Analysis & Logs</h2>
-            <p className="progressive-sub">Expand sections below to inspect acoustic waveforms, presence tracking, and raw transcripts</p>
-          </div>
-
-          {/* 7. Communication Analysis */}
-          <CollapsibleSection
-            id="communication"
-            title="Communication & Acoustic Fluency"
-            subtitle="Words per minute, verbal filler density, and pause cadence"
-            icon={Mic}
-            badgeText={communication.isAvailable ? `${communication.wpm || '—'} WPM` : 'Not recorded'}
-            badgeType={communication.isAvailable ? 'complete' : 'muted'}
-            isOpen={expandedSections.communication}
-            onToggle={() => toggleSection('communication')}
-          >
-            <CommunicationAnalysis communication={communication} />
-          </CollapsibleSection>
-
-          {/* 8. Video & Presence Analysis */}
-          <CollapsibleSection
-            id="video"
-            title="Video & Observable Presence (YOLOv8)"
-            subtitle="Webcam presence, horizontal framing, and observable expressions"
-            icon={Video}
-            badgeText={video.isAvailable ? 'Analysis Complete' : 'Unavailable'}
-            badgeType={video.isAvailable ? 'complete' : 'warning'}
-            isOpen={expandedSections.video}
-            onToggle={() => toggleSection('video')}
-          >
-            <VideoPresenceAnalysis video={video} />
-          </CollapsibleSection>
-
-          {/* 9. Detailed Evaluation */}
-          <CollapsibleSection
-            id="details"
-            title="Detailed Evaluation Sub-Pillars"
-            subtitle="Granular technical accuracy, relevance, completeness, and multimodal weight allocations"
-            icon={Layers}
-            badgeText="6 Sub-Pillars"
-            badgeType="neutral"
-            isOpen={expandedSections.details}
-            onToggle={() => toggleSection('details')}
-          >
-            <DetailedEvaluation detailedEvaluation={detailedEvaluation} />
-          </CollapsibleSection>
-
-          {/* 10. Interview Transcript */}
-          <CollapsibleSection
-            id="transcript"
-            title="Interview Transcript"
-            subtitle="Chronological log of questions, candidate answers, and code submissions"
-            icon={FileText}
-            badgeText={`${transcript.length} Questions`}
-            badgeType="neutral"
-            isOpen={expandedSections.transcript}
-            onToggle={() => toggleSection('transcript')}
-          >
-            <InterviewTranscript transcript={transcript} />
-          </CollapsibleSection>
-
-          {/* 11. Methodology */}
-          <CollapsibleSection
-            id="methodology"
-            title="How Your Interview Was Evaluated"
-            subtitle="Transparent explanation of SBERT, MFCC speech analysis, YOLOv8 framing, and multimodal fusion"
-            icon={BookOpen}
-            badgeText="Methodology"
-            badgeType="neutral"
-            isOpen={expandedSections.methodology}
-            onToggle={() => toggleSection('methodology')}
-          >
-            <MethodologyPanel
-              methodology={methodology}
-              onOpenEvidence={() => setShowEvidenceModal(true)}
-            />
-          </CollapsibleSection>
+      <div className="container">
+        {/* Header */}
+        <div className="results-header animate-fade-in">
+          <h1 className="results-title">Interview Results</h1>
+          <p className="results-subtitle">
+            {interview?.targetRole} · {interview?.interviewType} · {interview?.difficulty}
+            {interview?.questionGenerationSource === 'personalized' && ' · ✨ Personalized'}
+          </p>
+          {fe?.isDevelopmentEvaluation && (
+            <div className="dev-notice animate-fade-in">
+              ⚠️ {fe.sbertEvaluated > 0
+                ? `${fe.sbertEvaluated} questions evaluated with semantic AI evaluation. ${fe.notice}`
+                : 'AI semantic evaluation service was offline. Scores use baseline evaluation heuristics. Connect the AI service for deep evaluation.'}
+            </div>
+          )}
+          {interview?.completionReason === 'time_expired' && (
+            <div className="timeout-completion-badge animate-fade-in">
+              ⏱️ Session completed automatically when timer expired (time's up). Evaluated answers are detailed below.
+            </div>
+          )}
         </div>
 
-        {/* ── 12. NEXT ACTION FOOTER ──────────────────────────────────────── */}
-        <div className="results-action-footer glass-card">
-          <div className="footer-left">
-            <span className="footer-callout">Ready for your next mock session?</span>
-            <p className="footer-desc">
-              Practice weak areas directly or challenge yourself with an increased difficulty level.
-            </p>
+        {/* Overall Score + Job Readiness */}
+        <div className="results-hero animate-fade-in">
+          <div className="hero-scores glass-card">
+            <div className="hero-score-group">
+              <ScoreRing score={fe?.overallScore} size={140} label="Overall" />
+              {fe?.technicalScore !== null && fe?.technicalScore !== undefined && (
+                <ScoreRing score={fe.technicalScore} size={90} label="Technical" />
+              )}
+            </div>
+            <div className="hero-meta">
+              <div className="hero-meta-row">
+                <span className="meta-label">Questions Breakdown</span>
+                <span className="meta-val">
+                  <strong>{fe?.questionsAnswered ?? 0}</strong> answered · <strong>{fe?.questionsSkipped ?? 0}</strong> skipped · {fe?.totalQuestions ?? 0} total
+                </span>
+              </div>
+              <div className="hero-meta-row">
+                <span className="meta-label">Modalities Used</span>
+                <span className="meta-val">{fe?.modalitiesUsed?.join(', ') || 'text'}</span>
+              </div>
+              <div className="hero-meta-row">
+                <span className="meta-label">Interview Type</span>
+                <span className="meta-val" style={{ textTransform: 'capitalize' }}>{interview?.interviewType}</span>
+              </div>
+              <div className="hero-meta-row">
+                <span className="meta-label">Duration</span>
+                <span className="meta-val">
+                  {interview?.startedAt && interview?.completedAt
+                    ? `${Math.round((new Date(interview.completedAt) - new Date(interview.startedAt)) / 60000)} min`
+                    : '—'}
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="footer-right">
-            <Link to={practiceUrl} className="btn btn-primary">
-              <Compass size={14} /> Practice Weak Areas
-            </Link>
-            <Link to="/create-interview" className="btn btn-secondary">
-              <PlusCircle size={14} /> Start New Interview
-            </Link>
-            <Link to="/dashboard" className="btn btn-ghost">
-              Back to Dashboard
-            </Link>
-          </div>
+
+          {/* Job Readiness */}
+          {jobReadiness && (
+            <div className="job-readiness-card glass-card animate-fade-in">
+              <div className="jr-header">
+                <Award size={18} />
+                <span>Job Readiness Indicator</span>
+                <span className="badge badge-dev" title={jobReadiness.disclaimer}>Prototype</span>
+              </div>
+              <ScoreRing score={jobReadiness.score} size={110} label={jobReadiness.label} />
+              <div className="jr-breakdown">
+                <div className="jr-row">
+                  <span>Resume-JD Alignment</span>
+                  <span>{jobReadiness.breakdown?.resumeAlignmentScore ?? '—'}%</span>
+                </div>
+                <div className="jr-row">
+                  <span>Interview Performance</span>
+                  <span>{jobReadiness.breakdown?.interviewPerformanceScore ?? '—'}%</span>
+                </div>
+                <div className="jr-row">
+                  <span>Completion</span>
+                  <span>{jobReadiness.breakdown?.completionScore ?? '—'}%</span>
+                </div>
+              </div>
+              <p className="jr-disclaimer">{jobReadiness.disclaimer}</p>
+            </div>
+          )}
         </div>
 
-        {/* ── EVIDENCE MODAL (OPTIONAL POPUP) ─────────────────────────────── */}
-        <EvidenceModal
-          isOpen={showEvidenceModal}
-          onClose={() => setShowEvidenceModal(false)}
-          researchEvidence={methodology.researchEvidence}
-        />
+        {/* Skill Performance */}
+        {skillPerformance && Object.keys(skillPerformance).length > 0 && (
+          <div className="results-section glass-card animate-fade-in">
+            <div className="section-header" onClick={() => toggle('skills')}>
+              <h2><BarChart2 size={18} /> Skill Performance</h2>
+              {expanded.skills ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </div>
+            {(expanded.skills || true) && (
+              <div className="skill-bars">
+                {Object.entries(skillPerformance).sort((a, b) => b[1].score - a[1].score).map(([skill, perf]) => (
+                  <SkillBar key={skill} skill={skill} score={perf.score} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* ── RESULTS AI CHATBOT ────────────────────────────────────────── */}
-        <ResultsChatbot
-          isOpen={coachOpen}
-          onClose={() => setCoachOpen(false)}
-          resultId={id}
-        />
+        {/* Strong / Weak Areas */}
+        <div className="results-two-col animate-fade-in">
+          {fe?.strongAreas?.length > 0 && (
+            <div className="area-card glass-card strong">
+              <h3>✅ Strong Areas</h3>
+              {fe.strongAreas.map((s, i) => (
+                <div key={i} className="area-item">{s}</div>
+              ))}
+            </div>
+          )}
+          {fe?.weakAreas?.length > 0 && (
+            <div className="area-card glass-card weak">
+              <h3>⚠️ Areas to Improve</h3>
+              {fe.weakAreas.map((s, i) => (
+                <div key={i} className="area-item">{s}</div>
+              ))}
+            </div>
+          )}
+        </div>
 
-        {/* ── FLOATING RESULTS AI BUTTON ──────────────────────────────────── */}
-        <div
-          className="floating-results-ai-container"
-          style={{ position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 900 }}
-        >
+        {/* Resume / JD Alignment */}
+        {resumeSkillAlignment && (resumeSkillAlignment.matchedSkills?.length > 0 || resumeSkillAlignment.missingSkills?.length > 0) && (
+          <div className="results-section glass-card animate-fade-in">
+            <div className="section-header" onClick={() => toggle('alignment')}>
+              <h2><Target size={18} /> Resume–JD Alignment</h2>
+              {expanded.alignment ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </div>
+            {expanded.alignment && (
+              <div className="alignment-grid">
+                {resumeSkillAlignment.matchedSkills?.length > 0 && (
+                  <div>
+                    <div className="alignment-label matched">✅ Matched Required Skills</div>
+                    <div className="skill-chips">
+                      {resumeSkillAlignment.matchedSkills.map((s, i) => (
+                        <span key={i} className="chip chip-green">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {resumeSkillAlignment.missingSkills?.length > 0 && (
+                  <div>
+                    <div className="alignment-label missing">❌ Not Identified in Resume</div>
+                    <div className="skill-chips">
+                      {resumeSkillAlignment.missingSkills.map((s, i) => (
+                        <span key={i} className="chip chip-red">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Improvement Roadmap */}
+        {roadmap && (
+          <div className="results-section glass-card animate-fade-in">
+            <div className="section-header" onClick={() => toggle('roadmap')}>
+              <h2><TrendingUp size={18} /> Improvement Roadmap</h2>
+              {expanded.roadmap ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </div>
+            {expanded.roadmap && (
+              <div className="roadmap-section">
+                <p className="roadmap-summary">{roadmap.summary}</p>
+                {roadmap.recommendations?.map((rec, i) => (
+                  <div key={i} className="roadmap-item">
+                    <div className="roadmap-item-header">
+                      <span className="roadmap-skill">{rec.skill}</span>
+                      <PriorityBadge priority={rec.priority} />
+                      <span className="badge badge-gray" style={{ fontSize: '10px' }}>{rec.area}</span>
+                    </div>
+                    <p className="roadmap-desc">{rec.description}</p>
+                    {rec.topics?.length > 0 && (
+                      <div className="roadmap-topics">
+                        <span className="topics-label">Topics to study:</span>
+                        <ul>
+                          {rec.topics.map((t, j) => <li key={j}>{t}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {rec.studyApproach && (
+                      <p className="roadmap-approach">💡 {rec.studyApproach}</p>
+                    )}
+                  </div>
+                ))}
+                <p className="roadmap-disclaimer">{roadmap.disclaimer}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Question Breakdown */}
+        {questionBreakdown?.length > 0 && (
+          <div className="results-section animate-fade-in">
+            <div className="section-header" onClick={() => toggle('questions')}>
+              <h2><BookOpen size={18} /> Question-by-Question Analysis</h2>
+              {expanded.questions ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </div>
+            {expanded.questions && (
+              <div className="question-breakdown">
+                {questionBreakdown.map((q, i) => {
+                  const isSkipped = q.status === 'skipped'
+                  return (
+                    <div key={i} className={`qb-item glass-card ${isSkipped ? 'qb-item-skipped' : ''}`}>
+                      <div className="qb-header">
+                        <span className="qb-num">Q{q.questionNumber}</span>
+                        <span className={`badge ${q.type === 'coding' ? 'badge-purple' : 'badge-purple'}`}>
+                          {q.type === 'coding' ? '💻 Coding' : q.category}
+                        </span>
+                        <span className={`badge ${q.difficulty === 'hard' ? 'badge-red' : q.difficulty === 'easy' ? 'badge-green' : 'badge-yellow'}`}>
+                          {q.difficulty}
+                        </span>
+                        {q.targetSkill && q.targetSkill !== 'general' && (
+                          <span className="badge badge-gray">{q.targetSkill}</span>
+                        )}
+                        {isSkipped ? (
+                          <span className="qb-score" style={{ color: '#f59e0b', fontWeight: 600 }}>
+                            Skipped
+                          </span>
+                        ) : (
+                          <span className="qb-score">
+                            {q.score !== null ? `${Math.round(q.score)}/100` : '—'}
+                            {q.textEvaluation?.modelStatus === 'sbert_evaluated' && (
+                              <span className="sbert-tag">AI Evaluated</span>
+                            )}
+                          </span>
+                        )}
+                      </div>
+
+                      {q.contextNote && (
+                        <p className="qb-context">{q.contextNote}</p>
+                      )}
+
+                      <p className="qb-question">{q.question}</p>
+
+                      {isSkipped ? (
+                        <div className="qb-answer skipped-box">
+                          <span className="qb-answer-label" style={{ color: '#f59e0b' }}>Status:</span>
+                          <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                            Question skipped by candidate (excluded from overall score calculation).
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {q.code && (
+                            <div className="qb-code-solution-box">
+                              <span className="qb-answer-label">Submitted Code ({q.language || 'code'}):</span>
+                              <pre className="qb-code-block"><code>{q.code}</code></pre>
+                            </div>
+                          )}
+
+                          <div className="qb-answer">
+                            <span className="qb-answer-label">{q.code ? 'Explanation / Approach:' : 'Your answer:'}</span>
+                            <p>{q.answerText || '(No answer text provided)'}</p>
+                          </div>
+                        </>
+                      )}
+
+                      {q.textEvaluation?.strengths?.length > 0 && (
+                        <div className="qb-concepts">
+                          <span className="qb-concepts-label">✅ Covered:</span>
+                          {q.textEvaluation.strengths.map((s, j) => (
+                            <span key={j} className="concept-tag concept-covered">{s}</span>
+                          ))}
+                        </div>
+                      )}
+
+                      {q.textEvaluation?.missingConcepts?.length > 0 && (
+                        <div className="qb-concepts">
+                          <span className="qb-concepts-label">⚠️ Missed:</span>
+                          {q.textEvaluation.missingConcepts.map((c, j) => (
+                            <span key={j} className="concept-tag concept-missing">{c}</span>
+                          ))}
+                        </div>
+                      )}
+
+                      {(q.textEvaluation?.feedback || q.evaluation?.feedback) && (
+                        <p className="qb-feedback">
+                          {q.textEvaluation?.feedback || q.evaluation?.feedback}
+                        </p>
+                      )}
+
+                    {/* Audio/Video indicators */}
+                    {q.audioEvaluation?.audioFeaturesAvailable && (
+                      <div className="qb-media">
+                        <Mic size={12} /> Audio: {q.audioEvaluation.speakingDuration?.toFixed(1)}s speaking
+                        {q.audioEvaluation.speechRate && ` · ~${q.audioEvaluation.speechRate} syllables/sec`}
+                      </div>
+                    )}
+                    {q.videoEvaluation?.framesProcessed > 0 && (
+                      <div className="qb-media">
+                        <Video size={12} /> Video: {q.videoEvaluation.framesProcessed} frames ·{' '}
+                        person detected {Math.round((q.videoEvaluation.personDetectionRatio || 0) * 100)}% of frames
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              </div>
+            )
+            }
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="results-actions animate-fade-in" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
           <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setCoachOpen((prev) => !prev)}
+            onClick={handleTrainMe}
+            disabled={trainingLoading}
+            className="btn btn-primary btn-lg"
             style={{
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.4)',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.5rem',
-              boxShadow: '0 4px 20px rgba(2, 132, 199, 0.4)',
-              borderRadius: '999px',
-              padding: '0.65rem 1.15rem',
-              fontWeight: 600,
+              gap: '8px',
             }}
-            id="floating-results-ai-btn"
-            title="Open Results AI Assistant"
           >
-            <BarChart2 size={16} />
-            <span>Analyze Results AI</span>
+            <Sparkles size={18} />
+            {trainingLoading ? 'Building Masterclass...' : 'Train Me (Targeted Practice)'}
           </button>
+          <Link to="/create-interview" className="btn btn-secondary btn-lg">
+            <Zap size={16} /> Start New Interview
+          </Link>
+          <Link to="/progress" className="btn btn-secondary">
+            <TrendingUp size={16} /> View Progress
+          </Link>
+          <Link to="/dashboard" className="btn btn-ghost">
+            <Home size={16} /> Dashboard
+          </Link>
         </div>
+
+        {/* Train Me Modal */}
+        {showTrainModal && activeTrainingSession && (
+          <TrainMeModal
+            trainingSession={activeTrainingSession}
+            onClose={() => setShowTrainModal(false)}
+          />
+        )}
       </div>
     </div>
   )

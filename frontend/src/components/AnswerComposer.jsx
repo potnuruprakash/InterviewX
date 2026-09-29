@@ -3,16 +3,16 @@ import {
   Send, Trash2, Loader2, Sparkles, SkipForward,
   Mic, MicOff, AlertCircle, CheckCircle
 } from 'lucide-react'
-import { normalizeTranscriptJoin } from '../hooks/useSpeechRecognition'
 import './AnswerComposer.css'
 
 /**
- * AnswerComposer — Automatic Voice & Text Input
+ * AnswerComposer — Redesigned for automatic speech recognition.
  *
- * - Automatically populates candidate's spoken words into the textarea in real time.
- * - Displays speech dynamically with live transcription sync.
- * - Interactive mic status badge allowing pause/resume of dictation.
- * - Candidate can freely edit, format, or type their answer alongside voice.
+ * - No more Voice/Video/Text mode selector
+ * - No more "Start speaking" / "Stop speaking" buttons
+ * - Shows a subtle speech status indicator
+ * - Appends speech automatically via parent's useSpeechRecognition hook
+ * - Candidate can freely edit the transcribed text
  */
 export default function AnswerComposer({
   answer,
@@ -22,9 +22,6 @@ export default function AnswerComposer({
   speechStatus,
   speechError,
   isSpeechSupported,
-  onStartListening,
-  onStopListening,
-  onClearInterim,
   onSubmit,
   onSkip,
   onClear,
@@ -37,35 +34,21 @@ export default function AnswerComposer({
 }) {
   const textareaRef = useRef(null)
 
-  // Real-time composite text that immediately reflects live voice input in the text area
-  const activeText = interimTranscript
-    ? normalizeTranscriptJoin(answer, interimTranscript)
-    : answer
-
-  const words = activeText.trim() ? activeText.trim().split(/\s+/).length : 0
-  const characters = activeText.length
+  const words = answer.trim() ? answer.trim().split(/\s+/).length : 0
+  const characters = answer.length
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
-      if (activeText.trim() && !submitting && !disabled) {
+      if (answer.trim() && !submitting && !disabled) {
         onSubmit()
       }
     }
   }
 
-  const handleTextareaChange = (e) => {
-    // If the candidate manually types while interim text is active,
-    // clear the interim buffer so manual edits are not overwritten
-    if (interimTranscript && onClearInterim) {
-      onClearInterim()
-    }
-    onAnswerChange(e.target.value)
-  }
-
   // Determine speech status for indicator
   let micStatusClass = 'mic-status-idle'
-  let micStatusText = 'Click to speak'
+  let micStatusText = 'Microphone ready'
   let MicIcon = Mic
 
   if (!isSpeechSupported) {
@@ -76,27 +59,18 @@ export default function AnswerComposer({
     micStatusClass = 'mic-status-error'
     micStatusText = 'Mic unavailable — type your answer'
     MicIcon = MicOff
-  } else if (isListening || speechStatus === 'restarting') {
+  } else if (isListening) {
     micStatusClass = 'mic-status-active'
-    micStatusText = 'Listening... (Click to stop)'
+    micStatusText = 'Listening automatically...'
     MicIcon = Mic
   } else if (speechStatus === 'processing') {
     micStatusClass = 'mic-status-processing'
     micStatusText = 'Transcribing...'
     MicIcon = Mic
-  } else if (speechStatus === 'ready' || activeText.trim()) {
+  } else if (speechStatus === 'ready' || answer.trim()) {
     micStatusClass = 'mic-status-ready'
-    micStatusText = 'Click to speak'
-    MicIcon = Mic
-  }
-
-  const handleToggleMic = () => {
-    if (disabled || !isSpeechSupported) return
-    if (isListening) {
-      onStopListening?.()
-    } else {
-      onStartListening?.()
-    }
+    micStatusText = 'Transcript ready — edit freely'
+    MicIcon = CheckCircle
   }
 
   return (
@@ -105,23 +79,11 @@ export default function AnswerComposer({
       <div className="composer-header">
         <div className="composer-title-group">
           <span className="composer-title">Your Answer</span>
-          <span className="composer-subtitle">Click the microphone to speak, or type directly into the field</span>
+          <span className="composer-subtitle">Speak naturally or type — your answer appears here automatically</span>
         </div>
 
-        {/* Interactive mic status indicator */}
-        <button
-          type="button"
-          className={`mic-status-pill ${micStatusClass} ${isSpeechSupported ? 'clickable' : ''}`}
-          onClick={handleToggleMic}
-          title={
-            isListening
-              ? 'Click to stop microphone dictation'
-              : isSpeechSupported
-              ? 'Click to activate microphone dictation'
-              : speechError || 'Speech recognition unavailable'
-          }
-          disabled={disabled || !isSpeechSupported}
-        >
+        {/* Subtle mic status indicator */}
+        <div className={`mic-status-pill ${micStatusClass}`}>
           {isListening ? (
             <span className="mic-pulse-wrapper">
               <span className="mic-pulse-ring" />
@@ -131,7 +93,7 @@ export default function AnswerComposer({
             <MicIcon size={12} />
           )}
           <span>{micStatusText}</span>
-        </button>
+        </div>
       </div>
 
       {/* Live Interim Transcript Ribbon */}
@@ -156,14 +118,14 @@ export default function AnswerComposer({
         <textarea
           ref={textareaRef}
           className="composer-textarea"
-          value={activeText}
-          onChange={handleTextareaChange}
+          value={answer}
+          onChange={(e) => onAnswerChange(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={submitting || disabled}
           rows={10}
           placeholder={
             isSpeechSupported && !speechError
-              ? "Type your answer or click 'Click to speak' to use voice dictation. Words will appear automatically as you speak..."
+              ? 'Your spoken answer will appear here automatically. You can also type, edit, or correct the text at any time...'
               : 'Type your answer here... Be specific, provide technical examples, and structure your explanation clearly.'
           }
           aria-label="Interview answer text"
@@ -185,7 +147,7 @@ export default function AnswerComposer({
       {/* Footer Actions */}
       <div className="composer-footer">
         <div className="footer-left">
-          {activeText.trim().length > 0 && (
+          {answer.trim().length > 0 && (
             <button
               type="button"
               className="btn btn-ghost btn-clear"
@@ -237,7 +199,7 @@ export default function AnswerComposer({
             type="button"
             className="btn btn-primary btn-submit-answer"
             onClick={onSubmit}
-            disabled={!activeText.trim() || submitting || skipping || disabled}
+            disabled={!answer.trim() || submitting || skipping || disabled}
             id="submit-answer-btn"
           >
             {submitting ? (

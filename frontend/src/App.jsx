@@ -13,6 +13,7 @@ import ProgressPage from './pages/ProgressPage'
 import ProfilePage from './pages/ProfilePage'
 import SkillGapPage from './pages/SkillGapPage'
 import Navbar from './components/Navbar'
+import AICoachDrawer from './components/AICoachDrawer'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const hasClerkKey = PUBLISHABLE_KEY && PUBLISHABLE_KEY.startsWith('pk_')
@@ -119,6 +120,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <AICoachDrawer />
       </div>
     </BrowserRouter>
   )

@@ -82,21 +82,34 @@ const resumeSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    // Phase 2 — structured candidate profile
+    // Extracted and structured candidate profile
     parsedData: {
+      name: { type: String, default: null },
+      summary: { type: String, default: null },
       basicInfo: {
         name: { type: String, default: null },
         email: { type: String, default: null },
         phone: { type: String, default: null },
         location: { type: String, default: null },
+        summary: { type: String, default: null },
       },
-      skills: [skillObjectSchema],
+      skills: [{ type: String }],
+      detailedSkills: [skillObjectSchema],
+      languages: [{ type: String }],
+      frameworks: [{ type: String }],
+      libraries: [{ type: String }],
+      databases: [{ type: String }],
+      tools: [{ type: String }],
+      cloud: [{ type: String }],
       projects: [projectSchema],
       experience: [experienceSchema],
       education: [educationSchema],
       certifications: [certificationSchema],
-      tools: [{ type: String }],
-      technologies: [{ type: String }],
+    },
+    // Backwards compatibility alias for components expecting resume.analysis
+    analysis: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
     processingStatus: {
       type: String,
@@ -108,10 +121,17 @@ const resumeSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
 
-resumeSchema.index({ clerkUserId: 1, createdAt: -1 });
+// Virtual alias: resume.profile -> resume.parsedData
+resumeSchema.virtual('profile').get(function () {
+  return this.parsedData || this.analysis || {};
+});
 
 module.exports = mongoose.model('Resume', resumeSchema);
 

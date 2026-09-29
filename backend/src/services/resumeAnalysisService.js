@@ -149,14 +149,27 @@ const splitIntoSections = (text) => {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    const detectedType = detectSectionType(trimmed);
+    // Check if the entire trimmed line is a section heading
+    let detectedType = detectSectionType(trimmed);
+    let remainingLine = null;
+
+    // Also check for inline heading format: "Heading: content"
+    if (!detectedType && trimmed.includes(':')) {
+      const colonIdx = trimmed.indexOf(':');
+      const prefix = trimmed.slice(0, colonIdx).trim();
+      const possibleType = detectSectionType(prefix);
+      if (possibleType) {
+        detectedType = possibleType;
+        remainingLine = trimmed.slice(colonIdx + 1).trim();
+      }
+    }
 
     if (detectedType) {
       if (currentLines.length > 0) {
         sections.push({ type: currentType, lines: currentLines });
       }
       currentType = detectedType;
-      currentLines = [];
+      currentLines = remainingLine ? [remainingLine] : [];
     } else {
       currentLines.push(line);
     }
@@ -171,46 +184,9 @@ const splitIntoSections = (text) => {
 
 // ─── Skills Section Parser ───────────────────────────────────────────────────
 
-/**
- * Parse skills from the dedicated skills section.
- * Uses BOTH normalizeFromText (comma/bullet/newline separated) AND
- * extractSkillsFromText (sliding-window for whitespace/inline mentions).
- * This handles multi-column PDF layouts and space-separated lists.
- */
 const parseSkillsSection = (lines) => {
-  // Extract both original lines and after-colon contents for clean tokenization
-  const processedLines = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    processedLines.push(trimmed);
-    const colonIdx = trimmed.indexOf(':');
-    if (colonIdx !== -1) {
-      const after = trimmed.slice(colonIdx + 1).trim();
-      if (after) {
-        processedLines.push(after);
-      }
-    }
-  }
-
-  const text = processedLines.join('\n');
-
-  // Strategy 1: delimiter-based splitting (comma, pipe, bullet, newline)
-  const fromDelimiters = normalizeFromText(text, 'skills_section');
-
-  // Strategy 2: sliding-window scan for any recognized skill tokens
-  const fromScan = extractSkillsFromText(text, 'skills_section');
-
-  // Merge, dedup by canonicalName — delimiter results take priority
-  const seen = new Set(fromDelimiters.map((s) => s.canonicalName));
-  const merged = [...fromDelimiters];
-  for (const s of fromScan) {
-    if (!seen.has(s.canonicalName)) {
-      seen.add(s.canonicalName);
-      merged.push(s);
-    }
-  }
-  return merged;
+  const text = lines.join('\n');
+  return normalizeFromText(text, 'skills_section');
 };
 
 // ─── Education Parser ────────────────────────────────────────────────────────
@@ -488,27 +464,16 @@ const analyzeResume = (extractedText) => {
     'experience'
   );
 
+  // If no skills section was found or it was empty, extract directly from full text using dictionary scanner
+  if (skillsFromSection.length === 0) {
+    skillsFromSection = extractSkillsFromText(text, 'resume_full_text');
+  }
+
   const allSkills = [
     ...skillsFromSection,
     ...additionalFromProjects,
     ...additionalFromExperience,
   ];
-
-  // Safety net: if very few skills found so far, do a full-text scan of entire resume
-  // This catches resumes with no "Skills" heading — skills mentioned inline in bullets
-  const canonicalSoFar = new Set(allSkills.map((s) => s.canonicalName));
-  if (canonicalSoFar.size < 3) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[ResumeAnalysis] Fewer than 3 skills found from sections — running full-text implied scan');
-    }
-    const impliedFromFullText = extractSkillsFromText(text, 'implied');
-    for (const s of impliedFromFullText) {
-      if (!canonicalSoFar.has(s.canonicalName)) {
-        canonicalSoFar.add(s.canonicalName);
-        allSkills.push(s);
-      }
-    }
-  }
 
   // Final deduplication by canonicalName
   const finalSkills = [];
@@ -520,21 +485,80 @@ const analyzeResume = (extractedText) => {
     }
   }
 
-  // ── Dev-only debug logging ──────────────────────────────────────────────────
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[ResumeAnalysis] Extracted text length: ${text.length} chars`);
-    console.log(`[ResumeAnalysis] Skills from section: ${skillsFromSection.length}`);
-    console.log(`[ResumeAnalysis] Skills from projects: ${additionalFromProjects.length}`);
-    console.log(`[ResumeAnalysis] Skills from experience: ${additionalFromExperience.length}`);
-    console.log(`[ResumeAnalysis] Final skill count: ${finalSkills.length}`);
-    console.log(`[ResumeAnalysis] Canonical skill names: ${finalSkills.map((s) => s.canonicalName).join(', ')}`);
+  // Categorize skills for structured profile
+  const languages = [];
+  const frameworks = [];
+  const libraries = [];
+  const databases = [];
+  const tools = [];
+  const cloud = [];
+
+  for (const skill of finalSkills) {
+    const cat = (skill.category || '').toLowerCase();
+    const name = skill.name || skill.canonicalName;
+    if (cat === 'programming_language') {
+      if (!languages.includes(name)) languages.push(name);
+    } else if (['framework', 'ml_framework', 'web'].includes(cat)) {
+      if (!frameworks.includes(name)) frameworks.push(name);
+    } else if (['library', 'ml_library', 'data_library'].includes(cat)) {
+      if (!libraries.includes(name)) libraries.push(name);
+    } else if (cat === 'database') {
+      if (!databases.includes(name)) databases.push(name);
+    } else if (['tool', 'devops', 'testing', 'infrastructure', 'runtime', 'os'].includes(cat)) {
+      if (!tools.includes(name)) tools.push(name);
+    } else if (cat === 'cloud') {
+      if (!cloud.includes(name)) cloud.push(name);
+    } else {
+      // Default to frameworks or tools based on common naming
+      if (!tools.includes(name)) tools.push(name);
+    }
   }
 
+  // Summary extraction: find summary section or take header summary
+  let summary = null;
+  const summarySec = sections.find((s) => s.type === 'summary');
+  if (summarySec && summarySec.lines.length > 0) {
+    summary = summarySec.lines.join(' ').replace(/\s+/g, ' ').trim();
+  }
+
+  // Standardize projects to have 'name' and 'technologies'
+  const standardizedProjects = projects.map((p) => ({
+    name: p.title || p.name || 'Unnamed Project',
+    title: p.title || p.name || 'Unnamed Project',
+    description: p.description || '',
+    technologies: p.technologies || [],
+    contribution: p.contribution || '',
+  }));
+
+  // Standardize experience
+  const standardizedExperience = experience.map((e) => ({
+    jobTitle: e.jobTitle || 'Software Engineer',
+    organization: e.organization || '',
+    duration: e.duration || '',
+    responsibilities: e.responsibilities || [],
+    technologies: e.technologies || [],
+  }));
+
+  const flatSkillNames = finalSkills.map((s) => s.name || s.canonicalName);
+
   return {
-    basicInfo,
-    skills: finalSkills,
-    projects,
-    experience,
+    name: basicInfo.name,
+    summary,
+    basicInfo: {
+      ...basicInfo,
+      summary,
+    },
+    skills: flatSkillNames,
+    extractedSkills: flatSkillNames, // compatibility alias
+    detailedSkills: finalSkills,
+    languages,
+    frameworks,
+    libraries,
+    databases,
+    tools,
+    cloud,
+    projects: standardizedProjects,
+    experience: standardizedExperience,
     education,
     certifications,
   };

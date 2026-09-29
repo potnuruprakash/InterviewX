@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuthApi } from '../services/api'
 import {
   Upload, FileText, ChevronRight, AlertCircle,
   CheckCircle, Loader2, X, Search, ChevronDown,
-  Check, ArrowRight, ArrowLeft, Target, RefreshCw
+  Check, ArrowRight, ArrowLeft
 } from 'lucide-react'
 import {
   ROLE_CATEGORIES,
@@ -26,14 +26,10 @@ const STEPS = [
 
 export default function CreateInterview() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const practiceFromId = searchParams.get('practiceFrom')
-  const [isPracticeMode, setIsPracticeMode] = useState(Boolean(practiceFromId))
-
   const { authApi, isLoaded, isSignedIn, analyzeResume, runSkillAnalysis } = useAuthApi()
 
   // ── Step Navigation State ──────────────────────────────────────────────────
-  const [step, setStep] = useState(practiceFromId ? 3 : 1)
+  const [step, setStep] = useState(1)
 
   // ── Step 1 Form State (Job Details) ────────────────────────────────────────
   const [targetRole, setTargetRole] = useState('')
@@ -90,77 +86,6 @@ export default function CreateInterview() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // ── Practice Mode: Pre-fill from previous interview ────────────────────────
-  useEffect(() => {
-    if (!practiceFromId || !isLoaded || !isSignedIn) return
-
-    const loadPracticeData = async () => {
-      try {
-        setSkillGapLoading(true)
-        const res = await authApi.get(`/api/interviews/${practiceFromId}`)
-        const prevInterview = res.data?.interview
-        if (!prevInterview) return
-
-        // Fill Job Details
-        const role = prevInterview.targetRole || ''
-        setTargetRole(role)
-        setComboboxQuery(role)
-        setExperienceLevel(prevInterview.experienceLevel || prevInterview.jobDescriptionId?.experienceLevel || 'junior')
-        setCompany(prevInterview.company || prevInterview.jobDescriptionId?.company || '')
-        // Fill JD content if available (job.content is the raw JD text field)
-        setJdContent(
-          prevInterview.jobDescriptionId?.content ||
-          prevInterview.jobDescriptionId?.rawText ||
-          prevInterview.jobDescriptionId?.jobDescriptionText ||
-          ''
-        )
-
-        // Fill Resume details if available
-        if (prevInterview.resumeId) {
-          const rId = typeof prevInterview.resumeId === 'object' ? prevInterview.resumeId._id : prevInterview.resumeId
-          setResumeId(rId)
-          setResumeStatus('done')
-          if (typeof prevInterview.resumeId === 'object') {
-            setResumeAnalysis(prevInterview.resumeId.parsedData || prevInterview.resumeId)
-          }
-        }
-
-        // Fill Job ID
-        if (prevInterview.jobDescriptionId) {
-          const jId = typeof prevInterview.jobDescriptionId === 'object' ? prevInterview.jobDescriptionId._id : prevInterview.jobDescriptionId
-          setJobId(jId)
-        }
-
-        // Fill Skill Gap
-        if (prevInterview.skillAnalysisId) {
-          const sa = typeof prevInterview.skillAnalysisId === 'object' ? prevInterview.skillAnalysisId : null
-          if (sa) {
-            setSkillGapResult(sa)
-          }
-        }
-
-        // Setup defaults: pre-populate previous configuration, ensure question count default 5
-        setInterviewType(prevInterview.interviewType || 'technical')
-        setDifficulty(prevInterview.difficulty || 'medium')
-        setDurationMinutes(prevInterview.durationMinutes || 30)
-        setTotalQuestions(prevInterview.configuredQuestionCount || 5)
-        setInterviewMode(prevInterview.videoModeEnabled ? 'video' : 'audio')
-
-        // Fast-track to Step 3 (Interview Setup)
-        hasRunSkillGapRef.current = true
-        setStep(3)
-        setIsPracticeMode(true)
-      } catch (err) {
-        console.error('[CreateInterview] Failed to load previous interview for practice:', err)
-        setError('Could not load previous interview details for practice.')
-      } finally {
-        setSkillGapLoading(false)
-      }
-    }
-
-    loadPracticeData()
-  }, [practiceFromId, isLoaded, isSignedIn])
-
   // ── Resume Upload & Automatic Analysis ─────────────────────────────────────
   const handleFileSelect = useCallback(async (file) => {
     if (!file) return
@@ -196,15 +121,8 @@ export default function CreateInterview() {
       // 2. Automatic Analysis immediately
       setResumeStatus('analyzing')
       try {
-        const analysisRes = await analyzeResume(rId, true)
-        // Store full resume data so skill gap can access parsedData.skills
-        const resumeData = analysisRes.data?.resume || null
-        setResumeAnalysis(resumeData)
-        if (process.env.NODE_ENV !== 'production') {
-          const skillCount = resumeData?.parsedData?.skills?.length || 0
-          console.log(`[Resume] Analysis complete. Skills found: ${skillCount}`,
-            resumeData?.parsedData?.skills?.map(s => s.canonicalName) || [])
-        }
+        const analysisRes = await analyzeResume(rId)
+        setResumeAnalysis(analysisRes.data.resume)
         setResumeStatus('done')
       } catch (analysisErr) {
         console.warn('[Resume] Analysis warning:', analysisErr.message)
@@ -239,47 +157,17 @@ export default function CreateInterview() {
     setSkillGapLoading(true)
     setSkillGapError(null)
 
-    // 1. Extract canonical skill names from parsed resume data
-    let skillsArray = (
-      resumeAnalysis?.parsedData?.skills ||
-      resumeAnalysis?.skills ||
-      resumeAnalysis?.analysis?.extractedSkills ||
+    // 1. Instant client-side intelligent competency mapping
+    const skillsArray = resumeAnalysis?.analysis?.extractedSkills ||
+      resumeAnalysis?.parsedData?.skills?.map((s) => s.canonicalName || s.name || s) ||
       []
-    ).map((s) => s.canonicalName || s.name || String(s))
 
-    // If skills are missing and resumeId exists, pre-fetch or analyze the resume
-    if (skillsArray.length === 0 && resumeId) {
-      try {
-        const analysisRes = await analyzeResume(resumeId, true)
-        const resumeData = analysisRes.data?.resume
-        if (resumeData) {
-          setResumeAnalysis(resumeData)
-          const fetched = (
-            resumeData.parsedData?.skills ||
-            resumeData.skills ||
-            []
-          ).map((s) => s.canonicalName || s.name || String(s))
-          if (fetched.length > 0) {
-            skillsArray = fetched
-          }
-        }
-      } catch (err) {
-        console.warn('[SkillGap] Could not pre-fetch resume skills:', err.message)
-      }
-    }
+    const comp = computeCompetencyMatch(skillsArray, effectiveRole)
+    setCompetencyMatch(comp)
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[SkillGap] Resume skills for competency match (${skillsArray.length}):`, skillsArray)
-    }
-
-    if (skillsArray.length > 0) {
-      const comp = computeCompetencyMatch(skillsArray, effectiveRole)
-      setCompetencyMatch(comp)
-
-      if (comp) {
-        const recs = generateLearningRecommendations(comp, experienceLevel)
-        setLearningRecs(recs)
-      }
+    if (comp) {
+      const recs = generateLearningRecommendations(comp, experienceLevel)
+      setLearningRecs(recs)
     }
 
     // 2. Backend Job Description creation & skill analysis
@@ -288,13 +176,8 @@ export default function CreateInterview() {
       const standardSkills = roleProfile?.detectedRequirements?.join(', ') ||
         'Software engineering, problem solving, system design, data structures, algorithms, databases, API integration'
 
-      const userJD = jdContent.trim()
-      const hasDetailedJD = userJD.length > 80 && /[,\n;•]/.test(userJD)
-      const generatedContent = userJD
-        ? (hasDetailedJD
-            ? userJD
-            : `Target Role: ${effectiveRole}\nExperience Level: ${experienceLevel}\n\nRequired Skills:\n- ${standardSkills}\n\nJob Notes:\n${userJD}\n\nResponsibilities:\n- Design, develop, test, and maintain software applications as a ${effectiveRole}.`)
-        : `Target Role: ${effectiveRole}\nExperience Level: ${experienceLevel}\n\nRequired Skills:\n- ${standardSkills}\n\nResponsibilities:\n- Design, develop, test, and maintain software applications as a ${effectiveRole}.`
+      const generatedContent = jdContent.trim() ||
+        `Target Role: ${effectiveRole}\nExperience Level: ${experienceLevel}\n\nRequired Skills:\n- ${standardSkills}\n\nResponsibilities:\n- Design, develop, test, and maintain software applications as a ${effectiveRole}.`
 
       const jdPayload = {
         content: generatedContent,
@@ -303,12 +186,9 @@ export default function CreateInterview() {
         experienceLevel,
       }
 
-      let currentJobId = jobId
-      if (!currentJobId) {
-        const jdRes = await authApi.post('/api/jobs', jdPayload)
-        currentJobId = jdRes.data.job.id
-        setJobId(currentJobId)
-      }
+      const jdRes = await authApi.post('/api/jobs', jdPayload)
+      const currentJobId = jdRes.data.job.id
+      setJobId(currentJobId)
 
       // Ensure JD is analyzed
       try {
@@ -321,29 +201,7 @@ export default function CreateInterview() {
       if (resumeId) {
         const gapRes = await runSkillAnalysis(resumeId, currentJobId)
         if (gapRes.data?.skillAnalysis) {
-          const sa = gapRes.data.skillAnalysis
-          setSkillGapResult(sa)
-
-          // Synchronize candidate skills from backend response
-          const backendSkills = (
-            sa.candidateProfile?.skills ||
-            sa.candidateSkills ||
-            []
-          ).map((s) => s.canonicalName || s.name || String(s))
-
-          const resolvedSkills = backendSkills.length > 0 ? backendSkills : skillsArray
-          if (resolvedSkills.length > 0) {
-            setResumeAnalysis((prev) => ({
-              ...prev,
-              parsedData: sa.candidateProfile || prev?.parsedData,
-            }))
-            const freshComp = computeCompetencyMatch(resolvedSkills, effectiveRole)
-            setCompetencyMatch(freshComp)
-            if (freshComp) {
-              const recs = generateLearningRecommendations(freshComp, experienceLevel)
-              setLearningRecs(recs)
-            }
-          }
+          setSkillGapResult(gapRes.data.skillAnalysis)
         }
       }
     } catch (err) {
@@ -354,16 +212,13 @@ export default function CreateInterview() {
     }
   }
 
-  // Trigger skill gap on transition to step 2 (auto-retries if match was uncomputed or 0)
+  // Trigger skill gap on transition to step 2 (guarded against infinite loops)
   useEffect(() => {
-    if (step === 2 && effectiveRole) {
-      const matchEmpty = !competencyMatch || competencyMatch.overallMatch === 0
-      if (!hasRunSkillGapRef.current || matchEmpty) {
-        hasRunSkillGapRef.current = true
-        runSkillGap()
-      }
+    if (step === 2 && !hasRunSkillGapRef.current && effectiveRole) {
+      hasRunSkillGapRef.current = true
+      runSkillGap()
     }
-  }, [step, effectiveRole, competencyMatch?.overallMatch])
+  }, [step, effectiveRole])
 
   // ── Create Interview on Step 4 ─────────────────────────────────────────────
   const handleCreateInterview = async () => {
@@ -376,35 +231,14 @@ export default function CreateInterview() {
     setError(null)
 
     try {
-      // Extract candidate skills list for the AI question generator context
-      const candidateSkillNames = resumeAnalysis?.parsedData?.skills?.map(
-        (s) => s.canonicalName || s.name || String(s)
-      ) || []
-
-      // Extract skill gap summary for personalized question focus
-      const skillGapSummary = skillGapResult ? {
-        matchedRequiredSkills: skillGapResult.matchedRequiredSkills || [],
-        notIdentifiedRequiredSkills: skillGapResult.notIdentifiedRequiredSkills || [],
-        transferableSkills: skillGapResult.transferableSkills || [],
-        skillCoveragePercentage: skillGapResult.skillCoveragePercentage || 0,
-      } : null
-
       const res = await authApi.post('/api/interviews', {
         resumeId,
         jobDescriptionId: jobId,
         interviewType,
         difficulty,
         totalQuestions: Number(totalQuestions),
-        // Enforce exact question count — backend will use this
-        questionCount: Number(totalQuestions),
         durationMinutes: Number(durationMinutes),
-        videoModeEnabled: interviewMode === 'video',
         interviewMode,
-        practiceFromInterviewId: practiceFromId || null,
-        // Candidate context for personalized question generation
-        candidateSkills: candidateSkillNames,
-        skillGapSummary,
-        targetRole: effectiveRole,
       })
 
       navigate(`/interview/${res.data.interview.id}`)
@@ -444,12 +278,6 @@ export default function CreateInterview() {
 
   const handleBack = () => {
     setError(null)
-    hasRunSkillGapRef.current = false
-    if (step === 3 && isPracticeMode && practiceFromId) {
-      // In practice mode, Back from Step 3 returns to the results of the previous session
-      navigate(`/interview/${practiceFromId}/results`)
-      return
-    }
     setStep((s) => Math.max(1, s - 1))
   }
 
@@ -461,21 +289,14 @@ export default function CreateInterview() {
   }
 
   const skillsIdentifiedCount =
-    resumeAnalysis?.parsedData?.skills?.length ||
-    resumeAnalysis?.skills?.length ||
     resumeAnalysis?.analysis?.extractedSkills?.length ||
-    skillGapResult?.candidateSkillCount ||
+    resumeAnalysis?.parsedData?.skills?.length ||
     0
 
-  // Match percentage reflects the competency match grid and learning priorities.
-  // Prioritizes competencyMatch.overallMatch (aligning with Skills Matched & Skills to Improve),
-  // falling back to skillGapResult.skillCoveragePercentage if competency match is not ready.
   const overallMatchPercentage =
-    (competencyMatch && typeof competencyMatch.overallMatch === 'number' && competencyMatch.overallMatch > 0)
-      ? competencyMatch.overallMatch
-      : (skillGapResult && skillGapResult.skillCoveragePercentage > 0
-          ? skillGapResult.skillCoveragePercentage
-          : (competencyMatch?.overallMatch || skillGapResult?.skillCoveragePercentage || 0))
+    competencyMatch?.overallMatch ??
+    skillGapResult?.skillCoveragePercentage ??
+    72
 
   const totalMatchedCount =
     competencyMatch?.competencies?.reduce(
@@ -1016,34 +837,8 @@ export default function CreateInterview() {
               <div className="ci-step-header">
                 <span className="ci-step-counter">Step 3 of 4</span>
                 <h1 className="ci-step-title">Interview Setup</h1>
-                <p className="ci-step-desc">
-                  {isPracticeMode
-                    ? 'Targeted practice session configured from your previous interview.'
-                    : 'Customize how your interview will run.'}
-                </p>
+                <p className="ci-step-desc">Customize how your interview will run.</p>
               </div>
-
-              {/* Practice Mode Alert / Notice */}
-              {isPracticeMode && (
-                <div className="ci-practice-banner animate-fade-in">
-                  <div className="ci-practice-badge">
-                    <RefreshCw size={13} className="ci-practice-icon" />
-                    <span>Practice Session</span>
-                  </div>
-                  <div className="ci-practice-text">
-                    Reusing role & skill gap context from your previous session for <strong>{effectiveRole || 'your target role'}</strong>. Adjust your question count or settings below.
-                  </div>
-                  {practiceFromId && (
-                    <button
-                      type="button"
-                      className="ci-practice-back-link"
-                      onClick={() => navigate(`/interview/${practiceFromId}/results`)}
-                    >
-                      ← Back to Previous Results
-                    </button>
-                  )}
-                </div>
-              )}
 
               {/* Form Surface */}
               <div className="ci-form-surface ci-setup-surface">
@@ -1289,30 +1084,6 @@ export default function CreateInterview() {
                     </div>
                   </div>
                 </div>
-
-                {/* 5. PRACTICE FOCUS (Practice mode only) */}
-                {isPracticeMode && (
-                  <div className="ci-review-card ci-practice-card">
-                    <div className="ci-review-card-header">
-                      <span className="ci-review-card-title">PRACTICE FOCUS</span>
-                      <span className="ci-badge ci-badge-accent">Targeted Retake</span>
-                    </div>
-                    <div className="ci-review-content">
-                      <div className="ci-review-item">
-                        <span className="ci-r-label">Objective</span>
-                        <span className="ci-r-value bold">Improve articulation & composure</span>
-                      </div>
-                      <div className="ci-review-item">
-                        <span className="ci-r-label">Enforced Question Cap</span>
-                        <span className="ci-r-value highlight bold">{totalQuestions} questions strictly enforced</span>
-                      </div>
-                      <div className="ci-review-item">
-                        <span className="ci-r-label">Progress Tracking</span>
-                        <span className="ci-r-value">Creates new attempt linked for comparison</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </section>
           )}

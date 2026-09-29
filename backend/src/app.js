@@ -1,4 +1,7 @@
-require('dotenv').config();
+const path = require('path');
+if (!process.env.MONGODB_URI && !process.env.MONGO_URI) {
+  require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+}
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -15,6 +18,7 @@ const jobRoutes = require('./routes/jobs');
 const interviewRoutes = require('./routes/interviews');
 const progressRoutes = require('./routes/progress');
 const skillAnalysisRoutes = require('./routes/skillAnalysis');
+const coachRoutes = require('./routes/coach');
 const aiCoachRoutes = require('./routes/aiCoach');
 const chatRoutes = require('./routes/chat');
 const fileRoutes = require('./routes/files');
@@ -95,6 +99,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/interviews', interviewRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/skill-analysis', skillAnalysisRoutes);
+app.use('/api/coach', coachRoutes);
 app.use('/api/ai/coach', aiCoachRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/files', fileRoutes);

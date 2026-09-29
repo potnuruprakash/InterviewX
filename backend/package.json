@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "migrate:atlas": "node src/scripts/migrateLocalToAtlas.js",
     "test": "node src/tests/run_all_tests.js"
   },
   "keywords": [],

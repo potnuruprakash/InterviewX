@@ -28,7 +28,7 @@ const interviewSchema = new mongoose.Schema(
     },
     interviewType: {
       type: String,
-      enum: ['technical', 'behavioral', 'hr', 'mixed'],
+      enum: ['technical', 'coding', 'behavioral', 'hr', 'system_design', 'system design', 'mixed'],
       default: 'mixed',
     },
     difficulty: {
@@ -38,49 +38,20 @@ const interviewSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['created', 'ready', 'in_progress', 'paused', 'completed', 'evaluating', 'results', 'abandoned'],
+      enum: ['setup', 'created', 'in_progress', 'completed', 'cancelled', 'abandoned'],
       default: 'created',
     },
     currentQuestionIndex: {
       type: Number,
       default: 0,
     },
-    configuredQuestionCount: {
-      type: Number,
-      default: 5,
-    },
     totalQuestions: {
       type: Number,
-      default: 5,
+      default: 10,
     },
     durationMinutes: {
       type: Number,
       default: 30,
-    },
-    durationSeconds: {
-      type: Number,
-      default: 1800,
-    },
-    expiresAt: {
-      type: Date,
-      default: null,
-    },
-    videoModeEnabled: {
-      type: Boolean,
-      default: false,
-    },
-    videoRecorded: {
-      type: Boolean,
-      default: false,
-    },
-    videoUploaded: {
-      type: Boolean,
-      default: false,
-    },
-    practiceFromInterviewId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Interview',
-      default: null,
     },
     completionReason: {
       type: String,
@@ -98,20 +69,46 @@ const interviewSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    answeredQuestionsCount: {
-      type: Number,
-      default: 0,
+
+    // Active question snapshot for immediate UI retrieval & state restoration
+    currentQuestion: {
+      id: { type: String, default: null },
+      text: { type: String, default: null },
+      topic: { type: String, default: null },
+      category: { type: String, default: null },
+      difficulty: { type: String, default: 'medium' },
+      type: { type: String, default: 'technical' },
+      expectedConcepts: [{ type: String }],
+      order: { type: Number, default: 0 },
+      starterCode: { type: String, default: null },
+      language: { type: String, default: 'javascript' },
     },
-    timedOutQuestionsCount: {
-      type: Number,
-      default: 0,
+
+    // Rolling performance history for smooth adaptive difficulty adjustment
+    recentPerformance: {
+      type: [Number],
+      default: [],
+    },
+
+    // Topic coverage tracking
+    topicCoverage: {
+      type: Map,
+      of: Number,
+      default: {},
+    },
+
+    // Associated training session from Train Me
+    trainingSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TrainingSession',
+      default: null,
     },
 
     // Phase 3 — Personalized question generation
     questionGenerationSource: {
       type: String,
-      enum: ['personalized', 'static_bank', 'hybrid'],
-      default: 'static_bank',
+      enum: ['personalized', 'static_bank', 'hybrid', 'adaptive_dynamic'],
+      default: 'personalized',
     },
 
     // Phase 8 — Adaptive interview state
@@ -147,8 +144,9 @@ const interviewSchema = new mongoose.Schema(
     finalEvaluation: {
       overallScore: { type: Number, default: null },
       technicalScore: { type: Number, default: null },
-      communicationScore: { type: Number, default: null },
       problemSolvingScore: { type: Number, default: null },
+      communicationScore: { type: Number, default: null },
+      jobRelevanceScore: { type: Number, default: null },
       audioScore: { type: Number, default: null },
       videoScore: { type: Number, default: null },
       modalitiesUsed: { type: [String], default: [] },
@@ -158,6 +156,8 @@ const interviewSchema = new mongoose.Schema(
       strongAreas: { type: [String], default: [] },
       weakAreas: { type: [String], default: [] },
       skillGaps: { type: [String], default: [] },
+      improvementAreas: { type: [String], default: [] },
+      recommendedTrainingTopics: { type: [String], default: [] },
       summary: { type: String, default: null },
       completedAt: { type: Date, default: null },
       isDevelopmentEvaluation: { type: Boolean, default: false },
@@ -168,6 +168,8 @@ const interviewSchema = new mongoose.Schema(
       matchedSkills: [String],
       missingSkills: [String],
       weakSkills: [String],
+      strongSkills: [String],
+      partialSkills: [String],
       skillGapPercentage: Number,
     },
 
@@ -180,11 +182,12 @@ const interviewSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
-
-interviewSchema.index({ clerkUserId: 1, createdAt: -1 });
-interviewSchema.index({ clerkUserId: 1, status: 1 });
 
 module.exports = mongoose.model('Interview', interviewSchema);
 

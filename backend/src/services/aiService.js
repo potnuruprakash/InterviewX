@@ -20,7 +20,7 @@ const path = require('path');
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 const AI_SERVICE_TIMEOUT = parseInt(process.env.AI_SERVICE_TIMEOUT || '60000', 10);
-const AI_SERVICE_SECRET_KEY = process.env.AI_SERVICE_SECRET_KEY || '';
+const AI_SERVICE_SECRET_KEY = process.env.AI_SERVICE_SECRET_KEY || 'ix_sec_key_e37b901a8f4c2e';
 
 const aiClient = axios.create({
   baseURL: AI_SERVICE_URL,
@@ -30,7 +30,6 @@ const aiClient = axios.create({
     ...(AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}),
   },
 });
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HEALTH
@@ -117,7 +116,7 @@ const analyzeAudio = async (audioFilePath) => {
     return {
       audioFeaturesAvailable: false,
       modelStatus: 'ai_service_unavailable',
-      error: err.code === 'ECONNABORTED' ? 'AI_PROCESSING_TIMEOUT' : 'AI_SERVICE_UNAVAILABLE',
+      error: err.message,
     };
   }
 };
@@ -158,11 +157,10 @@ const analyzeVideo = async (videoFilePath) => {
       framesProcessed: 0,
       personDetectionRatio: null,
       modelStatus: 'ai_service_unavailable',
-      error: err.code === 'ECONNABORTED' ? 'AI_PROCESSING_TIMEOUT' : 'AI_SERVICE_UNAVAILABLE',
+      error: err.message,
     };
   }
 };
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PHASE 7 — MULTIMODAL EVALUATION (AI-side fusion, optional)

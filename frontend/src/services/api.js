@@ -44,6 +44,10 @@ authApi.interceptors.request.use(async (config) => {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    const resolvedUserId = currentUserId || (typeof window !== 'undefined' ? window.Clerk?.user?.id : null)
+    if (resolvedUserId) {
+      config.headers['x-dev-clerk-user-id'] = resolvedUserId
+    }
   } catch (err) {
     console.warn('[API] Could not retrieve Clerk token:', err.message)
   }
@@ -67,6 +71,10 @@ authApi.interceptors.response.use(
         }
         if (freshToken) {
           originalRequest.headers.Authorization = `Bearer ${freshToken}`
+          const resolvedUserId = currentUserId || (typeof window !== 'undefined' ? window.Clerk?.user?.id : null)
+          if (resolvedUserId) {
+            originalRequest.headers['x-dev-clerk-user-id'] = resolvedUserId
+          }
           return authApi(originalRequest)
         }
       } catch (retryErr) {
@@ -77,7 +85,6 @@ authApi.interceptors.response.use(
     return Promise.reject(new Error(message))
   }
 )
-
 
 // ─── Direct Helper Methods bound to singleton authApi ─────────────────────────
 
@@ -105,75 +112,47 @@ export const getUserSkillAnalyses = () =>
 export const getSkillAnalysisByContext = (resumeId, jobDescriptionId) =>
   authApi.get(`/api/skill-analysis/by-context?resumeId=${resumeId}&jobDescriptionId=${jobDescriptionId}`)
 
-// ─── AI Coach & Assistant API Helpers ───────────────────────────────────────
-export const getCoachProfile = () => authApi.get('/api/ai/coach/profile')
-export const getCoachProgress = () => authApi.get('/api/ai/coach/progress')
-export const getCoachSessions = () => authApi.get('/api/ai/coach/sessions')
-export const getCoachSession = (id) => authApi.get(`/api/ai/coach/sessions/${id}`)
-export const createCoachSession = (payload = {}) => authApi.post('/api/ai/coach/sessions', payload)
-export const sendCoachMessage = (sessionId, content) =>
-  authApi.post(`/api/ai/coach/sessions/${sessionId}/messages`, { content })
-export const triggerCoachAction = (sessionId, action) =>
-  authApi.post(`/api/ai/coach/sessions/${sessionId}/action`, { action })
+export const trainInterview = (interviewId) =>
+  authApi.post(`/api/interviews/${interviewId}/train`)
 
-// ChatGPT-Style Conversations (Legacy AI Coach)
-export const getConversations = () => authApi.get('/api/ai/coach/conversations')
-export const getConversation = (id) => authApi.get(`/api/ai/coach/conversations/${id}`)
-export const createConversation = (payload = {}) => authApi.post('/api/ai/coach/conversations', payload)
-export const deleteConversation = (id) => authApi.delete(`/api/ai/coach/conversations/${id}`)
-export const sendConversationMessage = (id, payload) =>
-  authApi.post(`/api/ai/coach/conversations/${id}/messages`, payload)
+export const getTrainingSession = (trainingId) =>
+  authApi.get(`/api/interviews/training/${trainingId}`)
 
-export const uploadChatAttachment = (file) => {
-  const form = new FormData()
-  form.append('file', file)
-  return authApi.post('/api/ai/coach/upload-attachment', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-}
+export const sendCoachMessage = (payload) =>
+  authApi.post('/api/coach/chat', payload)
 
-export const rateMessageFeedback = (msgId, rating) =>
-  authApi.post(`/api/ai/coach/messages/${msgId}/feedback`, { rating })
+export const getCoachState = () =>
+  authApi.get('/api/coach/state')
 
-// ─── Separate Chatbot APIs (Dashboard AI & Results AI) ──────────────────────
-// Dashboard Chatbot
-export const getDashboardChatSessions = () => authApi.get('/api/chat/dashboard/sessions')
-export const createDashboardChatSession = () => authApi.post('/api/chat/dashboard/sessions')
-export const getDashboardChatSession = (id) => authApi.get(`/api/chat/dashboard/sessions/${id}`)
-export const deleteDashboardChatSession = (id) => authApi.delete(`/api/chat/dashboard/sessions/${id}`)
-export const sendDashboardChatMessage = (id, payload) =>
-  authApi.post(`/api/chat/dashboard/sessions/${id}/messages`, payload)
-export const regenerateDashboardChatResponse = (id) =>
-  authApi.post(`/api/chat/dashboard/sessions/${id}/regenerate`)
-
-// Results Chatbot
-export const getResultChatSessions = (resultId) => authApi.get(`/api/chat/results/${resultId}/sessions`)
-export const createResultChatSession = (resultId) => authApi.post(`/api/chat/results/${resultId}/sessions`)
-export const getResultChatSession = (resultId, id) =>
-  authApi.get(`/api/chat/results/${resultId}/sessions/${id}`)
-export const deleteResultChatSession = (resultId, id) =>
-  authApi.delete(`/api/chat/results/${resultId}/sessions/${id}`)
-export const sendResultChatMessage = (resultId, id, payload) =>
-  authApi.post(`/api/chat/results/${resultId}/sessions/${id}/messages`, payload)
-export const regenerateResultChatResponse = (resultId, id) =>
-  authApi.post(`/api/chat/results/${resultId}/sessions/${id}/regenerate`)
-
+export const resetCoach = () =>
+  authApi.post('/api/coach/reset')
 
 /**
  * Hook providing access to the singleton authApi, auth state, and helper methods.
  * Ensures the token getter is synchronized without re-instantiating Axios or looping.
  */
 export const useAuthApi = () => {
-  const clerkAuth = useAuth()
-  const isLoaded = clerkAuth.isLoaded ?? true
-  const isSignedIn = clerkAuth.isSignedIn ?? false
-  const userId = clerkAuth.userId || null
-  if (userId) {
-    currentUserId = userId
-  }
-  const getToken = clerkAuth.getToken || null
-  if (getToken) {
-    currentTokenGetter = getToken
+  let isLoaded = true
+  let isSignedIn = false
+  let userId = null
+  let getToken = null
+
+  if (hasClerkKey) {
+    try {
+      const clerkAuth = useAuth()
+      isLoaded = clerkAuth.isLoaded
+      isSignedIn = clerkAuth.isSignedIn
+      userId = clerkAuth.userId
+      if (userId) {
+        currentUserId = userId
+      }
+      getToken = clerkAuth.getToken
+      if (getToken) {
+        currentTokenGetter = getToken
+      }
+    } catch (e) {
+      // Not wrapped in ClerkProvider
+    }
   }
 
   return {
@@ -190,32 +169,11 @@ export const useAuthApi = () => {
     getSkillAnalysis,
     getUserSkillAnalyses,
     getSkillAnalysisByContext,
-    getCoachProfile,
-    getCoachProgress,
-    getCoachSessions,
-    getCoachSession,
-    createCoachSession,
+    trainInterview,
+    getTrainingSession,
     sendCoachMessage,
-    triggerCoachAction,
-    getConversations,
-    getConversation,
-    createConversation,
-    deleteConversation,
-    sendConversationMessage,
-    uploadChatAttachment,
-    rateMessageFeedback,
-    getDashboardChatSessions,
-    createDashboardChatSession,
-    getDashboardChatSession,
-    deleteDashboardChatSession,
-    sendDashboardChatMessage,
-    regenerateDashboardChatResponse,
-    getResultChatSessions,
-    createResultChatSession,
-    getResultChatSession,
-    deleteResultChatSession,
-    sendResultChatMessage,
-    regenerateResultChatResponse,
+    getCoachState,
+    resetCoach,
   }
 }
 

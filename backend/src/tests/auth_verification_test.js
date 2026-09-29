@@ -11,11 +11,14 @@ process.env.TEST_AUTH_ENABLED = 'true';
 require('dotenv').config();
 const app = require('../app');
 
+const dns = require('dns');
+try { dns.setServers(['8.8.8.8', '1.1.1.1']); } catch (e) {}
+
 async function testAuthPipeline() {
   console.log('Testing InterviewX Auth Pipeline...\n');
 
   // Connect to DB for controller checks
-  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/interviewx');
+  await mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/adaptive-ai-interviewer');
 
   // Start temporary server on port 5555
   const server = http.createServer(app);

@@ -63,28 +63,6 @@
   transition: all var(--transition-base);
 }
 
-button.mic-status-pill {
-  border: 1px solid transparent;
-  outline: none;
-  font-family: inherit;
-  cursor: default;
-}
-
-button.mic-status-pill.clickable {
-  cursor: pointer;
-}
-
-button.mic-status-pill.clickable:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: brightness(1.15);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-}
-
-button.mic-status-pill:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
 /* Idle */
 .mic-status-idle {
   color: var(--text-muted);
@@ -97,13 +75,6 @@ button.mic-status-pill:disabled {
   color: #34d399;
   background: rgba(16, 185, 129, 0.1);
   border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-/* Reconnecting / auto-restarting */
-.mic-status-restarting {
-  color: #fbbf24;
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 /* Processing / transcribing */
@@ -379,199 +350,29 @@ button.mic-status-pill:disabled {
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .answer-composer {
-    padding: 14px;
-    gap: 12px;
+    padding: var(--space-md);
   }
   .composer-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
   }
   .composer-footer {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
-  }
-  .footer-left {
-    justify-content: space-between;
   }
   .footer-right {
     margin-left: 0;
-    width: 100%;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+    flex-wrap: wrap;
   }
   .btn-submit-answer {
     width: 100%;
     justify-content: center;
-    padding: 11px 16px;
   }
   .btn-skip-question {
-    width: 100%;
+    flex: 1;
     justify-content: center;
-    padding: 9px 16px;
   }
   .composer-textarea {
-    min-height: 180px;
-    font-size: 14px;
+    min-height: 200px;
   }
 }
-
-/* ============================================================
-   InterviewX Light Mode — Answer Composer
-   ============================================================ */
-
-[data-theme='light'] .answer-composer {
-  background: #FFFFFF;
-  border: 1px solid #E2E5EA;
-  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
-}
-
-[data-theme='light'] .answer-composer:focus-within {
-  border-color: #6D4AFF;
-  box-shadow: 0 0 0 3px rgba(109, 74, 255, 0.10);
-}
-
-[data-theme='light'] .composer-title {
-  color: #1F2430;
-}
-
-[data-theme='light'] .composer-subtitle {
-  color: #667085;
-}
-
-/* Mic Status Pills */
-[data-theme='light'] .mic-status-idle {
-  color: #667085;
-  background: #F0F2F5;
-  border-color: #D5D9E0;
-}
-
-[data-theme='light'] .mic-status-active {
-  color: #027A48;
-  background: #ECFDF3;
-  border-color: rgba(2, 122, 72, 0.3);
-}
-
-[data-theme='light'] .mic-status-restarting,
-[data-theme='light'] .mic-status-warn {
-  color: #B54708;
-  background: #FFFAEB;
-  border-color: rgba(181, 71, 8, 0.3);
-}
-
-[data-theme='light'] .mic-status-processing {
-  color: #175CD3;
-  background: #EFF8FF;
-  border-color: rgba(23, 92, 211, 0.25);
-}
-
-[data-theme='light'] .mic-status-ready {
-  color: #5B3FD4;
-  background: rgba(109, 74, 255, 0.08);
-  border-color: rgba(109, 74, 255, 0.25);
-}
-
-[data-theme='light'] .mic-status-error {
-  color: #B42318;
-  background: #FEF3F2;
-  border-color: rgba(180, 35, 24, 0.25);
-}
-
-[data-theme='light'] .mic-icon-active {
-  color: #027A48;
-}
-
-/* Live Interim */
-[data-theme='light'] .live-interim-box {
-  background: rgba(109, 74, 255, 0.06);
-  border-left-color: #6D4AFF;
-  color: #5B3FD4;
-}
-
-[data-theme='light'] .sparkle-icon {
-  color: #6D4AFF;
-}
-
-[data-theme='light'] .interim-label {
-  color: #667085;
-}
-
-[data-theme='light'] .interim-text {
-  color: #1F2430;
-}
-
-/* Textarea — Soft Off-White for Reading Comfort */
-[data-theme='light'] .composer-textarea {
-  background: #FAFBFC;
-  border: 1px solid #D5D9E0;
-  color: #1F2430;
-}
-
-[data-theme='light'] .composer-textarea:focus {
-  border-color: #6D4AFF;
-  box-shadow: 0 0 0 3px rgba(109, 74, 255, 0.10);
-}
-
-[data-theme='light'] .composer-textarea::placeholder {
-  color: #98A2B3;
-}
-
-[data-theme='light'] .textarea-meta {
-  color: #98A2B3;
-}
-
-[data-theme='light'] .media-attached-badge {
-  color: #0891b2;
-  background: rgba(6, 182, 212, 0.08);
-  border-color: rgba(6, 182, 212, 0.25);
-}
-
-/* Footer buttons */
-[data-theme='light'] .btn-clear {
-  color: #667085;
-}
-
-[data-theme='light'] .btn-clear:hover {
-  color: #B42318;
-  background: #FEF3F2;
-}
-
-[data-theme='light'] .shortcut-hint {
-  color: #98A2B3;
-}
-
-[data-theme='light'] .shortcut-hint kbd {
-  background: #F0F2F5;
-  border-color: #D5D9E0;
-  color: #667085;
-}
-
-[data-theme='light'] .media-sync-indicator {
-  color: #667085;
-}
-
-[data-theme='light'] .btn-skip-question {
-  background: #FFFFFF;
-  border: 1px solid #D5D9E0;
-  color: #667085;
-}
-
-[data-theme='light'] .btn-skip-question:hover:not(:disabled) {
-  background: #FFFAEB;
-  border-color: rgba(181, 71, 8, 0.3);
-  color: #B54708;
-}
-
-[data-theme='light'] .btn-submit-answer {
-  background: #6D4AFF;
-  color: #FFFFFF;
-  border: 1px solid #5B3FD4;
-}
-
-[data-theme='light'] .btn-submit-answer:hover:not(:disabled) {
-  background: #5B3FD4;
-  border-color: #4A2FB8;
-}
-

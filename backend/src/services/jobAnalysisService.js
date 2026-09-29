@@ -204,6 +204,148 @@ const extractResponsibilities = (lines) => {
   return results.slice(0, 15); // cap at 15
 };
 
+// ─── Standard Role Competency Profiles ───────────────────────────────────────
+
+const STANDARD_ROLE_PROFILES = {
+  'python full stack developer': {
+    title: 'Python Full Stack Developer',
+    requiredSkills: ['Python', 'REST APIs', 'FastAPI', 'React', 'JavaScript', 'SQL', 'Git'],
+    preferredSkills: ['Docker', 'AWS', 'Redis'],
+    roleExpectations: [
+      'Full stack web application development',
+      'RESTful API architecture with Python/FastAPI',
+      'Frontend component engineering with React and JavaScript',
+      'Database modeling and querying with SQL',
+      'Version control and collaborative workflows with Git',
+    ],
+  },
+  'python developer': {
+    title: 'Python Developer',
+    requiredSkills: ['Python', 'FastAPI', 'Django', 'REST APIs', 'SQL', 'Git'],
+    preferredSkills: ['Docker', 'PostgreSQL', 'Redis', 'AWS'],
+    roleExpectations: [
+      'Backend development and microservices with Python',
+      'API design and integration',
+      'Database schema management and performance tuning',
+    ],
+  },
+  'frontend developer': {
+    title: 'Frontend Developer',
+    requiredSkills: ['JavaScript', 'TypeScript', 'React', 'HTML', 'CSS', 'REST APIs', 'Git'],
+    preferredSkills: ['Next.js', 'Tailwind CSS', 'Redux', 'Jest'],
+    roleExpectations: [
+      'UI/UX implementation with React and modern CSS',
+      'State management and performance optimization',
+      'Responsive design and cross-browser compatibility',
+    ],
+  },
+  'react developer': {
+    title: 'React Developer',
+    requiredSkills: ['React', 'JavaScript', 'TypeScript', 'HTML', 'CSS', 'REST APIs', 'Git'],
+    preferredSkills: ['Next.js', 'Redux', 'Tailwind CSS', 'Vite'],
+    roleExpectations: [
+      'Component-driven UI development with React',
+      'Frontend state management and asynchronous data fetching',
+    ],
+  },
+  'full stack developer': {
+    title: 'Full Stack Developer',
+    requiredSkills: ['JavaScript', 'TypeScript', 'React', 'Node.js', 'Express.js', 'SQL', 'REST APIs', 'Git'],
+    preferredSkills: ['Docker', 'AWS', 'MongoDB', 'Redis'],
+    roleExpectations: [
+      'End-to-end full stack feature engineering',
+      'Server-side API and database integration',
+      'Frontend interactive user interfaces',
+    ],
+  },
+  'backend developer': {
+    title: 'Backend Developer',
+    requiredSkills: ['Node.js', 'Python', 'REST APIs', 'SQL', 'Git', 'Database Design'],
+    preferredSkills: ['Docker', 'Microservices', 'Redis', 'AWS'],
+    roleExpectations: [
+      'Scalable backend system architecture',
+      'Secure API design, authentication, and database querying',
+    ],
+  },
+  'java full stack developer': {
+    title: 'Java Full Stack Developer',
+    requiredSkills: ['Java', 'Spring Boot', 'REST APIs', 'SQL', 'React', 'JavaScript', 'Git'],
+    preferredSkills: ['Docker', 'AWS', 'Kubernetes', 'Hibernate', 'Microservices'],
+    roleExpectations: [
+      'Enterprise application development with Spring Boot',
+      'Full stack architecture with modern frontend',
+      'Relational database and transaction management',
+    ],
+  },
+  'data scientist': {
+    title: 'Data Scientist',
+    requiredSkills: ['Python', 'SQL', 'Machine Learning', 'Pandas', 'NumPy', 'Scikit-Learn', 'Data Analysis'],
+    preferredSkills: ['Deep Learning', 'PyTorch', 'TensorFlow', 'BigQuery', 'Tableau'],
+    roleExpectations: [
+      'Predictive modeling and statistical analysis',
+      'Data preprocessing, feature engineering, and pipeline creation',
+    ],
+  },
+  'machine learning engineer': {
+    title: 'Machine Learning Engineer',
+    requiredSkills: ['Python', 'Machine Learning', 'Deep Learning', 'PyTorch', 'TensorFlow', 'SQL', 'Git', 'Docker'],
+    preferredSkills: ['MLOps', 'Kubernetes', 'FastAPI', 'AWS'],
+    roleExpectations: [
+      'Production ML pipeline design and model deployment',
+      'Deep neural network training and evaluation',
+    ],
+  },
+  'devops engineer': {
+    title: 'DevOps Engineer',
+    requiredSkills: ['Linux', 'Docker', 'Kubernetes', 'CI/CD', 'Git', 'Bash', 'AWS', 'Terraform'],
+    preferredSkills: ['Prometheus', 'Grafana', 'Ansible', 'Python', 'Jenkins'],
+    roleExpectations: [
+      'Infrastructure as code and cloud orchestration',
+      'Automated CI/CD pipelines and production monitoring',
+    ],
+  },
+  'system design engineer': {
+    title: 'System Design Engineer',
+    requiredSkills: ['System Design', 'Microservices', 'Distributed Systems', 'REST APIs', 'Database Design', 'Scalability'],
+    preferredSkills: ['Kafka', 'Redis', 'Kubernetes', 'High Availability'],
+    roleExpectations: [
+      'High-throughput distributed architecture planning',
+      'Fault tolerance, caching, and database partitioning',
+    ],
+  },
+};
+
+const matchStandardRoleProfile = (roleTitle) => {
+  if (!roleTitle || typeof roleTitle !== 'string') return null;
+  const cleaned = roleTitle.toLowerCase().trim();
+
+  // Exact match
+  if (STANDARD_ROLE_PROFILES[cleaned]) return STANDARD_ROLE_PROFILES[cleaned];
+
+  // Substring match
+  for (const [key, profile] of Object.entries(STANDARD_ROLE_PROFILES)) {
+    if (cleaned.includes(key) || key.includes(cleaned)) {
+      return profile;
+    }
+  }
+
+  // Word overlap heuristic
+  const words = cleaned.split(/\s+/).filter((w) => w.length > 2);
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const [key, profile] of Object.entries(STANDARD_ROLE_PROFILES)) {
+    const keyWords = key.split(/\s+/);
+    const overlap = words.filter((w) => keyWords.includes(w)).length;
+    if (overlap > bestScore) {
+      bestScore = overlap;
+      bestMatch = profile;
+    }
+  }
+
+  return bestScore >= 2 ? bestMatch : null;
+};
+
 // ─── Main JD Analyzer ───────────────────────────────────────────────────────
 
 /**
@@ -214,26 +356,35 @@ const extractResponsibilities = (lines) => {
  * @returns {Object} Structured JD profile
  */
 const analyzeJobDescription = (rawText, targetRole) => {
-  if (!rawText || typeof rawText !== 'string') {
-    throw new Error('No job description text provided.');
+  let effectiveRole = targetRole;
+  if (!effectiveRole && typeof rawText === 'string') {
+    // If first line or text mentions a known standard role, use it
+    for (const [key, profile] of Object.entries(STANDARD_ROLE_PROFILES)) {
+      if (rawText.toLowerCase().includes(key)) {
+        effectiveRole = profile.title;
+        break;
+      }
+    }
   }
+  if (!effectiveRole) {
+    effectiveRole = typeof rawText === 'string' && rawText.length < 80 ? rawText : 'Software Engineer';
+  }
+  const matchedProfile = matchStandardRoleProfile(effectiveRole);
 
-  const text = rawText.trim();
+  const text = (rawText && typeof rawText === 'string') ? rawText.trim() : '';
+  const sections = text ? splitJDIntoSections(text) : [];
 
-  const sections = splitJDIntoSections(text);
-
-  let requiredSkills = [];
-  let preferredSkills = [];
+  let extractedRequired = [];
+  let extractedPreferred = [];
   let responsibilities = [];
 
-  // Process each detected section
   for (const section of sections) {
     switch (section.type) {
       case 'required':
-        requiredSkills = extractSkillsBlock(section.lines);
+        extractedRequired = extractSkillsBlock(section.lines);
         break;
       case 'preferred':
-        preferredSkills = extractSkillsBlock(section.lines);
+        extractedPreferred = extractSkillsBlock(section.lines);
         break;
       case 'responsibilities':
         responsibilities = extractResponsibilities(section.lines);
@@ -243,61 +394,71 @@ const analyzeJobDescription = (rawText, targetRole) => {
     }
   }
 
-  // If no explicit sections found, scan the whole text for skills
-  if (requiredSkills.length === 0 && preferredSkills.length === 0) {
-    // All skills from full text are treated as required when no explicit separation
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[JobAnalysis] No explicit required/preferred sections found — scanning full JD text for skills');
-    }
-    requiredSkills = extractSkillsBlock(text.split('\n'));
+  // If no explicit sectioning found in text, extract from full text
+  if (text && extractedRequired.length === 0 && extractedPreferred.length === 0) {
+    extractedRequired = extractSkillsBlock(text.split('\n'));
   }
 
-  // Remove preferred skills that are also in required (keep clean separation)
-  const requiredCanonicals = new Set(requiredSkills.map((s) => s.canonicalName));
-  preferredSkills = preferredSkills.filter((s) => !requiredCanonicals.has(s.canonicalName));
+  // Base skills from standard role taxonomy if matched
+  let baseRequiredSkills = [];
+  let basePreferredSkills = [];
+  let roleExpectations = [];
 
-  // Extract soft skills from the full text
-  const softSkills = extractSoftSkills(text);
+  if (matchedProfile) {
+    baseRequiredSkills = normalizeFromText(matchedProfile.requiredSkills.join(', '), 'required');
+    basePreferredSkills = normalizeFromText(matchedProfile.preferredSkills.join(', '), 'preferred');
+    roleExpectations = [...matchedProfile.roleExpectations];
+  }
 
-  // Extract meta info
-  const experienceRequirement = extractExperienceRequirement(text);
-  const company = extractCompany(text);
-  const location = extractLocation(text);
-
-  // Job title: use targetRole as primary, fall back to pattern
-  const jobTitlePatterns = [
-    /^(job\s+title|position|role)\s*:\s*(.+)$/im,
-    /^(software\s+engineer|full\s+stack|frontend|backend|data\s+scientist|ml\s+engineer|devops|sde|swe)\b/im,
-  ];
-  let jobTitle = targetRole || null;
-  if (!jobTitle) {
-    for (const pat of jobTitlePatterns) {
-      const match = text.match(pat);
-      if (match) {
-        jobTitle = (match[2] || match[0]).trim();
-        break;
-      }
+  // Merge extracted with base skills: explicit extracted take priority, augmented with base
+  const requiredMap = new Map();
+  for (const s of [...baseRequiredSkills, ...extractedRequired]) {
+    if (s && s.canonicalName && !requiredMap.has(s.canonicalName)) {
+      requiredMap.set(s.canonicalName, s);
     }
   }
+  const requiredSkills = Array.from(requiredMap.values());
 
-  // ── Dev-only debug logging ────────────────────────────────────────────────
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[JobAnalysis] JD text length: ${text.length} chars`);
-    console.log(`[JobAnalysis] Required skills (${requiredSkills.length}): ${requiredSkills.map((s) => s.canonicalName).join(', ') || '(none)'}`);
-    console.log(`[JobAnalysis] Preferred skills (${preferredSkills.length}): ${preferredSkills.map((s) => s.canonicalName).join(', ') || '(none)'}`);
-    console.log(`[JobAnalysis] Soft skills: ${softSkills.join(', ') || '(none)'}`);
+  const preferredMap = new Map();
+  for (const s of [...basePreferredSkills, ...extractedPreferred]) {
+    if (s && s.canonicalName && !requiredMap.has(s.canonicalName) && !preferredMap.has(s.canonicalName)) {
+      preferredMap.set(s.canonicalName, s);
+    }
   }
+  const preferredSkills = Array.from(preferredMap.values());
+
+  const softSkills = text ? extractSoftSkills(text) : ['Problem Solving', 'Communication', 'Teamwork'];
+  const experienceRequirement = text ? extractExperienceRequirement(text) : '1-3 years';
+  const company = text ? extractCompany(text) : null;
+  const location = text ? extractLocation(text) : null;
+
+  const jobTitle = targetRole || matchedProfile?.title || 'Software Engineer';
+
+  const requiredSkillNames = requiredSkills.map((s) => s.name || s.canonicalName);
+  const preferredSkillNames = preferredSkills.map((s) => s.name || s.canonicalName);
 
   return {
+    title: jobTitle,
     jobTitle,
     company,
     location,
     experienceRequirement,
     requiredSkills,
     preferredSkills,
-    responsibilities,
+    requiredSkillNames,
+    preferredSkillNames,
+    roleExpectations: roleExpectations.length > 0 ? roleExpectations : [
+      `Application development aligned with ${jobTitle} standards`,
+      'Technical problem solving and collaborative code delivery',
+    ],
+    responsibilities: responsibilities.length > 0 ? responsibilities : roleExpectations,
     softSkills,
   };
 };
 
-module.exports = { analyzeJobDescription };
+module.exports = {
+  analyzeJobDescription,
+  matchStandardRoleProfile,
+  STANDARD_ROLE_PROFILES,
+};
+

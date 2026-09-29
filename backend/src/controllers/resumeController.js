@@ -155,6 +155,7 @@ const analyzeResumeController = async (req, res) => {
       {
         extractedText,
         parsedData: candidateProfile,
+        analysis: candidateProfile,
         processingStatus: 'completed',
         processingError: null,
       }
@@ -166,6 +167,7 @@ const analyzeResumeController = async (req, res) => {
         id: resume._id,
         processingStatus: 'completed',
         parsedData: candidateProfile,
+        analysis: candidateProfile,
       },
     });
   } catch (error) {
@@ -212,6 +214,8 @@ const getResumeAnalysis = async (req, res) => {
         originalName: resume.originalName,
         processingStatus: resume.processingStatus,
         parsedData: resume.parsedData,
+        analysis: resume.parsedData,
+        profile: resume.parsedData,
         analyzedAt: resume.updatedAt,
       },
     });

@@ -58,35 +58,55 @@ const responseSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
-    // Phase 4 — SBERT text evaluation
+    // Phase 4+ — Structured Answer Evaluation
     textEvaluation: {
+      correctness: { type: Number, default: null },
+      completeness: { type: Number, default: null },
+      technicalDepth: { type: Number, default: null },
+      reasoning: { type: Number, default: null },
+      relevance: { type: Number, default: null },
+      overallScore: { type: Number, default: null },
       semanticScore: { type: Number, default: null },
       conceptCoverage: { type: Number, default: null },
       textScore: { type: Number, default: null },
       feedback: { type: String, default: null },
       strengths: { type: [String], default: [] },
+      weaknesses: { type: [String], default: [] },
       missingConcepts: { type: [String], default: [] },
       improvementSuggestion: { type: String, default: null },
+      recommendedNextDifficulty: { type: String, enum: ['easy', 'medium', 'hard', null], default: null },
       confidence: { type: Number, default: null },
       modelStatus: { type: String, default: null },
     },
-    // Phase 5 — Audio evaluation
+    // Phase 5 — Audio evaluation (observable signals)
     audioEvaluation: {
       speakingDuration: { type: Number, default: null },
+      speakingPace: { type: Number, default: null }, // words/min
       pauseDuration: { type: Number, default: null },
+      pauseFrequency: { type: Number, default: null },
+      fillerWordsCount: { type: Number, default: 0 },
+      fillerWords: { type: [String], default: [] },
+      volumeConsistency: { type: String, default: null },
       speechRate: { type: Number, default: null },
+      speechContinuity: { type: String, default: null },
+      feedback: { type: String, default: null },
       mfccSummary: { type: mongoose.Schema.Types.Mixed, default: null },
       energyCharacteristics: { type: mongoose.Schema.Types.Mixed, default: null },
       pitchStatistics: { type: mongoose.Schema.Types.Mixed, default: null },
       audioFeaturesAvailable: { type: Boolean, default: false },
       modelStatus: { type: String, default: 'not_processed' },
     },
-    // Phase 6 — Video evaluation
+    // Phase 6 — Video evaluation (observable signals)
     videoEvaluation: {
       framesProcessed: { type: Number, default: null },
       personDetectionRatio: { type: Number, default: null },
       faceVisibilityRatio: { type: Number, default: null },
+      gazeAttentionRatio: { type: Number, default: null },
+      postureStability: { type: String, default: null },
+      visibleMovement: { type: String, default: null },
+      cameraEngagement: { type: String, default: null },
       videoQualityIndicator: { type: String, default: null },
+      feedback: { type: String, default: null },
       modelStatus: { type: String, default: 'not_processed' },
       processingConfidence: { type: Number, default: null },
     },

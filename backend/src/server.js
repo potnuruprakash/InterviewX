@@ -1,4 +1,7 @@
-require('dotenv').config();
+const path = require('path');
+// Load environment variables once from backend/.env regardless of process working directory
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
 const app = require('./app');
 const connectDB = require('./config/db');
 
@@ -16,7 +19,7 @@ const start = async () => {
       console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
     });
   } catch (error) {
-    console.error('[Server] Failed to start:', error);
+    console.error('[Server] Failed to start:', error.message);
     process.exit(1);
   }
 };
