@@ -146,6 +146,26 @@ const interviewSchema = new mongoose.Schema(
 
     // Phase 9 — Final evaluation
     finalEvaluation: {
+      status: {
+        type: String,
+        enum: ['pending', 'ready', 'unavailable'],
+        default: 'pending',
+      },
+      audioStatus: {
+        type: String,
+        enum: ['available', 'processing', 'unavailable'],
+        default: 'unavailable',
+      },
+      videoStatus: {
+        type: String,
+        enum: ['available', 'processing', 'unavailable'],
+        default: 'unavailable',
+      },
+      textStatus: {
+        type: String,
+        enum: ['available', 'processing', 'unavailable'],
+        default: 'available',
+      },
       overallScore: { type: Number, default: null },
       technicalScore: { type: Number, default: null },
       problemSolvingScore: { type: Number, default: null },
@@ -195,6 +215,7 @@ const interviewSchema = new mongoose.Schema(
 
 interviewSchema.index({ clerkUserId: 1, createdAt: -1 });
 interviewSchema.index({ clerkUserId: 1, status: 1 });
+interviewSchema.index({ _id: 1, clerkUserId: 1 });
 
 module.exports = mongoose.model('Interview', interviewSchema);
 

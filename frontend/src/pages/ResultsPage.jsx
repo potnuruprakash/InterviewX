@@ -361,6 +361,7 @@ export default function ResultsPage() {
   const [results, setResults] = useState(() => resultsCache.get(id) || null)
   const [roadmap, setRoadmap] = useState(() => roadmapCache.get(id) || null)
   const [loading, setLoading] = useState(() => !resultsCache.has(id))
+  const [isFinalizing, setIsFinalizing] = useState(false)
   const [roadmapLoading, setRoadmapLoading] = useState(() => !roadmapCache.has(id))
   const [error, setError] = useState(null)
   const [roadmapError, setRoadmapError] = useState(null)
@@ -373,7 +374,7 @@ export default function ResultsPage() {
   const [showTrainModal, setShowTrainModal] = useState(false)
   const [activeTrainingSession, setActiveTrainingSession] = useState(null)
   const [trainingLoading, setTrainingLoading] = useState(false)
-  const fetchedRef = useRef(null)
+  const activeFetchIdRef = useRef(null)
 
   const handleTrainMe = async () => {
     setTrainingLoading(true)
@@ -399,50 +400,132 @@ export default function ResultsPage() {
     }
 
     let isMounted = true
-    if (fetchedRef.current === id && results) return
-    fetchedRef.current = id
+    let pollTimer = null
+    activeFetchIdRef.current = id
 
-    // 1. Fetch Primary Results (critical path)
-    const loadPrimary = async () => {
-      if (!results) {
-        setLoading(true)
+    // Invalidate stale cache if viewing a different interview ID
+    const cachedResults = resultsCache.get(id)
+    const cachedRoadmap = roadmapCache.get(id)
+
+    if (cachedResults) {
+      setResults(cachedResults)
+      setLoading(false)
+      setError(null)
+      if (cachedResults.finalEvaluation?.status === 'pending') {
+        setIsFinalizing(true)
+      } else {
+        setIsFinalizing(false)
       }
+    } else {
+      setResults(null)
+      setLoading(true)
+      setIsFinalizing(false)
+    }
+
+    if (cachedRoadmap) {
+      setRoadmap(cachedRoadmap)
+      setRoadmapLoading(false)
+    } else {
+      setRoadmap(null)
+    }
+
+    // Helper: fetch results with bounded exponential backoff for transient failures (1s, 2s, 4s, max 3 retries)
+    const fetchResultsWithRetry = async (retryCount = 0) => {
       try {
         const res = await authApi.get(`/api/interviews/${id}/results`)
         const data = res.data?.data || res.data
-        if (isMounted && data) {
-          resultsCache.set(id, data)
-          setResults(data)
-          setError(null)
-        }
+        return data
       } catch (err) {
-        if (isMounted) {
-          setError(err.message || 'Could not load interview results.')
+        if (retryCount < 3 && isMounted && activeFetchIdRef.current === id) {
+          const delay = Math.pow(2, retryCount) * 1000 // 1000ms, 2000ms, 4000ms
+          await new Promise((r) => setTimeout(r, delay))
+          if (!isMounted || activeFetchIdRef.current !== id) return null
+          return fetchResultsWithRetry(retryCount + 1)
         }
-      } finally {
-        if (isMounted) setLoading(false)
+        throw err
       }
     }
 
-    // 2. Fetch Secondary Roadmap in parallel (progressive path)
-    const loadRoadmap = async () => {
-      if (!roadmap) {
-        setRoadmapLoading(true)
+    // Polling function when finalEvaluation.status === 'pending'
+    const pollUntilReady = (pollAttempt = 0) => {
+      if (pollAttempt >= 4 || !isMounted || activeFetchIdRef.current !== id) {
+        if (isMounted) setIsFinalizing(false)
+        return
       }
+
+      const pollDelay = Math.min(1000 * Math.pow(2, pollAttempt), 4000)
+      pollTimer = setTimeout(async () => {
+        if (!isMounted || activeFetchIdRef.current !== id) return
+        try {
+          const data = await fetchResultsWithRetry(0)
+          if (!isMounted || activeFetchIdRef.current !== id || !data) return
+
+          if (data.finalEvaluation?.status === 'ready') {
+            resultsCache.set(id, data)
+            setResults(data)
+            setIsFinalizing(false)
+          } else {
+            // Still pending: schedule next poll
+            pollUntilReady(pollAttempt + 1)
+          }
+        } catch {
+          if (isMounted) setIsFinalizing(false)
+        }
+      }, pollDelay)
+    }
+
+    // 1. Fetch Primary Results
+    const loadPrimary = async () => {
+      if (cachedResults && cachedResults.finalEvaluation?.status === 'ready') {
+        return
+      }
+
+      try {
+        const data = await fetchResultsWithRetry(0)
+        if (!isMounted || activeFetchIdRef.current !== id || !data) return
+
+        if (data.finalEvaluation?.status === 'pending') {
+          setIsFinalizing(true)
+          setResults(data)
+          setLoading(false)
+          pollUntilReady(0)
+        } else {
+          resultsCache.set(id, data)
+          setResults(data)
+          setIsFinalizing(false)
+          setError(null)
+          setLoading(false)
+        }
+      } catch (err) {
+        if (isMounted && activeFetchIdRef.current === id) {
+          setError(err.message || 'Could not load interview results.')
+          setLoading(false)
+          setIsFinalizing(false)
+        }
+      }
+    }
+
+    // 2. Fetch Secondary Roadmap in parallel (progressive path - never blocks results)
+    const loadRoadmap = async () => {
+      if (cachedRoadmap) return
+
+      setRoadmapLoading(true)
       try {
         const res = await authApi.get(`/api/interviews/${id}/roadmap`)
         const data = res.data?.roadmap || res.data?.data?.roadmap || res.data
-        if (isMounted && data) {
+        if (isMounted && activeFetchIdRef.current === id && data) {
           roadmapCache.set(id, data)
           setRoadmap(data)
           setRoadmapError(null)
         }
-      } catch (err) {
-        if (isMounted) {
+      } catch {
+        if (isMounted && activeFetchIdRef.current === id) {
           setRoadmapError('Personalized roadmap currently unavailable.')
         }
       } finally {
-        if (isMounted) setRoadmapLoading(false)
+        if (isMounted && activeFetchIdRef.current === id) {
+          setRoadmapLoading(false)
+        }
       }
     }
 
@@ -451,11 +534,35 @@ export default function ResultsPage() {
 
     return () => {
       isMounted = false
+      if (pollTimer) clearTimeout(pollTimer)
     }
-  }, [id, isLoaded, isSignedIn, results, roadmap])
+  }, [id, isLoaded, isSignedIn])
 
-  if (!isLoaded || (loading && !results)) {
+  if (!isLoaded || (loading && !results && !isFinalizing)) {
     return <ResultsSkeleton />
+  }
+
+  if (isFinalizing && (!results || results.finalEvaluation?.status === 'pending')) {
+    return (
+      <div className="results-page">
+        <div className="results-container" style={{ paddingTop: '80px', alignItems: 'center' }}>
+          <div className="glass-card" style={{ maxWidth: '520px', width: '100%', padding: '40px 32px', textAlign: 'center' }}>
+            <div style={{ margin: '0 auto 20px', display: 'flex', justifyContent: 'center' }}>
+              <RefreshCw size={36} color="#818cf8" style={{ animation: 'spin 2s linear infinite' }} />
+            </div>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 10px', color: '#ffffff' }}>
+              Finalizing Your Interview Assessment...
+            </h2>
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 20px', lineHeight: 1.6 }}>
+              Our evaluation engine is synthesizing your responses, multi-dimensional scoring, and targeted recommendations. This takes just a moment.
+            </p>
+            <div style={{ height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden', maxWidth: '280px', margin: '0 auto' }}>
+              <div style={{ height: '100%', width: '70%', background: 'linear-gradient(90deg, #6366f1, #8b5cf6)', borderRadius: '4px', animation: 'pulse 1.5s infinite ease-in-out' }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (!isSignedIn) {
@@ -490,7 +597,6 @@ export default function ResultsPage() {
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
               <button
                 onClick={() => {
-                  fetchedRef.current = null
                   setLoading(true)
                   setError(null)
                   authApi.get(`/api/interviews/${id}/results`)
@@ -600,9 +706,7 @@ export default function ResultsPage() {
     const relevance = avgDimension('relevance') ?? (overallScore !== null ? Math.min(100, Math.round(overallScore * 1.02)) : null)
 
     // 5. Delivery & Communication
-    const commScore = fe?.audioScore ?? (answeredQuestions.some(q => q.audioEvaluation?.speakingDuration > 0)
-      ? 75
-      : (overallScore !== null ? Math.round(overallScore) : null))
+    const commScore = fe?.audioScore ?? fe?.communicationScore ?? (overallScore !== null ? Math.round(overallScore) : null)
 
     return [
       {
@@ -689,28 +793,34 @@ export default function ResultsPage() {
     return (
       (fe?.audioScore !== null && fe?.audioScore !== undefined) ||
       (fe?.videoScore !== null && fe?.videoScore !== undefined) ||
-      questionBreakdown.some(q => q.audioEvaluation?.speakingDuration > 0 || q.videoEvaluation?.framesProcessed > 0)
+      fe?.audioStatus === 'available' ||
+      fe?.videoStatus === 'available' ||
+      fe?.audioStatus === 'processing' ||
+      fe?.videoStatus === 'processing' ||
+      questionBreakdown.some(q => (q.audioEvaluation?.speakingDuration && q.audioEvaluation.speakingDuration > 0) || (q.videoEvaluation?.framesProcessed && q.videoEvaluation.framesProcessed > 0))
     )
   }, [fe, questionBreakdown])
 
   // Communication metrics aggregated across questions
   const commSummary = useMemo(() => {
     if (!hasCommData) return null
-    const audioQuestions = questionBreakdown.filter(q => q.audioEvaluation?.speakingDuration > 0)
-    const videoQuestions = questionBreakdown.filter(q => q.videoEvaluation?.framesProcessed > 0)
+    const audioQuestions = questionBreakdown.filter(q => q.audioEvaluation?.speakingDuration && q.audioEvaluation.speakingDuration > 0)
+    const videoQuestions = questionBreakdown.filter(q => q.videoEvaluation?.framesProcessed && q.videoEvaluation.framesProcessed > 0)
 
     const avgPace = audioQuestions.length > 0
       ? Math.round(audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.speakingPace || 135), 0) / audioQuestions.length)
-      : 138
+      : null
 
-    const totalFillers = audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.fillerWordsCount || 0), 0)
+    const totalFillers = audioQuestions.length > 0
+      ? audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.fillerWordsCount || 0), 0)
+      : null
 
     const avgDuration = audioQuestions.length > 0
       ? Math.round(audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.speakingDuration || 0), 0) / audioQuestions.length)
       : null
 
     const avgPersonDetected = videoQuestions.length > 0
-      ? Math.round((videoQuestions.reduce((acc, q) => acc + (q.videoEvaluation?.personDetectionRatio || 0.95), 0) / videoQuestions.length) * 100)
+      ? Math.round((videoQuestions.reduce((acc, q) => acc + (q.videoEvaluation?.personDetectionRatio ?? 0.95), 0) / videoQuestions.length) * 100)
       : null
 
     return {
@@ -719,9 +829,11 @@ export default function ResultsPage() {
       avgDuration,
       avgPersonDetected,
       audioCount: audioQuestions.length,
-      videoCount: videoQuestions.length
+      videoCount: videoQuestions.length,
+      audioStatus: fe?.audioStatus || (audioQuestions.length > 0 ? 'available' : 'unavailable'),
+      videoStatus: fe?.videoStatus || (videoQuestions.length > 0 ? 'available' : 'unavailable'),
     }
-  }, [hasCommData, questionBreakdown])
+  }, [hasCommData, questionBreakdown, fe])
 
   // Key Strength & Primary Weakness for Executive Summary
   const keyStrength = fe?.strongAreas?.[0] || 'Core domain comprehension'
@@ -1141,15 +1253,23 @@ export default function ResultsPage() {
                   <Mic size={14} className="comm-stat-icon" />
                 </div>
                 <div className="comm-stat-main">
-                  <span className="comm-stat-num">{commSummary.avgPace}</span>
-                  <span className="comm-stat-pill pill-optimal">Target: 120–160 WPM</span>
+                  <span className="comm-stat-num">{commSummary.avgPace !== null ? commSummary.avgPace : '—'}</span>
+                  <span className={`comm-stat-pill ${commSummary.avgPace !== null ? 'pill-optimal' : 'pill-note'}`}>
+                    {commSummary.avgPace !== null
+                      ? 'Target: 120–160 WPM'
+                      : (commSummary.audioStatus === 'processing' ? 'Processing...' : 'Unavailable')}
+                  </span>
                 </div>
                 <p className="comm-stat-desc">
-                  {commSummary.avgPace >= 120 && commSummary.avgPace <= 160
-                    ? 'Pace is within standard clear conversational target range.'
-                    : commSummary.avgPace > 160
-                    ? 'Pace was slightly rapid; pacing pauses will improve clarity.'
-                    : 'Deliberate, steady speaking pace observed.'}
+                  {commSummary.avgPace !== null
+                    ? (commSummary.avgPace >= 120 && commSummary.avgPace <= 160
+                      ? 'Pace is within standard clear conversational target range.'
+                      : commSummary.avgPace > 160
+                      ? 'Pace was slightly rapid; pacing pauses will improve clarity.'
+                      : 'Deliberate, steady speaking pace observed.')
+                    : (commSummary.audioStatus === 'processing'
+                      ? 'Audio recording is being processed in background.'
+                      : 'Audio analysis unavailable. Candidate answered via text / microphone was disabled.')}
                 </p>
               </div>
 
@@ -1159,15 +1279,21 @@ export default function ResultsPage() {
                   <Target size={14} className="comm-stat-icon" />
                 </div>
                 <div className="comm-stat-main">
-                  <span className="comm-stat-num">{commSummary.totalFillers}</span>
-                  <span className={`comm-stat-pill ${commSummary.totalFillers <= 5 ? 'pill-optimal' : 'pill-warning'}`}>
-                    {commSummary.totalFillers <= 5 ? 'Minimal Fillers' : 'Detected'}
+                  <span className="comm-stat-num">{commSummary.totalFillers !== null ? commSummary.totalFillers : '—'}</span>
+                  <span className={`comm-stat-pill ${commSummary.totalFillers !== null ? (commSummary.totalFillers <= 5 ? 'pill-optimal' : 'pill-warning') : 'pill-note'}`}>
+                    {commSummary.totalFillers !== null
+                      ? (commSummary.totalFillers <= 5 ? 'Minimal Fillers' : 'Detected')
+                      : (commSummary.audioStatus === 'processing' ? 'Processing...' : 'Unavailable')}
                   </span>
                 </div>
                 <p className="comm-stat-desc">
-                  {commSummary.totalFillers <= 5
-                    ? 'Very clean verbal delivery with minimal extraneous hesitation words.'
-                    : 'Opportunity to replace filler words ("um", "like") with brief deliberate pauses.'}
+                  {commSummary.totalFillers !== null
+                    ? (commSummary.totalFillers <= 5
+                      ? 'Very clean verbal delivery with minimal extraneous hesitation words.'
+                      : 'Opportunity to replace filler words with brief deliberate pauses.')
+                    : (commSummary.audioStatus === 'processing'
+                      ? 'Analyzing speech audio for filler words...'
+                      : 'Audio analysis unavailable for this session.')}
                 </p>
               </div>
 
@@ -1187,21 +1313,27 @@ export default function ResultsPage() {
                 </div>
               )}
 
-              {commSummary.avgPersonDetected !== null && (
-                <div className="comm-stat-card">
-                  <div className="comm-stat-header">
-                    <span className="comm-stat-title">Camera Presence</span>
-                    <Video size={14} className="comm-stat-icon" />
-                  </div>
-                  <div className="comm-stat-main">
-                    <span className="comm-stat-num">{commSummary.avgPersonDetected}%</span>
-                    <span className="comm-stat-pill pill-optimal">Stable Framing</span>
-                  </div>
-                  <p className="comm-stat-desc">
-                    Stable subject framing detected across all video evaluation frames.
-                  </p>
+              <div className="comm-stat-card">
+                <div className="comm-stat-header">
+                  <span className="comm-stat-title">Camera Presence</span>
+                  <Video size={14} className="comm-stat-icon" />
                 </div>
-              )}
+                <div className="comm-stat-main">
+                  <span className="comm-stat-num">{commSummary.avgPersonDetected !== null ? `${commSummary.avgPersonDetected}%` : '—'}</span>
+                  <span className={`comm-stat-pill ${commSummary.avgPersonDetected !== null ? 'pill-optimal' : 'pill-note'}`}>
+                    {commSummary.avgPersonDetected !== null
+                      ? 'Stable Framing'
+                      : (commSummary.videoStatus === 'processing' ? 'Processing...' : 'Unavailable')}
+                  </span>
+                </div>
+                <p className="comm-stat-desc">
+                  {commSummary.avgPersonDetected !== null
+                    ? 'Stable subject framing detected across all video evaluation frames.'
+                    : (commSummary.videoStatus === 'processing'
+                      ? 'Processing candidate video frames...'
+                      : 'Video analysis unavailable. Candidate participated without camera / video capture was disabled.')}
+                </p>
+              </div>
             </div>
 
             {/* Scientific Caveat Box */}

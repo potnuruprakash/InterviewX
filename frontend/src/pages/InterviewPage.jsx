@@ -295,6 +295,13 @@ export default function InterviewPage() {
       if (isFinished) {
         setIsComplete(true)
         setCurrentQuestion(null)
+        try {
+          await authApi.post(`/api/interviews/${id}/complete`, {
+            completionReason: interviewData?.completionReason || 'all_questions_completed',
+          })
+        } catch (e) {
+          // Already completed on backend, safe to proceed
+        }
         navigate(`/interview/${id}/results`)
       } else {
         setCurrentQuestion(res.data.nextQuestion)
@@ -350,6 +357,13 @@ export default function InterviewPage() {
       if (isFinished) {
         setIsComplete(true)
         setCurrentQuestion(null)
+        try {
+          await authApi.post(`/api/interviews/${id}/complete`, {
+            completionReason: interviewData?.completionReason || 'all_questions_completed',
+          })
+        } catch (e) {
+          // Already completed on backend, safe to proceed
+        }
         navigate(`/interview/${id}/results`)
       } else {
         setCurrentQuestion(res.data.nextQuestion)
