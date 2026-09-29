@@ -4,6 +4,7 @@ import { AlertCircle } from 'lucide-react'
 
 import { lazy, Suspense } from 'react'
 import Navbar from './components/Navbar'
+import ResultsErrorBoundary from './components/ResultsErrorBoundary'
 
 const AICoachDrawer = lazy(() => import('./components/AICoachDrawer'))
 const LandingPage = lazy(() => import('./pages/LandingPage'))
@@ -106,7 +107,9 @@ export default function App() {
             <Route path="/interview/:id/results" element={
               <ProtectedRoute>
                 <Navbar />
-                <ResultsPage />
+                <ResultsErrorBoundary>
+                  <ResultsPage />
+                </ResultsErrorBoundary>
               </ProtectedRoute>
             } />
             <Route path="/progress" element={

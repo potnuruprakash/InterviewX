@@ -629,12 +629,254 @@ export default function ResultsPage() {
     }
   }, [id, isLoaded, isSignedIn, authTimeout, retryTrigger])
 
-  // ── RENDER GUARD ORDER (critical path) ─────────────────────────────────────
-  // IMPORTANT: isFinalizing must be checked BEFORE the generic loading skeleton.
-  // If isFinalizing=true and loading=true simultaneously (race between setLoading and
-  // setIsFinalizing), the old code fell through to <ResultsSkeleton> and the user saw
-  // a blank white skeleton instead of the "Finalizing..." message.
+  // ── DERIVED DATA & UNCONDITIONAL HOOKS (Rules-of-Hooks compliance) ─────────
+  const rawData = results?.data || results
+  const interview = rawData?.interview
+  const fe = rawData?.finalEvaluation
+  const jobReadiness = rawData?.jobReadiness
+  const skillPerformance = rawData?.skillPerformance
+  const questionBreakdown = Array.isArray(rawData?.questionBreakdown) ? rawData.questionBreakdown : []
+  const resumeSkillAlignment = rawData?.resumeSkillAlignment
 
+  // Date formatting
+  const formattedDate = useMemo(() => {
+    const raw = interview?.completedAt || interview?.startedAt
+    if (!raw) return 'Recent Session'
+    try {
+      return new Date(raw).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      })
+    } catch {
+      return 'Recent Session'
+    }
+  }, [interview?.completedAt, interview?.startedAt])
+
+  // Duration in minutes
+  const durationText = useMemo(() => {
+    if (interview?.durationMinutes) return `${interview.durationMinutes} min`
+    if (interview?.startedAt && interview?.completedAt) {
+      const mins = Math.max(1, Math.round((new Date(interview.completedAt) - new Date(interview.startedAt)) / 60000))
+      return `${mins} min`
+    }
+    return '30 min'
+  }, [interview?.durationMinutes, interview?.startedAt, interview?.completedAt])
+
+  // Overall Score & Tier — stable useMemo so downstream memos (metrics) don't invalidate on every render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const overallScore = useMemo(
+    () => (fe?.overallScore !== null && fe?.overallScore !== undefined ? Math.round(fe.overallScore) : null),
+    [fe?.overallScore]
+  )
+  const scoreTier = useMemo(() => getScoreTier(overallScore), [overallScore])
+
+  // Instrumentation: Log results_rendered when report is successfully rendered to DOM
+  useEffect(() => {
+    if (interview && overallScore !== null) {
+      perfMark('results_core_render')
+      console.log('[ResultsLifecycle] results_rendered', {
+        interviewId: id,
+        overallScore,
+        date: formattedDate,
+      })
+    }
+  }, [interview, overallScore, id, formattedDate])
+
+  // Calculate the 5 Core Performance Metrics strictly from actual data
+  const metrics = useMemo(() => {
+    const answeredQuestions = questionBreakdown.filter(q => q && q.status === 'answered')
+
+    const avgDimension = (dim) => {
+      const vals = answeredQuestions
+        .map(q => q?.textEvaluation?.[dim])
+        .filter(v => v !== null && v !== undefined && typeof v === 'number')
+      if (vals.length === 0) return null
+      return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+    }
+
+    // 1. Technical Knowledge
+    const techKnowledge = fe?.technicalScore ?? avgDimension('correctness') ?? (overallScore !== null ? Math.round(overallScore * 0.98) : null)
+
+    // 2. Problem Solving & Logic
+    const probSolving = avgDimension('reasoning') ?? (overallScore !== null ? Math.round(overallScore * 0.95) : null)
+
+    // 3. Completeness
+    const completeness = avgDimension('completeness') ?? (overallScore !== null ? Math.round(overallScore * 0.92) : null)
+
+    // 4. Relevance & Precision
+    const relevance = avgDimension('relevance') ?? (overallScore !== null ? Math.min(100, Math.round(overallScore * 1.02)) : null)
+
+    // 5. Delivery & Communication
+    const commScore = fe?.audioScore ?? fe?.communicationScore ?? (overallScore !== null ? Math.round(overallScore) : null)
+
+    return [
+      {
+        title: 'Technical Knowledge',
+        score: techKnowledge,
+        icon: Brain,
+        interpretation: techKnowledge !== null && techKnowledge >= 75
+          ? 'Demonstrated strong domain principles and conceptual accuracy.'
+          : techKnowledge !== null && techKnowledge >= 60
+          ? 'Adequate core knowledge with room for more in-depth nuances.'
+          : 'Noticeable conceptual gaps identified in core technical answers.'
+      },
+      {
+        title: 'Problem Solving',
+        score: probSolving,
+        icon: Target,
+        interpretation: probSolving !== null && probSolving >= 75
+          ? 'Structured, systematic reasoning and logical step breakdown.'
+          : probSolving !== null && probSolving >= 60
+          ? 'Follows reasonable solution logic; occasionally skips edge cases.'
+          : 'Benefit from adopting clearer structured problem-solving frameworks.'
+      },
+      {
+        title: 'Completeness',
+        score: completeness,
+        icon: Layers,
+        interpretation: completeness !== null && completeness >= 75
+          ? 'Comprehensive responses that fully address prompts and trade-offs.'
+          : completeness !== null && completeness >= 60
+          ? 'Core requirements answered; secondary considerations omitted.'
+          : 'Answers left several key prompt requirements unaddressed.'
+      },
+      {
+        title: 'Relevance',
+        score: relevance,
+        icon: CheckCircle,
+        interpretation: relevance !== null && relevance >= 75
+          ? 'High precision, on-topic answers with minimal superfluous detail.'
+          : relevance !== null && relevance >= 60
+          ? 'Generally aligned to questions with occasional slight drift.'
+          : 'Opportunity to improve concise alignment with the direct prompt.'
+      },
+      {
+        title: 'Communication',
+        score: commScore,
+        icon: Mic,
+        interpretation: commScore !== null && commScore >= 75
+          ? 'Articulate pacing, clear delivery structure, and low filler frequency.'
+          : commScore !== null && commScore >= 60
+          ? 'Understandable delivery; can refine pacing and pause management.'
+          : 'Focus on steady pacing and concise response organization.'
+      }
+    ]
+  }, [questionBreakdown, fe, overallScore])
+
+  // Filtered Questions
+  const filteredQuestions = useMemo(() => {
+    return questionBreakdown.filter(q => {
+      if (questionFilter === 'strong') return q.score >= 75 && q.status !== 'skipped'
+      if (questionFilter === 'needs_work') return (q.score < 75 && q.score !== null) || q.status === 'skipped'
+      if (questionFilter === 'technical') return q.category?.toLowerCase() === 'technical' || q.type === 'technical'
+      if (questionFilter === 'behavioral') return q.category?.toLowerCase() === 'behavioral'
+      if (questionFilter === 'coding') return q.type === 'coding'
+      return true
+    })
+  }, [questionBreakdown, questionFilter])
+
+  // ── PRE-COMPUTED question breakdown stats ────────────────────────────────────
+  // Replaces 6 inline questionBreakdown.filter/some() calls in JSX (one per render).
+  const qbStats = useMemo(() => {
+    const answeredCount = questionBreakdown.filter(q => q.status === 'answered').length
+    const skippedCount = questionBreakdown.filter(q => q.status === 'skipped').length
+    const hasCoding = questionBreakdown.some(q => q.type === 'coding')
+    const hasTechnical = questionBreakdown.some(q => q.category?.toLowerCase() === 'technical')
+    return { answeredCount, skippedCount, hasCoding, hasTechnical, hasSkipped: skippedCount > 0 }
+  }, [questionBreakdown])
+
+  const toggleQuestion = (idx) => {
+    setExpandedQuestions(prev => ({ ...prev, [idx]: !prev[idx] }))
+  }
+
+  const expandAllQuestions = () => {
+    const all = {}
+    questionBreakdown.forEach((_, i) => { all[i] = true })
+    setExpandedQuestions(all)
+  }
+
+  const collapseAllQuestions = () => {
+    setExpandedQuestions({})
+  }
+
+  // Check if communication signals actually exist
+  const hasCommData = useMemo(() => {
+    return (
+      (fe?.audioScore !== null && fe?.audioScore !== undefined) ||
+      (fe?.videoScore !== null && fe?.videoScore !== undefined) ||
+      fe?.audioStatus === 'available' ||
+      fe?.videoStatus === 'available' ||
+      fe?.audioStatus === 'processing' ||
+      fe?.videoStatus === 'processing' ||
+      questionBreakdown.some(q => (q?.audioEvaluation?.speakingDuration && q.audioEvaluation.speakingDuration > 0) || (q?.videoEvaluation?.framesProcessed && q.videoEvaluation.framesProcessed > 0))
+    )
+  }, [fe, questionBreakdown])
+
+  // Communication metrics aggregated across questions
+  const commSummary = useMemo(() => {
+    if (!hasCommData) return null
+    const audioQuestions = questionBreakdown.filter(q => q?.audioEvaluation?.speakingDuration && q.audioEvaluation.speakingDuration > 0)
+    const videoQuestions = questionBreakdown.filter(q => q?.videoEvaluation?.framesProcessed && q.videoEvaluation.framesProcessed > 0)
+
+    const avgPace = audioQuestions.length > 0
+      ? Math.round(audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.speakingPace || 135), 0) / audioQuestions.length)
+      : null
+
+    const totalFillers = audioQuestions.length > 0
+      ? audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.fillerWordsCount || 0), 0)
+      : null
+
+    const avgDuration = audioQuestions.length > 0
+      ? Math.round(audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.speakingDuration || 0), 0) / audioQuestions.length)
+      : null
+
+    const avgPersonDetected = videoQuestions.length > 0
+      ? Math.round((videoQuestions.reduce((acc, q) => acc + (q.videoEvaluation?.personDetectionRatio ?? 0.95), 0) / videoQuestions.length) * 100)
+      : null
+
+    return {
+      avgPace,
+      totalFillers,
+      avgDuration,
+      avgPersonDetected,
+      audioCount: audioQuestions.length,
+      videoCount: videoQuestions.length,
+      audioStatus: fe?.audioStatus || (audioQuestions.length > 0 ? 'available' : 'unavailable'),
+      videoStatus: fe?.videoStatus || (videoQuestions.length > 0 ? 'available' : 'unavailable'),
+    }
+  }, [hasCommData, questionBreakdown, fe])
+
+  // Key Strength & Primary Weakness — memoized so asynchronous roadmap arrival
+  // doesn't trigger unnecessary re-derivation of all dependent JSX sections
+  const keyStrength = useMemo(
+    () => fe?.strongAreas?.[0] || 'Core domain comprehension',
+    [fe?.strongAreas]
+  )
+  const primaryWeakness = useMemo(
+    () => fe?.weakAreas?.[0] || (roadmap?.recommendations?.[0]?.skill || 'Edge-case explanation depth'),
+    [fe?.weakAreas, roadmap?.recommendations]
+  )
+
+  // Recommended Practice items (3 to 5 targeted items strictly based on weaknesses)
+  const targetedPractice = useMemo(() => {
+    if (roadmap?.recommendations?.length > 0) {
+      return roadmap.recommendations.slice(0, 4)
+    }
+    // Fallback directly to weak areas or skill gaps
+    const areas = [...(fe?.weakAreas || []), ...(fe?.skillGaps || [])].slice(0, 4)
+    return areas.map((area, idx) => ({
+      skill: area,
+      priority: idx === 0 ? 'High' : 'Medium',
+      area: 'Technical Skill',
+      description: `Targeted practice to reinforce foundational patterns in ${area}.`,
+      topics: [`Core ${area} principles`, 'Edge case patterns', 'Real-world application'],
+      studyApproach: `Review production trade-offs and practice explaining implementation decisions for ${area}.`
+    }))
+  }, [roadmap, fe])
+
+  // ── RENDER GUARD ORDER (critical path) ─────────────────────────────────────
+  // IMPORTANT: All hooks are declared unconditionally above. Render guards are evaluated below.
   // 1. Clerk not yet initialized
   if (!isLoaded && !authTimeout) {
     return <ResultsSkeleton />
@@ -751,17 +993,6 @@ export default function ResultsPage() {
     )
   }
 
-  const rawData = results?.data || results
-
-  const {
-    interview,
-    finalEvaluation: fe,
-    jobReadiness,
-    skillPerformance,
-    questionBreakdown = [],
-    resumeSkillAlignment
-  } = rawData || {}
-
   if (!interview) {
     return (
       <div className="results-page">
@@ -791,245 +1022,6 @@ export default function ResultsPage() {
       </div>
     )
   }
-
-  // Date formatting
-  const formattedDate = useMemo(() => {
-    const raw = interview?.completedAt || interview?.startedAt
-    if (!raw) return 'Recent Session'
-    try {
-      return new Date(raw).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      })
-    } catch {
-      return 'Recent Session'
-    }
-  }, [interview?.completedAt, interview?.startedAt])
-
-  // Duration in minutes
-  const durationText = useMemo(() => {
-    if (interview?.durationMinutes) return `${interview.durationMinutes} min`
-    if (interview?.startedAt && interview?.completedAt) {
-      const mins = Math.max(1, Math.round((new Date(interview.completedAt) - new Date(interview.startedAt)) / 60000))
-      return `${mins} min`
-    }
-    return '30 min'
-  }, [interview])
-
-  // Overall Score & Tier — stable useMemo so downstream memos (metrics) don't invalidate on every render
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const overallScore = useMemo(
-    () => (fe?.overallScore !== null && fe?.overallScore !== undefined ? Math.round(fe.overallScore) : null),
-    [fe?.overallScore]
-  )
-  const scoreTier = useMemo(() => getScoreTier(overallScore), [overallScore])
-
-  // Instrumentation: Log results_rendered when report is successfully rendered to DOM
-  useEffect(() => {
-    if (interview && overallScore !== null) {
-      perfMark('results_core_render')
-      console.log('[ResultsLifecycle] results_rendered', {
-        interviewId: id,
-        overallScore,
-        date: formattedDate,
-      })
-    }
-  }, [interview, overallScore, id, formattedDate])
-
-  // Calculate the 5 Core Performance Metrics strictly from actual data
-  const metrics = useMemo(() => {
-    const answeredQuestions = questionBreakdown.filter(q => q.status === 'answered')
-
-    const avgDimension = (dim) => {
-      const vals = answeredQuestions
-        .map(q => q.textEvaluation?.[dim])
-        .filter(v => v !== null && v !== undefined && typeof v === 'number')
-      if (vals.length === 0) return null
-      return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
-    }
-
-    // 1. Technical Knowledge
-    const techKnowledge = fe?.technicalScore ?? avgDimension('correctness') ?? (overallScore !== null ? Math.round(overallScore * 0.98) : null)
-
-    // 2. Problem Solving & Logic
-    const probSolving = avgDimension('reasoning') ?? (overallScore !== null ? Math.round(overallScore * 0.95) : null)
-
-    // 3. Completeness
-    const completeness = avgDimension('completeness') ?? (overallScore !== null ? Math.round(overallScore * 0.92) : null)
-
-    // 4. Relevance & Precision
-    const relevance = avgDimension('relevance') ?? (overallScore !== null ? Math.min(100, Math.round(overallScore * 1.02)) : null)
-
-    // 5. Delivery & Communication
-    const commScore = fe?.audioScore ?? fe?.communicationScore ?? (overallScore !== null ? Math.round(overallScore) : null)
-
-    return [
-      {
-        title: 'Technical Knowledge',
-        score: techKnowledge,
-        icon: Brain,
-        interpretation: techKnowledge >= 75
-          ? 'Demonstrated strong domain principles and conceptual accuracy.'
-          : techKnowledge >= 60
-          ? 'Adequate core knowledge with room for more in-depth nuances.'
-          : 'Noticeable conceptual gaps identified in core technical answers.'
-      },
-      {
-        title: 'Problem Solving',
-        score: probSolving,
-        icon: Target,
-        interpretation: probSolving >= 75
-          ? 'Structured, systematic reasoning and logical step breakdown.'
-          : probSolving >= 60
-          ? 'Follows reasonable solution logic; occasionally skips edge cases.'
-          : 'Benefit from adopting clearer structured problem-solving frameworks.'
-      },
-      {
-        title: 'Completeness',
-        score: completeness,
-        icon: Layers,
-        interpretation: completeness >= 75
-          ? 'Comprehensive responses that fully address prompts and trade-offs.'
-          : completeness >= 60
-          ? 'Core requirements answered; secondary considerations omitted.'
-          : 'Answers left several key prompt requirements unaddressed.'
-      },
-      {
-        title: 'Relevance',
-        score: relevance,
-        icon: CheckCircle,
-        interpretation: relevance >= 75
-          ? 'High precision, on-topic answers with minimal superfluous detail.'
-          : relevance >= 60
-          ? 'Generally aligned to questions with occasional slight drift.'
-          : 'Opportunity to improve concise alignment with the direct prompt.'
-      },
-      {
-        title: 'Communication',
-        score: commScore,
-        icon: Mic,
-        interpretation: commScore >= 75
-          ? 'Articulate pacing, clear delivery structure, and low filler frequency.'
-          : commScore >= 60
-          ? 'Understandable delivery; can refine pacing and pause management.'
-          : 'Focus on steady pacing and concise response organization.'
-      }
-    ]
-  }, [questionBreakdown, fe, overallScore])
-
-  // Filtered Questions
-  const filteredQuestions = useMemo(() => {
-    return questionBreakdown.filter(q => {
-      if (questionFilter === 'strong') return q.score >= 75 && q.status !== 'skipped'
-      if (questionFilter === 'needs_work') return (q.score < 75 && q.score !== null) || q.status === 'skipped'
-      if (questionFilter === 'technical') return q.category?.toLowerCase() === 'technical' || q.type === 'technical'
-      if (questionFilter === 'behavioral') return q.category?.toLowerCase() === 'behavioral'
-      if (questionFilter === 'coding') return q.type === 'coding'
-      return true
-    })
-  }, [questionBreakdown, questionFilter])
-
-  // ── PRE-COMPUTED question breakdown stats ────────────────────────────────────
-  // Replaces 6 inline questionBreakdown.filter/some() calls in JSX (one per render).
-  // With 10+ questions, each inline iteration ran on EVERY render cycle including
-  // accordion toggles, filter changes, and roadmap state updates.
-  const qbStats = useMemo(() => {
-    const answeredCount = questionBreakdown.filter(q => q.status === 'answered').length
-    const skippedCount = questionBreakdown.filter(q => q.status === 'skipped').length
-    const hasCoding = questionBreakdown.some(q => q.type === 'coding')
-    const hasTechnical = questionBreakdown.some(q => q.category?.toLowerCase() === 'technical')
-    return { answeredCount, skippedCount, hasCoding, hasTechnical, hasSkipped: skippedCount > 0 }
-  }, [questionBreakdown])
-
-  const toggleQuestion = (idx) => {
-    setExpandedQuestions(prev => ({ ...prev, [idx]: !prev[idx] }))
-  }
-
-  const expandAllQuestions = () => {
-    const all = {}
-    questionBreakdown.forEach((_, i) => { all[i] = true })
-    setExpandedQuestions(all)
-  }
-
-  const collapseAllQuestions = () => {
-    setExpandedQuestions({})
-  }
-
-  // Check if communication signals actually exist
-  const hasCommData = useMemo(() => {
-    return (
-      (fe?.audioScore !== null && fe?.audioScore !== undefined) ||
-      (fe?.videoScore !== null && fe?.videoScore !== undefined) ||
-      fe?.audioStatus === 'available' ||
-      fe?.videoStatus === 'available' ||
-      fe?.audioStatus === 'processing' ||
-      fe?.videoStatus === 'processing' ||
-      questionBreakdown.some(q => (q.audioEvaluation?.speakingDuration && q.audioEvaluation.speakingDuration > 0) || (q.videoEvaluation?.framesProcessed && q.videoEvaluation.framesProcessed > 0))
-    )
-  }, [fe, questionBreakdown])
-
-  // Communication metrics aggregated across questions
-  const commSummary = useMemo(() => {
-    if (!hasCommData) return null
-    const audioQuestions = questionBreakdown.filter(q => q.audioEvaluation?.speakingDuration && q.audioEvaluation.speakingDuration > 0)
-    const videoQuestions = questionBreakdown.filter(q => q.videoEvaluation?.framesProcessed && q.videoEvaluation.framesProcessed > 0)
-
-    const avgPace = audioQuestions.length > 0
-      ? Math.round(audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.speakingPace || 135), 0) / audioQuestions.length)
-      : null
-
-    const totalFillers = audioQuestions.length > 0
-      ? audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.fillerWordsCount || 0), 0)
-      : null
-
-    const avgDuration = audioQuestions.length > 0
-      ? Math.round(audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.speakingDuration || 0), 0) / audioQuestions.length)
-      : null
-
-    const avgPersonDetected = videoQuestions.length > 0
-      ? Math.round((videoQuestions.reduce((acc, q) => acc + (q.videoEvaluation?.personDetectionRatio ?? 0.95), 0) / videoQuestions.length) * 100)
-      : null
-
-    return {
-      avgPace,
-      totalFillers,
-      avgDuration,
-      avgPersonDetected,
-      audioCount: audioQuestions.length,
-      videoCount: videoQuestions.length,
-      audioStatus: fe?.audioStatus || (audioQuestions.length > 0 ? 'available' : 'unavailable'),
-      videoStatus: fe?.videoStatus || (videoQuestions.length > 0 ? 'available' : 'unavailable'),
-    }
-  }, [hasCommData, questionBreakdown, fe])
-
-  // Key Strength & Primary Weakness — memoized so asynchronous roadmap arrival
-  // doesn't trigger unnecessary re-derivation of all dependent JSX sections
-  const keyStrength = useMemo(
-    () => fe?.strongAreas?.[0] || 'Core domain comprehension',
-    [fe?.strongAreas]
-  )
-  const primaryWeakness = useMemo(
-    () => fe?.weakAreas?.[0] || (roadmap?.recommendations?.[0]?.skill || 'Edge-case explanation depth'),
-    [fe?.weakAreas, roadmap?.recommendations]
-  )
-
-  // Recommended Practice items (3 to 5 targeted items strictly based on weaknesses)
-  const targetedPractice = useMemo(() => {
-    if (roadmap?.recommendations?.length > 0) {
-      return roadmap.recommendations.slice(0, 4)
-    }
-    // Fallback directly to weak areas or skill gaps
-    const areas = [...(fe?.weakAreas || []), ...(fe?.skillGaps || [])].slice(0, 4)
-    return areas.map((area, idx) => ({
-      skill: area,
-      priority: idx === 0 ? 'High' : 'Medium',
-      area: 'Technical Skill',
-      description: `Targeted practice to reinforce foundational patterns in ${area}.`,
-      topics: [`Core ${area} principles`, 'Edge case patterns', 'Real-world application'],
-      studyApproach: `Review production trade-offs and practice explaining implementation decisions for ${area}.`
-    }))
-  }, [roadmap, fe])
 
   // ── SECONDARY RENDER MARK ──────────────────────────────────────────────────
   perfMark('results_secondary_render')
