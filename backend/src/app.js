@@ -26,29 +26,85 @@ const fileRoutes = require('./routes/files');
 const app = express();
 
 
-// Security headers
-app.use(helmet());
+// CORS — must be registered before all other middleware, including helmet,
+// so that pre-flight OPTIONS requests and error responses carry CORS headers.
+//
+// Environment variable: FRONTEND_URL
+//   Set this on Render to the exact Vercel origin, e.g.:
+//     https://interview-x-five.vercel.app
+//   Multiple origins are supported as a comma-separated list:
+//     https://interview-x-five.vercel.app,https://interview-o4wai632-prakash-1cc8.vercel.app
 
-// CORS — allow frontend origin
-const allowedOrigins = [
-  ...(process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map((s) => s.trim()),
+const normalizeOrigin = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  return url
+    .trim()
+    .replace(/^["']|["']$/g, '') // strip quotes
+    .replace(/\/+$/, '')          // strip trailing slashes
+    .toLowerCase();              // normalize protocol & hostname case
+};
+
+const defaultAllowedOrigins = [
   'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:4173',
   'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:4173',
+  'https://interview-x-five.vercel.app',
+  'https://interview-o4wai632-prakash-1cc8.vercel.app',
 ];
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('CORS: Origin not allowed'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
-);
+
+const getAllowedOrigins = () => {
+  const envRaw = process.env.FRONTEND_URL || '';
+  const envOrigins = envRaw
+    .split(',')
+    .map(normalizeOrigin)
+    .filter(Boolean);
+
+  return new Set([
+    ...defaultAllowedOrigins.map(normalizeOrigin),
+    ...envOrigins,
+  ]);
+};
+
+// Log at startup so Render logs show exactly what is allowed
+console.log('[CORS] Allowed origins:', Array.from(getAllowedOrigins()));
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow non-browser requests (curl, server-to-server, health checks)
+    if (!origin) return callback(null, true);
+
+    const normalizedOrigin = normalizeOrigin(origin);
+    const allowed = getAllowedOrigins();
+
+    if (allowed.has(normalizedOrigin)) {
+      return callback(null, true);
+    }
+
+    console.warn(`[CORS] Blocked origin: "${origin}" (normalized: "${normalizedOrigin}")`);
+    return callback(new Error('CORS: Origin not allowed'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-dev-clerk-user-id',
+    'x-test-clerk-user-id',
+  ],
+};
+
+// Handle pre-flight OPTIONS for every route FIRST — before helmet or any auth
+// path-to-regexp 8.x (Express 5) wildcard syntax: '{/*path}'
+app.options('{/*path}', cors(corsOptions));
+
+// Apply CORS to all other requests
+app.use(cors(corsOptions));
+
+// Security headers (after CORS so CORS headers are not overwritten)
+app.use(helmet());
 
 
 // Request logging

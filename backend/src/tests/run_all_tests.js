@@ -10,6 +10,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const testSuites = [
+  { name: 'CORS Configuration & Origin Security', file: 'cors_verification_test.js' },
   { name: 'Auth & Route Verification', file: 'auth_verification_test.js' },
   { name: 'Multi-Tenant Security & Isolation', file: 'security_and_isolation_test.js' },
   { name: 'Adversarial Red-Team & IDOR Audit', file: 'redteam_audit_suite.js' },
