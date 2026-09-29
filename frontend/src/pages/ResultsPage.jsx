@@ -14,6 +14,14 @@ const TrainMeModal = lazy(() => import('../components/TrainMeModal'))
 
 // Session-level memory cache for instantaneous back-navigation & zero-delay re-renders
 const resultsCache = new Map()
+
+// ── Performance instrumentation (dev-only) ───────────────────────────────────
+const _isDev = import.meta.env.DEV
+const perfMark = (name) => {
+  if (_isDev && typeof performance !== 'undefined' && performance.mark) {
+    try { performance.mark(name) } catch (_) { /* ignore */ }
+  }
+}
 const roadmapCache = new Map()
 
 // Helper to determine score tier
@@ -356,6 +364,7 @@ export default function ResultsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { authApi, isLoaded, isSignedIn } = useAuthApi()
+  perfMark('results_page_start')
 
   // Initialize from session cache if available for instant 0ms rendering
   const [results, setResults] = useState(() => resultsCache.get(id) || null)
@@ -465,6 +474,7 @@ export default function ResultsPage() {
 
     // Helper: fetch results with bounded exponential backoff for transient failures (1s, 2s, 4s, max 3 retries)
     const fetchResultsWithRetry = async (retryCount = 0) => {
+      perfMark('results_api_start')
       const reqStart = performance.now()
       console.log('[ResultsLifecycle] results_request_start', {
         interviewId: id,
@@ -474,6 +484,7 @@ export default function ResultsPage() {
         const res = await authApi.get(`/api/interviews/${id}/results`, { timeout: 15000 })
         const data = res.data?.data || res.data
         const durationMs = Math.round(performance.now() - reqStart)
+        perfMark('results_api_success')
         console.log('[ResultsLifecycle] results_request_success', {
           interviewId: id,
           status: data?.finalEvaluation?.status,
@@ -618,10 +629,18 @@ export default function ResultsPage() {
     }
   }, [id, isLoaded, isSignedIn, authTimeout, retryTrigger])
 
-  if ((!isLoaded && !authTimeout) || (loading && !results && !isFinalizing)) {
+  // ── RENDER GUARD ORDER (critical path) ─────────────────────────────────────
+  // IMPORTANT: isFinalizing must be checked BEFORE the generic loading skeleton.
+  // If isFinalizing=true and loading=true simultaneously (race between setLoading and
+  // setIsFinalizing), the old code fell through to <ResultsSkeleton> and the user saw
+  // a blank white skeleton instead of the "Finalizing..." message.
+
+  // 1. Clerk not yet initialized
+  if (!isLoaded && !authTimeout) {
     return <ResultsSkeleton />
   }
 
+  // 2. Finalizing (pending evaluation) — show specific message, not generic skeleton
   if (isFinalizing && (!results || results.finalEvaluation?.status === 'pending')) {
     return (
       <div className="results-page">
@@ -643,6 +662,11 @@ export default function ResultsPage() {
         </div>
       </div>
     )
+  }
+
+  // 3. Primary loading (waiting on API, no results yet)
+  if (loading && !results) {
+    return <ResultsSkeleton />
   }
 
   if (!isSignedIn && isLoaded) {
@@ -793,13 +817,18 @@ export default function ResultsPage() {
     return '30 min'
   }, [interview])
 
-  // Overall Score & Tier
-  const overallScore = fe?.overallScore !== null && fe?.overallScore !== undefined ? Math.round(fe.overallScore) : null
-  const scoreTier = getScoreTier(overallScore)
+  // Overall Score & Tier — stable useMemo so downstream memos (metrics) don't invalidate on every render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const overallScore = useMemo(
+    () => (fe?.overallScore !== null && fe?.overallScore !== undefined ? Math.round(fe.overallScore) : null),
+    [fe?.overallScore]
+  )
+  const scoreTier = useMemo(() => getScoreTier(overallScore), [overallScore])
 
   // Instrumentation: Log results_rendered when report is successfully rendered to DOM
   useEffect(() => {
     if (interview && overallScore !== null) {
+      perfMark('results_core_render')
       console.log('[ResultsLifecycle] results_rendered', {
         interviewId: id,
         overallScore,
@@ -901,6 +930,18 @@ export default function ResultsPage() {
     })
   }, [questionBreakdown, questionFilter])
 
+  // ── PRE-COMPUTED question breakdown stats ────────────────────────────────────
+  // Replaces 6 inline questionBreakdown.filter/some() calls in JSX (one per render).
+  // With 10+ questions, each inline iteration ran on EVERY render cycle including
+  // accordion toggles, filter changes, and roadmap state updates.
+  const qbStats = useMemo(() => {
+    const answeredCount = questionBreakdown.filter(q => q.status === 'answered').length
+    const skippedCount = questionBreakdown.filter(q => q.status === 'skipped').length
+    const hasCoding = questionBreakdown.some(q => q.type === 'coding')
+    const hasTechnical = questionBreakdown.some(q => q.category?.toLowerCase() === 'technical')
+    return { answeredCount, skippedCount, hasCoding, hasTechnical, hasSkipped: skippedCount > 0 }
+  }, [questionBreakdown])
+
   const toggleQuestion = (idx) => {
     setExpandedQuestions(prev => ({ ...prev, [idx]: !prev[idx] }))
   }
@@ -962,9 +1003,16 @@ export default function ResultsPage() {
     }
   }, [hasCommData, questionBreakdown, fe])
 
-  // Key Strength & Primary Weakness for Executive Summary
-  const keyStrength = fe?.strongAreas?.[0] || 'Core domain comprehension'
-  const primaryWeakness = fe?.weakAreas?.[0] || (roadmap?.recommendations?.[0]?.description ? roadmap.recommendations[0].skill : 'Edge-case explanation depth')
+  // Key Strength & Primary Weakness — memoized so asynchronous roadmap arrival
+  // doesn't trigger unnecessary re-derivation of all dependent JSX sections
+  const keyStrength = useMemo(
+    () => fe?.strongAreas?.[0] || 'Core domain comprehension',
+    [fe?.strongAreas]
+  )
+  const primaryWeakness = useMemo(
+    () => fe?.weakAreas?.[0] || (roadmap?.recommendations?.[0]?.skill || 'Edge-case explanation depth'),
+    [fe?.weakAreas, roadmap?.recommendations]
+  )
 
   // Recommended Practice items (3 to 5 targeted items strictly based on weaknesses)
   const targetedPractice = useMemo(() => {
@@ -982,6 +1030,9 @@ export default function ResultsPage() {
       studyApproach: `Review production trade-offs and practice explaining implementation decisions for ${area}.`
     }))
   }, [roadmap, fe])
+
+  // ── SECONDARY RENDER MARK ──────────────────────────────────────────────────
+  perfMark('results_secondary_render')
 
   return (
     <div className="results-page">
@@ -1114,7 +1165,7 @@ export default function ResultsPage() {
                     {scoreTier.label}
                   </span>
                   <span style={{ fontSize: '11px', color: '#64748b' }}>
-                    {fe?.questionsAnswered ?? questionBreakdown.filter(q => q.status === 'answered').length} of {fe?.totalQuestions ?? questionBreakdown.length} Answered
+                    {fe?.questionsAnswered ?? qbStats.answeredCount} of {fe?.totalQuestions ?? questionBreakdown.length} Answered
                   </span>
                 </div>
               </div>
@@ -1308,7 +1359,7 @@ export default function ResultsPage() {
                 >
                   Needs Focus (&lt;75)
                 </button>
-                {questionBreakdown.some(q => q.type === 'coding') && (
+                {qbStats.hasCoding && (
                   <button
                     type="button"
                     onClick={() => setQuestionFilter('coding')}
@@ -1317,7 +1368,7 @@ export default function ResultsPage() {
                     Coding
                   </button>
                 )}
-                {questionBreakdown.some(q => q.category?.toLowerCase() === 'technical') && (
+                {qbStats.hasTechnical && (
                   <button
                     type="button"
                     onClick={() => setQuestionFilter('technical')}
@@ -1330,11 +1381,11 @@ export default function ResultsPage() {
 
               <div className="status-counter-chips">
                 <span className="counter-chip chip-answered">
-                  {questionBreakdown.filter(q => q.status === 'answered').length} Answered
+                  {qbStats.answeredCount} Answered
                 </span>
-                {questionBreakdown.some(q => q.status === 'skipped') && (
+                {qbStats.hasSkipped && (
                   <span className="counter-chip chip-skipped">
-                    {questionBreakdown.filter(q => q.status === 'skipped').length} Skipped
+                    {qbStats.skippedCount} Skipped
                   </span>
                 )}
               </div>
