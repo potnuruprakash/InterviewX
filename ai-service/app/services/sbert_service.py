@@ -30,36 +30,53 @@ CONCEPT_MATCH_THRESHOLD = 0.35      # Cosine similarity threshold for concept ma
 HIGH_ALIGNMENT_THRESHOLD = 70.0     # Alignment threshold for direct answer relevance
 MODERATE_ALIGNMENT_THRESHOLD = 45.0 # Partial alignment threshold
 
-# MODEL LOADING (singleton — loaded once at startup)
+# MODEL LOADING (singleton — loaded once, concurrency-safe)
 # ─────────────────────────────────────────────────────────────────────────────
+import threading
 
 _model = None
 _model_name = os.getenv("SBERT_MODEL_NAME", "all-MiniLM-L6-v2")
 _model_status = "not_loaded"
+_model_lock = threading.Lock()
+_model_loading = False  # True while load_model() is executing
 
 
 def load_model():
-    """Load the SBERT model. Called once at startup."""
-    global _model, _model_status
+    """Load the SBERT model. Idempotent and concurrency-safe via threading.Lock."""
+    global _model, _model_status, _model_loading
+    # Fast-path: already loaded
     if _model is not None:
         return
 
-    try:
-        from sentence_transformers import SentenceTransformer
-        logger.info(f"[SBERT] Loading model: {_model_name}")
-        _model = SentenceTransformer(_model_name)
-        _model_status = "loaded"
-        logger.info(f"[SBERT] Model loaded successfully: {_model_name}")
-    except ImportError:
-        _model_status = "sentence_transformers_not_installed"
-        logger.warning("[SBERT] sentence-transformers not installed.")
-    except Exception as e:
-        _model_status = f"load_error: {str(e)}"
-        logger.error(f"[SBERT] Model load failed: {e}")
+    with _model_lock:
+        # Re-check inside lock in case another thread just finished
+        if _model is not None:
+            return
+        _model_loading = True
+        _model_status = "loading"
+        try:
+            from sentence_transformers import SentenceTransformer
+            logger.info(f"[SBERT] Loading model: {_model_name} ...")
+            _model = SentenceTransformer(_model_name)
+            _model_status = "loaded"
+            logger.info(f"[SBERT] Model loaded successfully: {_model_name}")
+        except ImportError:
+            _model_status = "sentence_transformers_not_installed"
+            logger.warning("[SBERT] sentence-transformers not installed.")
+        except Exception as e:
+            _model_status = f"load_error: {str(e)}"
+            logger.error(f"[SBERT] Model load failed: {e}")
+        finally:
+            _model_loading = False
 
 
 def get_model_status() -> str:
     return _model_status
+
+
+def is_loading() -> bool:
+    """True while the model is currently being loaded in the background."""
+    return _model_loading
 
 
 def get_model_name() -> str:

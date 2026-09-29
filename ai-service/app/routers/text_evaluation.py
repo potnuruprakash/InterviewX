@@ -1,5 +1,6 @@
 """Text evaluation router — Phase 4 (SBERT)"""
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from app.schemas.schemas import TextEvaluationRequest
 from app.services import sbert_service
 
@@ -27,6 +28,18 @@ async def text_evaluate(request: TextEvaluationRequest):
       confidence: 0-1
       modelStatus: str
     """
+    # Return 503 while the model is warming up so callers can retry
+    if sbert_service.is_loading():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": "MODEL_WARMING_UP",
+                "message": "SBERT model is still loading. Please retry in a few seconds.",
+                "modelStatus": sbert_service.get_model_status(),
+            },
+        )
+
     try:
         result = sbert_service.evaluate_text(
             question=request.question,
@@ -36,3 +49,4 @@ async def text_evaluate(request: TextEvaluationRequest):
         return {"success": True, "data": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail={"success": False, "error": "EVALUATION_ERROR", "message": str(e)})
+

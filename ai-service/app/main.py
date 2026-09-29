@@ -1,5 +1,5 @@
 """
-Main FastAPI application — InterviewX AI Service
+Main FastAPI application   InterviewX AI Service
 
 Phase 4: SBERT text evaluation
 Phase 5: Audio MFCC analysis
@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 import os
+import asyncio
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -23,22 +24,67 @@ from app.services import sbert_service, video_service
 load_dotenv()
 
 
+async def _load_models_background():
+    """
+    Load all heavy AI models in the background after the HTTP server has started.
+
+    Each model is loaded in a thread-pool executor so the blocking C-extension
+    code (Torch / Transformers / Ultralytics) never stalls the asyncio event loop.
+    Uvicorn has already bound $PORT and is accepting connections by the time this
+    coroutine runs, so Render's port-scan succeeds immediately.
+    """
+    loop = asyncio.get_event_loop()
+
+    # ‖ Phase 4: SBERT
+    logger.info("[Startup] Background task: loading SBERT model ...")
+    try:
+        await loop.run_in_executor(None, sbert_service.load_model)
+        logger.info(f"[Startup] SBERT ready -- status: {sbert_service.get_model_status()}")
+    except Exception as exc:
+        logger.error(f"[Startup] SBERT load error: {exc}")
+
+    # ₆ Phase 6: YOLOv8 + Video Pipeline
+    logger.info("[Startup] Background task: loading YOLOv8 / video pipeline ...")
+    try:
+        await loop.run_in_executor(None, video_service.load_yolo_model)
+        logger.info(f"[Startup] YOLO ready -- status: {video_service.get_yolo_status()}")
+    except Exception as exc:
+        logger.error(f"[Startup] YOLO load error: {exc}")
+
+    logger.info("[Startup] All AI models initialised. Service fully operational.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load ML models at startup — once, not per request."""
-    logger.info("[Startup] Loading AI models...")
+    """
+    FastAPI lifespan handler.
 
-    # Load SBERT
-    sbert_service.load_model()
-    logger.info(f"[Startup] SBERT status: {sbert_service.get_model_status()}")
+    KEY BEHAVIOUR:
+      * asyncio.create_task() is called BEFORE yield so the background model-
+        load task is scheduled immediately, but it only starts running once
+        the event loop iterates -- i.e. AFTER Uvicorn finishes binding the port.
+      * yield returns control to Uvicorn, which binds $PORT and answers
+        Render's health-check probe within seconds.
+      * Heavy AI libraries (Torch / Transformers / Ultralytics) run in a
+        thread-pool executor so they never block the async event loop.
+    """
+    logger.info("[Startup] InterviewX AI Service starting -- binding port now.")
+    logger.info("[Startup] AI model loading will begin in background after server is ready.")
 
-    # Load YOLOv8
-    video_service.load_yolo_model()
-    logger.info(f"[Startup] YOLO status: {video_service.get_yolo_status()}")
+    # Schedule background loading.  The task won't actually start until the
+    # first await point after yield hands control back to the event loop.
+    _bg_task = asyncio.create_task(_load_models_background())
 
-    logger.info("[Startup] AI models initialization complete.")
-    yield
+    yield  # Uvicorn binds $PORT and starts serving here
+
+    # Shutdown
     logger.info("[Shutdown] AI service shutting down.")
+    if not _bg_task.done():
+        _bg_task.cancel()
+        try:
+            await _bg_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
@@ -49,14 +95,14 @@ app = FastAPI(
         "**Phase 5**: Audio MFCC feature analysis\n"
         "**Phase 6**: YOLOv8 video frame analysis\n"
         "**Phase 7**: Multimodal fusion\n\n"
-        "**Note**: CNN-LSTM audio model is not trained — returns feature data only.\n"
+        "**Note**: CNN-LSTM audio model is not trained -- returns feature data only.\n"
         "YOLOv8 uses pretrained COCO weights for person detection."
     ),
     version="3.0.0",
     lifespan=lifespan,
 )
 
-# CORS — allow only backend microservice
+# CORS -- allow only backend microservice
 allowed_origins_str = os.getenv("BACKEND_URL", "http://localhost:5000")
 allowed_origins = [o.strip() for o in allowed_origins_str.split(",") if o.strip()]
 
@@ -131,7 +177,7 @@ async def root():
             "docs": "/docs",
         },
         "models": {
-            "sbert": {
+            "sbert":{
                 "model": sbert_service.get_model_name(),
                 "status": sbert_service.get_model_status(),
             },

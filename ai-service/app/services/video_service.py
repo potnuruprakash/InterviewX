@@ -20,6 +20,7 @@ YOLO_MODEL_PATH env var can override with a custom weights file.
 import os
 import logging
 import tempfile
+import threading
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -29,22 +30,65 @@ FRAME_SAMPLE_FPS = int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "1"))
 
 _yolo_model = None
 _yolo_model_status = "not_loaded"
-from app.video import get_video_pipeline
+
+# Concurrency guard for pipeline singleton creation
+_pipeline_lock = threading.Lock()
+_pipeline_loading = False  # True while pipeline/__init is executing
+
+from app.video import get_video_pipeline as _get_video_pipeline_raw
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MODEL LOADING
 # ─────────────────────────────────────────────────────────────────────────────
 
+def get_video_pipeline():
+    """
+    Concurrency-safe accessor for the VideoAnalysisPipeline singleton.
+    Multiple simultaneous first-requests will serialize through _pipeline_lock.
+    """
+    global _pipeline_loading
+
+    # Fast-path (pipeline already exists inside _get_video_pipeline_raw)
+    import app.video.inference.pipeline as _pl_mod
+    if _pl_mod._pipeline_instance is not None:
+        return _pl_mod._pipeline_instance
+
+    with _pipeline_lock:
+        # Double-checked locking
+        if _pl_mod._pipeline_instance is not None:
+            return _pl_mod._pipeline_instance
+        _pipeline_loading = True
+        try:
+            return _get_video_pipeline_raw()
+        finally:
+            _pipeline_loading = False
+
+
 def load_yolo_model():
-    """Load YOLOv8 model. Called once at startup."""
+    """Trigger pipeline initialization. Called from background startup task."""
+    logger.info("[VideoService] Initializing video pipeline (YOLO + face analyzer) ...")
     pipeline = get_video_pipeline()
-    logger.info(f"[VideoService] Pipeline initialized with YOLO status: {pipeline.yolo_detector.status}")
+    logger.info(f"[VideoService] Pipeline ready. YOLO status: {pipeline.yolo_detector.status}")
+
+
+def is_loading() -> bool:
+    """True while the pipeline is currently being created in the background."""
+    return _pipeline_loading
+
+
+def is_ready() -> bool:
+    """True when the pipeline singleton has been fully created."""
+    import app.video.inference.pipeline as _pl_mod
+    return _pl_mod._pipeline_instance is not None
 
 
 def get_yolo_status() -> str:
-    pipeline = get_video_pipeline()
-    return pipeline.yolo_detector.status
+    """Return YOLO model status without triggering pipeline initialization."""
+    import app.video.inference.pipeline as _pl_mod
+    if _pl_mod._pipeline_instance is None:
+        return "loading" if _pipeline_loading else "not_loaded"
+    return _pl_mod._pipeline_instance.yolo_detector.status
 
 
 def get_model_audit_report() -> dict:

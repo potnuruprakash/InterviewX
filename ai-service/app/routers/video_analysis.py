@@ -2,6 +2,7 @@
 import os
 import tempfile
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse
 from app.services import video_service
 
 router = APIRouter(prefix="/api/ai", tags=["Video Analysis"])
@@ -27,6 +28,18 @@ async def video_analyze(video: UploadFile = File(...)):
     tmp_path = None
     MAX_VIDEO_SIZE = 100 * 1024 * 1024  # 100 MB limit
     CHUNK_SIZE = 1024 * 1024  # 1 MB chunk
+
+    # Return 503 while the pipeline is still warming up
+    if video_service.is_loading():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": "MODEL_WARMING_UP",
+                "message": "Video analysis pipeline is still loading. Please retry in a few seconds.",
+                "modelStatus": video_service.get_yolo_status(),
+            },
+        )
 
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -68,6 +81,16 @@ async def video_model_info():
     Returns empirical model performance, verified dataset audit,
     and capability specifications for the Video Analysis pipeline.
     """
+    if video_service.is_loading():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": "MODEL_WARMING_UP",
+                "message": "Video pipeline is still loading. Please retry in a few seconds.",
+                "modelStatus": video_service.get_yolo_status(),
+            },
+        )
     audit = video_service.get_model_audit_report()
     return {"success": True, "data": audit}
 
