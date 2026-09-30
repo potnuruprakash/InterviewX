@@ -96,7 +96,7 @@ const detectNonSubstantiveAnswer = (answerText, semanticScore = null, conceptCov
   const substantiveIndicators = [
     /\\b(?:java|python|javascript|typescript|react|node(?:\\.js)?|spring|spring boot|sql|mongodb|docker|kubernetes|aws|azure|gcp|api|rest|git|linux|html|css|c\\+\\+|c#|\.net|backend|frontend|full[- ]?stack|software engineer|developer|programmer|intern|experience|project|projects|application|system|service|database|microservices?|testing|deployment|cloud|architecture|algorithm|data structure|skills?|team|role|work(?:ed|ing)?|built|developed|designed|implemented|created|managed|led)\\b/i,
     /\\b(?:i|i'm|im|my|we|our|he|she|they)\\b/i,
-    /\\b(?:am|is|are|was|were|have|has|had|worked|built|developed|designed|implemented|used|use|using|enjoy|enjoyed|learned|learning)\\b/i,
+    /\\b(?:am|is|are|was|were|have|has|had|worked|built|developed|designed|implemented|used|use|using|learned|learning)\\b/i,
     /\\d+(?:\\.\\d+)?\\s*(?:years?|months?|projects?)?/i,
   ].some((pattern) => pattern.test(normalized));
 
