@@ -32,6 +32,7 @@ export default function InterviewPage() {
   const [currentQuestion, setCurrentQuestion] = useState(null)
   const [answer, setAnswer] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [skipping, setSkipping] = useState(false)
   const [completing, setCompleting] = useState(false)
