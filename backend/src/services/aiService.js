@@ -19,7 +19,7 @@ const fs = require('fs');
 const path = require('path');
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-const AI_SERVICE_TIMEOUT = parseInt(process.env.AI_SERVICE_TIMEOUT || '60000', 10);
+const AI_SERVICE_TIMEOUT = parseInt(process.env.AI_SERVICE_TIMEOUT || '120000', 10);
 const AI_SERVICE_SECRET_KEY = process.env.AI_SERVICE_SECRET_KEY;
 
 if (!AI_SERVICE_SECRET_KEY && process.env.NODE_ENV === 'production') {
@@ -144,7 +144,7 @@ const analyzeVideo = async (videoFilePath) => {
     const form = new FormData();
     form.append('video', fs.createReadStream(videoFilePath), {
       filename: path.basename(videoFilePath),
-      contentType: 'video/webm',
+      contentType: 'application/octet-stream',
     });
 
     const res = await axios.post(`${AI_SERVICE_URL}/api/ai/video-analyze`, form, {
