@@ -1,8 +1,16 @@
 /* ============================================================
-   ENTERPRISE ANSWER WORKSPACE STYLES
+   ANSWER CARD & DEDICATED ACTION BAR STYLES
    ============================================================ */
 
-.enterprise-answer-workspace {
+.answer-workspace-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+/* ── 1. The Answer Card ────────────────────────────────────────── */
+.enterprise-answer-card {
   display: flex;
   flex-direction: column;
   background: var(--bg-card, rgba(15, 23, 42, 0.7));
@@ -11,31 +19,28 @@
   padding: 20px 24px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
   gap: 12px;
-  flex: 1;
-  min-height: 0;
-  transition: border-color var(--transition-base, 0.2s ease);
+  transition: border-color 0.2s ease;
 }
 
-[data-theme='light'] .enterprise-answer-workspace {
+[data-theme='light'] .enterprise-answer-card {
   background: #ffffff;
   border-color: #e2e8f0;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
 }
 
-.enterprise-answer-workspace:focus-within {
+.enterprise-answer-card:focus-within {
   border-color: rgba(99, 102, 241, 0.4);
 }
 
-/* ── 1. Header Row ────────────────────────────────────────────── */
-.workspace-header-row {
+/* Header */
+.answer-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-shrink: 0;
   gap: 8px;
 }
 
-.workspace-title-label {
+.answer-card-label {
   font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -43,11 +48,11 @@
   text-transform: uppercase;
 }
 
-[data-theme='light'] .workspace-title-label {
+[data-theme='light'] .answer-card-label {
   color: #64748b;
 }
 
-.workspace-status-indicator {
+.answer-status-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -56,19 +61,19 @@
   color: var(--text-muted, #94a3b8);
 }
 
-.workspace-status-indicator.tone-live {
+.answer-status-pill.tone-live {
   color: #34d399;
 }
 
-.workspace-status-indicator.tone-processing {
+.answer-status-pill.tone-processing {
   color: #818cf8;
 }
 
-.workspace-status-indicator.tone-success {
+.answer-status-pill.tone-success {
   color: #10b981;
 }
 
-.workspace-status-indicator.tone-warn {
+.answer-status-pill.tone-warn {
   color: #fbbf24;
 }
 
@@ -78,10 +83,10 @@
   border-radius: 50%;
   background: #10b981;
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
-  animation: liveDotPulse 1.8s infinite ease-in-out;
+  animation: liveDotPulseAns 1.8s infinite ease-in-out;
 }
 
-@keyframes liveDotPulse {
+@keyframes liveDotPulseAns {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.85); }
 }
@@ -94,8 +99,8 @@
   color: #f59e0b;
 }
 
-/* ── 2. Subtle Interim Live Row ───────────────────────────────── */
-.workspace-interim-row {
+/* Interim Ribbon */
+.answer-interim-ribbon {
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -105,24 +110,23 @@
   border-radius: 0 4px 4px 0;
   font-size: 12px;
   line-height: 1.4;
-  flex-shrink: 0;
 }
 
-[data-theme='light'] .workspace-interim-row {
+[data-theme='light'] .answer-interim-ribbon {
   background: #f1f5f9;
   border-left-color: #4f46e5;
 }
 
-.interim-prefix {
+.interim-label {
   font-weight: 600;
   color: #818cf8;
 }
 
-[data-theme='light'] .interim-prefix {
+[data-theme='light'] .interim-label {
   color: #4f46e5;
 }
 
-.interim-content {
+.interim-text {
   color: var(--text-secondary, #cbd5e1);
   font-style: italic;
   overflow: hidden;
@@ -130,22 +134,21 @@
   white-space: nowrap;
 }
 
-[data-theme='light'] .interim-content {
+[data-theme='light'] .interim-text {
   color: #334155;
 }
 
-/* ── 3. Textarea Wrapper ──────────────────────────────────────── */
-.workspace-textarea-wrapper {
-  flex: 1;
+/* Textarea Box */
+.answer-textarea-box {
+  width: 100%;
+  min-height: 180px;
   display: flex;
   flex-direction: column;
-  min-height: 160px;
 }
 
 .enterprise-answer-textarea {
   width: 100%;
-  flex: 1;
-  min-height: 160px;
+  min-height: 180px;
   background: rgba(5, 8, 16, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 8px;
@@ -154,7 +157,7 @@
   font-size: 15px;
   line-height: 1.65;
   padding: 14px 16px;
-  resize: none;
+  resize: vertical;
   outline: none;
   transition: all 0.2s ease;
 }
@@ -191,32 +194,33 @@
   cursor: not-allowed;
 }
 
-/* ── 4. Dedicated Metadata Row ────────────────────────────────── */
-.workspace-meta-row {
+/* Bottom Stats Row */
+.answer-card-bottom-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 12px;
   color: var(--text-muted, #94a3b8);
-  flex-shrink: 0;
-  padding: 0 2px;
 }
 
-[data-theme='light'] .workspace-meta-row {
+[data-theme='light'] .answer-card-bottom-row {
+  border-top-color: #f1f5f9;
   color: #64748b;
 }
 
-.meta-left {
+.bottom-row-left {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.shortcut-guide {
+.shortcut-text {
   font-size: 11.5px;
 }
 
-.shortcut-guide kbd {
+.shortcut-text kbd {
   font-family: inherit;
   font-size: 10.5px;
   font-weight: 600;
@@ -227,13 +231,13 @@
   color: var(--text-secondary, #cbd5e1);
 }
 
-[data-theme='light'] .shortcut-guide kbd {
+[data-theme='light'] .shortcut-text kbd {
   background: #e2e8f0;
   border-color: #cbd5e1;
   color: #334155;
 }
 
-.btn-text-clear {
+.btn-clear-answer {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -247,18 +251,18 @@
   transition: all 0.2s ease;
 }
 
-.btn-text-clear:hover {
+.btn-clear-answer:hover {
   color: #f87171;
   background: rgba(239, 68, 68, 0.08);
 }
 
-.meta-right {
+.bottom-row-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.attached-media-tag {
+.media-attached-tag {
   font-size: 11px;
   color: #38bdf8;
   background: rgba(56, 189, 248, 0.08);
@@ -266,38 +270,31 @@
   border-radius: 4px;
 }
 
-.text-count-stat {
+.word-char-stats {
   font-variant-numeric: tabular-nums;
   font-size: 11.5px;
 }
 
-/* ── 5. Integrated Action Bar ─────────────────────────────────── */
-.workspace-action-bar {
+/* ── 2. Dedicated Action Bar (Below Answer Card) ──────────────── */
+.answer-action-bar-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  flex-shrink: 0;
-  gap: 12px;
-}
-
-[data-theme='light'] .workspace-action-bar {
-  border-top-color: #e2e8f0;
+  width: 100%;
+  gap: 16px;
 }
 
 .action-bar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
 }
 
-.btn-action-skip {
+.btn-skip-action {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 44px;
-  padding: 0 16px;
+  padding: 0 18px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -309,25 +306,25 @@
   user-select: none;
 }
 
-[data-theme='light'] .btn-action-skip {
+[data-theme='light'] .btn-skip-action {
   background: #f1f5f9;
   border-color: #cbd5e1;
   color: #475569;
 }
 
-.btn-action-skip:hover:not(:disabled) {
+.btn-skip-action:hover:not(:disabled) {
   background: rgba(245, 158, 11, 0.1);
   border-color: rgba(245, 158, 11, 0.35);
   color: #fbbf24;
 }
 
-[data-theme='light'] .btn-action-skip:hover:not(:disabled) {
+[data-theme='light'] .btn-skip-action:hover:not(:disabled) {
   background: #fef3c7;
   border-color: #fde68a;
   color: #b45309;
 }
 
-.btn-action-skip:disabled {
+.btn-skip-action:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -335,11 +332,9 @@
 .action-bar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
 }
 
-/* Primary High-Priority Submit Answer Button */
-.btn-action-submit {
+.btn-submit-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -359,17 +354,17 @@
   user-select: none;
 }
 
-.btn-action-submit:hover:not(:disabled) {
+.btn-submit-action:hover:not(:disabled) {
   background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
   box-shadow: 0 6px 18px rgba(79, 70, 229, 0.45);
   transform: translateY(-1px);
 }
 
-.btn-action-submit:active:not(:disabled) {
+.btn-submit-action:active:not(:disabled) {
   transform: translateY(0);
 }
 
-.btn-action-submit:disabled {
+.btn-submit-action:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   box-shadow: none;
@@ -386,29 +381,25 @@
 
 /* ── Responsive Styling ───────────────────────────────────────── */
 @media (max-width: 640px) {
-  .enterprise-answer-workspace {
+  .enterprise-answer-card {
     padding: 16px;
     gap: 10px;
   }
 
-  .shortcut-guide {
+  .shortcut-text {
     display: none;
   }
 
-  .workspace-action-bar {
-    gap: 8px;
-  }
-
-  .btn-action-skip {
+  .btn-skip-action {
     height: 44px;
-    padding: 0 12px;
+    padding: 0 14px;
     font-size: 13px;
   }
 
-  .btn-action-submit {
+  .btn-submit-action {
     height: 44px;
-    padding: 0 16px;
-    min-width: 120px;
+    padding: 0 18px;
+    min-width: 130px;
     font-size: 13.5px;
   }
 }

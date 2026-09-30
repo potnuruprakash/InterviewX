@@ -13,8 +13,8 @@ import AICoachDrawer from '../components/AICoachDrawer'
 import {
   InterviewHeader,
   QuestionCard,
-  InterviewCameraCard,
-  InterviewSignalsCard,
+  FloatingVideoWindow,
+  InterviewSidebar,
   InterviewLoadingScreen,
   EndInterviewModal,
   SkipConfirmModal,
@@ -657,36 +657,33 @@ export default function InterviewPage() {
         </div>
       )}
 
-      {/* ── Main Focused Interview Workspace (CSS Grid) ────────────────── */}
+      {/* ── Main Focused Interview Workspace (Two-Column Responsive Layout) ── */}
       <main className="interview-workspace-main">
         <div className="interview-workspace-container">
-          <div className="interview-workspace-grid">
-            {/* 1. Question Section */}
-            <div className="workspace-question-area">
+          <div className="interview-workspace-columns">
+            {/* ── LEFT COLUMN (~70–75% width): Question + Floating Video, Answer Card, Action Bar, Previous Feedback ── */}
+            <div className="workspace-left-column">
+              {/* 1. Question Card with upper-right Floating Video Window */}
               <QuestionCard
                 question={currentQuestion}
                 questionNumber={Math.min(currentQIndex + 1, totalQ)}
                 totalQuestions={totalQ}
+                floatingVideo={
+                  <FloatingVideoWindow
+                    userName={user?.fullName || user?.firstName || 'Candidate'}
+                    videoEnabled={videoEnabled}
+                    onToggleVideo={handleToggleVideo}
+                    isMicActive={isMicActive}
+                    onToggleMic={handleToggleMic}
+                    isRecording={isMediaRecording && videoEnabled}
+                    onVideoBlob={(blob) => setVideoBlob(blob)}
+                    videoRecorderRef={videoRecorderRef}
+                    disabled={submitting || skipping || completing}
+                  />
+                }
               />
-            </div>
 
-            {/* 2. Video Camera Section */}
-            <div className="workspace-video-area">
-              <InterviewCameraCard
-                userName={user?.fullName || user?.firstName || 'Candidate'}
-                videoEnabled={videoEnabled}
-                onToggleVideo={handleToggleVideo}
-                isMicActive={isMicActive}
-                onToggleMic={handleToggleMic}
-                isRecording={isMediaRecording && videoEnabled}
-                onVideoBlob={(blob) => setVideoBlob(blob)}
-                videoRecorderRef={videoRecorderRef}
-                disabled={submitting || skipping || completing}
-              />
-            </div>
-
-            {/* 3. Answer Composer Section */}
-            <div className="workspace-answer-area">
+              {/* 2. Large Answer Card + Dedicated Action Bar below it */}
               <AnswerComposer
                 answer={answer}
                 onAnswerChange={setAnswer}
@@ -736,12 +733,12 @@ export default function InterviewPage() {
                 </div>
               )}
 
-              {/* Evaluated Previous Answer (Collapsible / Unobtrusive Feedback) */}
+              {/* 3. Previous Response Feedback (BELOW Action Bar in normal document flow) */}
               {lastEval && showLastEval && (
                 <div className="previous-eval-card glass-card animate-fade-in">
                   <div className="previous-eval-header">
                     <div className="eval-status-left">
-                      <ShieldCheck size={14} className="eval-success-icon" />
+                      <ShieldCheck size={16} className="eval-success-icon" />
                       <span className="eval-card-title">Previous Response Feedback</span>
                     </div>
                     <div className="eval-tag-group">
@@ -764,7 +761,7 @@ export default function InterviewPage() {
                     <div className="eval-concepts-row">
                       <span className="concepts-label">Covered Strengths:</span>
                       <div className="concept-tags-list">
-                        {lastEval.textEvaluation.strengths.slice(0, 3).map((s, i) => (
+                        {lastEval.textEvaluation.strengths.slice(0, 4).map((s, i) => (
                           <span key={i} className="concept-chip concept-covered">{s}</span>
                         ))}
                       </div>
@@ -773,9 +770,9 @@ export default function InterviewPage() {
 
                   {lastEval.textEvaluation?.missingConcepts?.length > 0 && (
                     <div className="eval-concepts-row">
-                      <span className="concepts-label">Suggested Additions:</span>
+                      <span className="concepts-label">Suggested Focus:</span>
                       <div className="concept-tags-list">
-                        {lastEval.textEvaluation.missingConcepts.slice(0, 3).map((c, i) => (
+                        {lastEval.textEvaluation.missingConcepts.slice(0, 4).map((c, i) => (
                           <span key={i} className="concept-chip concept-missing">{c}</span>
                         ))}
                       </div>
@@ -783,14 +780,16 @@ export default function InterviewPage() {
                   )}
 
                   {(lastEval.textEvaluation?.feedback || lastEval.evaluation?.feedback) && (
-                    <p className="eval-feedback-paragraph">
-                      {lastEval.textEvaluation?.feedback || lastEval.evaluation?.feedback}
-                    </p>
+                    <div className="eval-feedback-block">
+                      <p className="eval-feedback-paragraph">
+                        {lastEval.textEvaluation?.feedback || lastEval.evaluation?.feedback}
+                      </p>
+                    </div>
                   )}
 
                   {lastEval.textEvaluation?.improvementSuggestion && (
                     <div className="eval-improvement-row">
-                      <Sparkles size={12} />
+                      <Sparkles size={13} className="improvement-sparkle-icon" />
                       <span>{lastEval.textEvaluation.improvementSuggestion}</span>
                     </div>
                   )}
@@ -798,12 +797,14 @@ export default function InterviewPage() {
               )}
             </div>
 
-            {/* 4. Session Signals & Guidelines Section */}
-            <div className="workspace-side-area">
-              <InterviewSignalsCard
+            {/* ── RIGHT COLUMN (~25–30% width): Live Evaluation, Session Status, Guidelines ── */}
+            <div className="workspace-right-column">
+              <InterviewSidebar
+                lastEval={lastEval}
+                submitting={submitting}
                 videoEnabled={videoEnabled}
                 isMicActive={isMicActive}
-                speechStatus={speechStatus}
+                isListening={isListening}
                 targetSkill={currentQuestion?.targetSkill || currentQuestion?.skill}
               />
             </div>

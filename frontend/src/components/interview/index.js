@@ -4,4 +4,5 @@ export { default as InterviewVideoPanel, InterviewCameraCard, InterviewSignalsCa
 export { default as InterviewHeader } from './InterviewHeader'
 export { default as QuestionCard } from './QuestionCard'
 export { default as InterviewLoadingScreen } from './InterviewLoadingScreen'
+export { default as InterviewSidebar } from './InterviewSidebar'
 export { EndInterviewModal, SkipConfirmModal } from './InterviewEndDialog'

@@ -1,5 +1,5 @@
 /* ============================================================
-   INTERVIEWX — ENTERPRISE PRODUCTION INTERVIEW WORKSPACE
+   INTERVIEWX — TWO-COLUMN WORKSPACE WITH FLOATING VIDEO
    ============================================================ */
 
 /* ── 1. Page Shell (Viewport-Aware 100dvh) ─────────────────── */
@@ -67,7 +67,7 @@
 
 .interview-workspace-container {
   width: 100%;
-  max-width: 1560px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 16px 24px;
   height: 100%;
@@ -77,84 +77,68 @@
   overflow: hidden;
 }
 
-/* ── 5. CSS Grid Workspace (Desktop / Laptop) ──────────────── */
-.interview-workspace-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas:
-    "question video"
-    "answer   side";
-  gap: 16px;
+/* ── 5. Responsive Two-Column Layout (Desktop) ─────────────── */
+.interview-workspace-columns {
+  display: flex;
+  gap: 20px;
   width: 100%;
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
-/* ── Area 1: Question ──────────────────────────────────────── */
-.workspace-question-area {
-  grid-area: question;
-  min-width: 0;
-}
-
-/* ── Area 2: Video ─────────────────────────────────────────── */
-.workspace-video-area {
-  grid-area: video;
-  min-width: 0;
-}
-
-/* ── Area 3: Answer Editor & Feedback ──────────────────────── */
-.workspace-answer-area {
-  grid-area: answer;
+/* Left Column (~70–75%): Question Card, Answer Card, Action Bar, Previous Feedback */
+.workspace-left-column {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+/* Right Column (~25–30%): Live Evaluation, Session Status, Guidelines */
+.workspace-right-column {
+  width: clamp(280px, 26vw, 360px);
+  flex-shrink: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   padding-right: 2px;
 }
 
 /* Custom Sleek Scrollbars */
-.workspace-answer-area::-webkit-scrollbar,
-.workspace-side-area::-webkit-scrollbar {
+.workspace-left-column::-webkit-scrollbar,
+.workspace-right-column::-webkit-scrollbar {
   width: 5px;
 }
 
-.workspace-answer-area::-webkit-scrollbar-track,
-.workspace-side-area::-webkit-scrollbar-track {
+.workspace-left-column::-webkit-scrollbar-track,
+.workspace-right-column::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.workspace-answer-area::-webkit-scrollbar-thumb,
-.workspace-side-area::-webkit-scrollbar-thumb {
+.workspace-left-column::-webkit-scrollbar-thumb,
+.workspace-right-column::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
 }
 
-[data-theme='light'] .workspace-answer-area::-webkit-scrollbar-thumb,
-[data-theme='light'] .workspace-side-area::-webkit-scrollbar-thumb {
+[data-theme='light'] .workspace-left-column::-webkit-scrollbar-thumb,
+[data-theme='light'] .workspace-right-column::-webkit-scrollbar-thumb {
   background: #cbd5e1;
 }
 
-/* ── Area 4: Side Area (Session Diagnostics & Guidelines) ──── */
-.workspace-side-area {
-  grid-area: side;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-
-/* ── 6. Previous Answer Evaluated Card ──────────────────────── */
+/* ── 6. Previous Answer Evaluated Card (Below Action Bar) ───── */
 .previous-eval-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 16px 20px;
+  border-radius: var(--radius-lg, 12px);
   border: 1px solid rgba(16, 185, 129, 0.25);
   background: rgba(16, 185, 129, 0.04);
   flex-shrink: 0;
@@ -175,12 +159,12 @@
 .eval-status-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .eval-card-title {
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   color: #34d399;
 }
 
@@ -199,7 +183,7 @@
 }
 
 .eval-score-badge {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--text-primary, #ffffff);
   background: rgba(255, 255, 255, 0.06);
@@ -216,8 +200,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -235,14 +219,14 @@
 .eval-concepts-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .concepts-label {
   color: var(--text-muted, #94a3b8);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 11px;
 }
 
@@ -253,8 +237,8 @@
 }
 
 .concept-chip {
-  font-size: 10.5px;
-  padding: 1px 6px;
+  font-size: 11px;
+  padding: 2px 7px;
   border-radius: 4px;
 }
 
@@ -282,27 +266,37 @@
   border-color: #fde68a;
 }
 
-.eval-feedback-paragraph {
-  font-size: 12px;
+.eval-feedback-block {
+  font-size: 12.5px;
+  line-height: 1.55;
   color: var(--text-secondary, #cbd5e1);
-  line-height: 1.5;
   margin: 0;
 }
 
-[data-theme='light'] .eval-feedback-paragraph {
+[data-theme='light'] .eval-feedback-block {
   color: #475569;
+}
+
+.eval-feedback-paragraph {
+  margin: 0;
 }
 
 .eval-improvement-row {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  font-size: 11.5px;
+  gap: 8px;
+  font-size: 12px;
   color: #93c5fd;
-  background: rgba(59, 130, 246, 0.06);
+  background: rgba(59, 130, 246, 0.08);
   border-left: 2px solid #3b82f6;
-  padding: 4px 8px;
+  padding: 6px 10px;
   border-radius: 0 4px 4px 0;
+}
+
+.improvement-sparkle-icon {
+  color: #60a5fa;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 /* ── 7. Notice & Error Banners ─────────────────────────────── */
@@ -501,9 +495,12 @@
     padding: 20px 32px;
   }
 
-  .interview-workspace-grid {
-    grid-template-columns: minmax(0, 1fr) 360px;
-    gap: 20px;
+  .interview-workspace-columns {
+    gap: 24px;
+  }
+
+  .workspace-right-column {
+    width: 350px;
   }
 }
 
@@ -513,9 +510,12 @@
     padding: 14px 20px;
   }
 
-  .interview-workspace-grid {
-    grid-template-columns: minmax(0, 1fr) 320px;
-    gap: 14px;
+  .interview-workspace-columns {
+    gap: 18px;
+  }
+
+  .workspace-right-column {
+    width: 320px;
   }
 }
 
@@ -525,22 +525,17 @@
     padding: 12px 16px;
   }
 
-  .interview-workspace-grid {
-    grid-template-columns: minmax(0, 1fr) 280px;
-    grid-template-rows: auto 1fr;
-    grid-template-areas:
-      "question video"
-      "answer   video";
-    gap: 12px;
+  .interview-workspace-columns {
+    gap: 14px;
   }
 
-  .workspace-side-area {
-    display: none; /* Hide secondary signals on tablet to maximize writing space */
+  .workspace-right-column {
+    width: 270px;
   }
 }
 
 /* ── Mobile Layout (< 768px) ──────────────────────────────── */
-/* Single-column: Header -> Progress -> Question -> Video -> Answer -> Side */
+/* Single-column: Header -> Question -> Video -> Answer -> Action Bar -> Previous Feedback -> Live Eval -> Session -> Guidelines */
 @media (max-width: 767px) {
   .interview-page.interview-cockpit {
     height: auto;
@@ -563,35 +558,23 @@
     padding: 10px 12px 48px 12px;
   }
 
-  .interview-workspace-grid {
-    display: flex;
+  .interview-workspace-columns {
     flex-direction: column;
     height: auto;
     overflow: visible;
-    gap: 12px;
+    gap: 16px;
   }
 
-  .workspace-question-area {
-    order: 1;
+  .workspace-left-column {
     width: 100%;
-  }
-
-  .workspace-video-area {
-    order: 2;
-    width: 100%;
-  }
-
-  .workspace-answer-area {
-    order: 3;
-    width: 100%;
-    overflow-y: visible;
+    overflow: visible;
     padding-right: 0;
   }
 
-  .workspace-side-area {
-    order: 4;
+  .workspace-right-column {
     width: 100%;
-    overflow-y: visible;
+    overflow: visible;
+    padding-right: 0;
   }
 }
 

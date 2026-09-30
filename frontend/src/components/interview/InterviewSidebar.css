@@ -1,0 +1,340 @@
+/* ============================================================
+   ENTERPRISE RIGHT SIDEBAR STYLES
+   ============================================================ */
+
+.enterprise-right-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.sidebar-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, rgba(15, 23, 42, 0.7));
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-lg, 12px);
+  padding: 16px 18px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
+  gap: 12px;
+}
+
+[data-theme='light'] .sidebar-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+
+.sidebar-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-card-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #94a3b8);
+  text-transform: uppercase;
+}
+
+[data-theme='light'] .sidebar-card-title {
+  color: #64748b;
+}
+
+/* AI Badge */
+.badge-ai-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+[data-theme='light'] .badge-ai-indicator {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4f46e5;
+}
+
+/* Status Live Pill */
+.status-indicator-pill {
+  font-size: 10px;
+  font-weight: 600;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* ── Card 1: Live Evaluation ──────────────────────────────────── */
+.live-eval-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.eval-submitting-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  color: #818cf8;
+}
+
+.submitting-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.submitting-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #c7d2fe;
+}
+
+[data-theme='light'] .submitting-title {
+  color: #4338ca;
+}
+
+.submitting-desc {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.eval-result-state {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eval-score-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.eval-score-num {
+  font-family: var(--font-display, inherit);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary, #ffffff);
+  line-height: 1;
+}
+
+[data-theme='light'] .eval-score-num {
+  color: #0f172a;
+}
+
+.eval-score-total {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted, #94a3b8);
+  margin-left: 2px;
+}
+
+.eval-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 2px 7px;
+  border-radius: 9999px;
+}
+
+.eval-feedback-snippet {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary, #cbd5e1);
+  margin: 0;
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+[data-theme='light'] .eval-feedback-snippet {
+  color: #475569;
+}
+
+.eval-quick-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.quick-tags-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.tags-flex {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.eval-tag {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.strength-tag {
+  background: rgba(16, 185, 129, 0.1);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+[data-theme='light'] .strength-tag {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #86efac;
+}
+
+/* Awaiting state */
+.eval-awaiting-state {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.eval-empty-score {
+  font-family: var(--font-display, inherit);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1;
+}
+
+.eval-awaiting-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary, #cbd5e1);
+  margin-top: 4px;
+}
+
+[data-theme='light'] .eval-awaiting-title {
+  color: #334155;
+}
+
+.eval-awaiting-desc {
+  font-size: 11.5px;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* ── Card 2: Session Status ──────────────────────────────────── */
+.session-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.status-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.status-row-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-row-icon {
+  color: #818cf8;
+}
+
+[data-theme='light'] .status-row-icon {
+  color: #6366f1;
+}
+
+.status-name {
+  color: var(--text-secondary, #cbd5e1);
+  font-weight: 500;
+}
+
+[data-theme='light'] .status-name {
+  color: #334155;
+}
+
+.status-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-val.val-active {
+  color: var(--text-primary, #ffffff);
+}
+
+[data-theme='light'] .status-val.val-active {
+  color: #0f172a;
+}
+
+.status-val.val-muted {
+  color: var(--text-muted, #94a3b8);
+}
+
+.status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.status-dot.dot-green { background: #10b981; }
+.status-dot.dot-amber { background: #f59e0b; }
+.status-dot.dot-muted { background: #64748b; }
+
+/* ── Card 3: Guidelines ──────────────────────────────────────── */
+.sidebar-guidelines-list {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-secondary, #cbd5e1);
+}
+
+[data-theme='light'] .sidebar-guidelines-list {
+  color: #475569;
+}
+
+.sidebar-guidelines-list kbd {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #ffffff);
+}
+
+[data-theme='light'] .sidebar-guidelines-list kbd {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}

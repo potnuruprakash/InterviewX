@@ -6,14 +6,17 @@ import {
 import './AnswerComposer.css'
 
 /**
- * Enterprise AnswerComposer Workspace
+ * Enterprise Answer Workspace & Dedicated Action Bar
  *
- * Integrated interview editor with:
- * - Clear section title & subtle listening/recording state row
- * - Unobtrusive inline transcription status
- * - Large, comfortable writing area without overlapping elements
- * - Word & character count row safely below the text
- * - Solid bottom action bar (Skip secondary, Submit Answer primary 44-48px)
+ * 1. Answer Card:
+ *    - Header: YOUR ANSWER & Listening indicator
+ *    - Unobtrusive live transcription row
+ *    - Large, comfortable writing area
+ *    - Bottom metadata row: word & character count, shortcut hint, clear button
+ *
+ * 2. Dedicated Action Bar (Below Answer Card in normal document flow):
+ *    - Left: Skip Question (secondary)
+ *    - Right: Submit Answer (primary, 46-48px)
  */
 function AnswerComposer({
   answer = '',
@@ -84,84 +87,83 @@ function AnswerComposer({
   }
 
   return (
-    <div className="enterprise-answer-workspace glass-card animate-fade-in">
-      {/* ── 1. Header: Section Label & Subtle Status Row ───────────────── */}
-      <div className="workspace-header-row">
-        <div className="workspace-title-label">YOUR ANSWER</div>
+    <div className="answer-workspace-block">
+      {/* ── 1. The Answer Card ────────────────────────────────────────── */}
+      <div className="enterprise-answer-card glass-card animate-fade-in">
+        {/* Header: Section title & listening status */}
+        <div className="answer-card-header">
+          <span className="answer-card-label">YOUR ANSWER</span>
 
-        <div className={`workspace-status-indicator ${statusTone}`} aria-live="polite">
-          {statusIcon}
-          <span>{statusText}</span>
-        </div>
-      </div>
-
-      {/* ── 2. Subtle Inline Live Transcription (Non-intrusive) ────────── */}
-      {isListening && interimTranscript && (
-        <div className="workspace-interim-row animate-fade-in" aria-live="polite">
-          <span className="interim-prefix">Transcribing:</span>
-          <span className="interim-content">"{interimTranscript}"</span>
-        </div>
-      )}
-
-      {/* ── 3. Large Comfortable Answer Area ──────────────────────────── */}
-      <div className="workspace-textarea-wrapper">
-        <textarea
-          ref={textareaRef}
-          className="enterprise-answer-textarea"
-          value={answer}
-          onChange={(e) => onAnswerChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={submitting || skipping || disabled}
-          placeholder={
-            isSpeechSupported && !speechError
-              ? 'Your spoken answer appears here automatically. You can also type, edit, or format your response directly…'
-              : 'Type your answer here… Structure your explanation clearly and include relevant technical examples.'
-          }
-          aria-label="Candidate response text"
-          rows={7}
-        />
-      </div>
-
-      {/* ── 4. Dedicated Metadata Row (Placed safely below typing area) ── */}
-      <div className="workspace-meta-row">
-        <div className="meta-left">
-          <span className="shortcut-guide">
-            Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to submit
-          </span>
-          {answer.trim().length > 0 && onClear && (
-            <button
-              type="button"
-              className="btn-text-clear"
-              onClick={onClear}
-              disabled={submitting || skipping || disabled}
-              title="Clear answer text"
-              aria-label="Clear answer text"
-            >
-              <Trash2 size={12} />
-              <span>Clear</span>
-            </button>
-          )}
+          <div className={`answer-status-pill ${statusTone}`} aria-live="polite">
+            {statusIcon}
+            <span>{statusText}</span>
+          </div>
         </div>
 
-        <div className="meta-right">
-          {(hasAudioAttached || hasVideoAttached) && (
-            <span className="attached-media-tag">
-              ✓ Media captured
+        {/* Subtle inline transcription ribbon */}
+        {isListening && interimTranscript && (
+          <div className="answer-interim-ribbon animate-fade-in" aria-live="polite">
+            <span className="interim-label">Transcribing:</span>
+            <span className="interim-text">"{interimTranscript}"</span>
+          </div>
+        )}
+
+        {/* Large comfortable writing area */}
+        <div className="answer-textarea-box">
+          <textarea
+            ref={textareaRef}
+            className="enterprise-answer-textarea"
+            value={answer}
+            onChange={(e) => onAnswerChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={submitting || skipping || disabled}
+            placeholder="Your spoken answer appears here automatically. You can also type, edit, or format your response directly..."
+            aria-label="Interview answer response"
+            rows={8}
+          />
+        </div>
+
+        {/* Bottom statistics row (safely below text, never overlapping) */}
+        <div className="answer-card-bottom-row">
+          <div className="bottom-row-left">
+            <span className="shortcut-text">
+              Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to submit
             </span>
-          )}
-          <span className="text-count-stat">
-            {words} {words === 1 ? 'word' : 'words'} · {characters} chars
-          </span>
+            {trimmed.length > 0 && onClear && (
+              <button
+                type="button"
+                className="btn-clear-answer"
+                onClick={onClear}
+                disabled={submitting || skipping || disabled}
+                title="Clear current text"
+                aria-label="Clear current answer text"
+              >
+                <Trash2 size={12} />
+                <span>Clear</span>
+              </button>
+            )}
+          </div>
+
+          <div className="bottom-row-right">
+            {(hasAudioAttached || hasVideoAttached) && (
+              <span className="media-attached-tag">
+                ✓ Media attached
+              </span>
+            )}
+            <span className="word-char-stats">
+              {words} {words === 1 ? 'word' : 'words'} · {characters} characters
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* ── 5. Integrated Action Bar (Always visible & accessible) ─────── */}
-      <div className="workspace-action-bar">
+      {/* ── 2. Dedicated Action Bar (Below Answer Card in document flow) ── */}
+      <div className="answer-action-bar-row">
         <div className="action-bar-left">
           {onSkip && (
             <button
               type="button"
-              className="btn-action-skip"
+              className="btn-skip-action"
               onClick={onSkip}
               disabled={submitting || skipping || disabled}
               title="Skip this question"
@@ -169,7 +171,7 @@ function AnswerComposer({
             >
               {skipping ? (
                 <>
-                  <Loader2 size={15} className="spin-icon" />
+                  <Loader2 size={14} className="spin-icon" />
                   <span>Skipping…</span>
                 </>
               ) : (
@@ -185,7 +187,7 @@ function AnswerComposer({
         <div className="action-bar-right">
           <button
             type="button"
-            className="btn-action-submit"
+            className="btn-submit-action"
             onClick={onSubmit}
             disabled={!trimmed || submitting || skipping || disabled}
             id="submit-answer-btn"

@@ -11,16 +11,18 @@ const DIFFICULTY_MAP = {
 /**
  * QuestionCard Component
  *
- * Designed around strong information hierarchy:
- * 1. Clean metadata row: "Question X of Y · Medium · Skill · Topic"
- * 2. Visual focal point: High-contrast, large question prompt (28-34px)
- * 3. Contextual row: Gentle inline note (e.g. skill gap rationale) without alert styling
- * 4. Subtle attribution footnote
+ * Dedicated Question Workspace Card with:
+ * - Badges row: Question X of Y, Difficulty, Skill Gap, Topic
+ * - Large dominant question prompt
+ * - Resume/Context information
+ * - Assessment type attribution
+ * - Upper-right slot for Floating Video Window with protected padding
  */
 function QuestionCard({
   question,
   questionNumber = 1,
   totalQuestions = 10,
+  floatingVideo = null,
 }) {
   if (!question) {
     return (
@@ -43,73 +45,78 @@ function QuestionCard({
 
   return (
     <article className="enterprise-question-card glass-card animate-fade-in" key={question.id}>
-      {/* ── 1. Clean Metadata Row (No excessive badge clutter) ─────────── */}
-      <div className="question-meta-row">
-        <span className="question-counter">
-          Question {questionNumber} of {totalQuestions}
-        </span>
-        <span className="meta-separator">·</span>
-        <span className={`question-difficulty ${diffInfo.class}`}>
-          {diffInfo.label}
-        </span>
-        <span className="meta-separator">·</span>
-        <span className="question-topic" title={`Topic: ${topic}`}>
-          {topic}
-        </span>
-        {isSkillGap && (
-          <>
-            <span className="meta-separator">·</span>
-            <span className="question-source-tag">Skill Gap</span>
-          </>
+      {/* ── Question Text Content Flow (has protected right-side spacing) ─ */}
+      <div className="question-content-flow">
+        {/* Badges Row */}
+        <div className="question-badges-row">
+          <span className="q-badge q-counter">
+            Question {questionNumber} of {totalQuestions}
+          </span>
+          <span className={`q-badge q-diff ${diffInfo.class}`}>
+            {diffInfo.label}
+          </span>
+          {isSkillGap && (
+            <span className="q-badge q-skill-gap">Skill Gap</span>
+          )}
+          <span className="q-badge q-topic" title={`Topic: ${topic}`}>
+            {topic}
+          </span>
+        </div>
+
+        {/* Primary Dominant Question Title */}
+        <h1 className="enterprise-question-text">
+          {question.text}
+        </h1>
+
+        {/* Context / Resume Rationale Note */}
+        {question.contextNote && (
+          <div className="question-contextual-info">
+            <Info size={14} className="contextual-info-icon" />
+            <span className="contextual-info-text">{question.contextNote}</span>
+          </div>
+        )}
+
+        {/* Assessment Type Attribution */}
+        {question.source && question.source !== 'static_bank' && (
+          <div className="question-attribution-footnote">
+            {question.source === 'resume' && (
+              <>
+                <BookOpen size={12} className="attr-icon" />
+                <span>Tailored to your resume experience</span>
+              </>
+            )}
+            {question.source === 'job_description' && (
+              <>
+                <Zap size={12} className="attr-icon" />
+                <span>Targeted for job requirements</span>
+              </>
+            )}
+            {question.source === 'skill_gap' && (
+              <>
+                <BarChart2 size={12} className="attr-icon" />
+                <span>Focused skill-gap assessment</span>
+              </>
+            )}
+            {question.source === 'experience' && (
+              <>
+                <TrendingUp size={12} className="attr-icon" />
+                <span>Engineering & architecture experience</span>
+              </>
+            )}
+            {question.source === 'behavioral' && (
+              <>
+                <CheckCircle2 size={12} className="attr-icon" />
+                <span>Behavioral & communication evaluation</span>
+              </>
+            )}
+          </div>
         )}
       </div>
 
-      {/* ── 2. Primary Focal Point: The Question ────────────────────────── */}
-      <h1 className="enterprise-question-text">
-        {question.text}
-      </h1>
-
-      {/* ── 3. Subtle Contextual Information (Non-destructive, not an error alert) */}
-      {question.contextNote && (
-        <div className="question-contextual-info">
-          <Info size={14} className="contextual-info-icon" />
-          <span className="contextual-info-text">{question.contextNote}</span>
-        </div>
-      )}
-
-      {/* ── 4. Subtle Attribution (Targeted reasoning) ──────────────────── */}
-      {question.source && question.source !== 'static_bank' && (
-        <div className="question-attribution-footnote">
-          {question.source === 'resume' && (
-            <>
-              <BookOpen size={12} className="attr-icon" />
-              <span>Tailored to your resume experience</span>
-            </>
-          )}
-          {question.source === 'job_description' && (
-            <>
-              <Zap size={12} className="attr-icon" />
-              <span>Targeted for job requirements</span>
-            </>
-          )}
-          {question.source === 'skill_gap' && (
-            <>
-              <BarChart2 size={12} className="attr-icon" />
-              <span>Focused skill-gap assessment</span>
-            </>
-          )}
-          {question.source === 'experience' && (
-            <>
-              <TrendingUp size={12} className="attr-icon" />
-              <span>Engineering & architecture experience</span>
-            </>
-          )}
-          {question.source === 'behavioral' && (
-            <>
-              <CheckCircle2 size={12} className="attr-icon" />
-              <span>Behavioral & communication evaluation</span>
-            </>
-          )}
+      {/* ── Upper-Right Floating Video Window Anchor ───────────────────── */}
+      {floatingVideo && (
+        <div className="question-floating-video-anchor">
+          {floatingVideo}
         </div>
       )}
     </article>
