@@ -136,34 +136,59 @@ const analyzeAudio = async (audioFilePath) => {
  * @returns {Object} Video analysis result
  */
 const analyzeVideo = async (videoFilePath) => {
-  try {
-    if (!fs.existsSync(videoFilePath)) {
-      return { modelStatus: 'file_not_found', framesProcessed: 0 };
+  if (!fs.existsSync(videoFilePath)) {
+    return { modelStatus: 'file_not_found', framesProcessed: 0 };
+  }
+
+  // The Python service returns 503 while YOLO/MediaPipe are warming up.
+  // Retry transient warm-up failures so a valid interview video is not lost.
+  const maxAttempts = 3;
+  const retryDelayMs = 3000;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const form = new FormData();
+      form.append('video', fs.createReadStream(videoFilePath), {
+        filename: path.basename(videoFilePath),
+        contentType: 'application/octet-stream',
+      });
+
+      const res = await axios.post(`${AI_SERVICE_URL}/api/ai/video-analyze`, form, {
+        headers: {
+          ...form.getHeaders(),
+          ...(AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}),
+        },
+        timeout: AI_SERVICE_TIMEOUT,
+      });
+
+      const data = res.data?.data || res.data;
+      const warming = data?.error === 'MODEL_WARMING_UP' || data?.modelStatus === 'loading';
+      if (!warming || attempt === maxAttempts) return data;
+    } catch (err) {
+      const status = err?.response?.status;
+      const code = err?.response?.data?.error || err?.response?.data?.detail?.error;
+      const warming = status === 503 && code === 'MODEL_WARMING_UP';
+
+      if (!warming || attempt === maxAttempts) {
+        console.warn('[AI Service] Video analysis failed:', err.message);
+        return {
+          framesProcessed: 0,
+          personDetectionRatio: null,
+          modelStatus: 'ai_service_unavailable',
+          error: err.message,
+        };
+      }
     }
 
-    const form = new FormData();
-    form.append('video', fs.createReadStream(videoFilePath), {
-      filename: path.basename(videoFilePath),
-      contentType: 'application/octet-stream',
-    });
-
-    const res = await axios.post(`${AI_SERVICE_URL}/api/ai/video-analyze`, form, {
-      headers: {
-        ...form.getHeaders(),
-        ...(AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}),
-      },
-      timeout: AI_SERVICE_TIMEOUT,
-    });
-    return res.data?.data || res.data;
-  } catch (err) {
-    console.warn('[AI Service] Video analysis failed:', err.message);
-    return {
-      framesProcessed: 0,
-      personDetectionRatio: null,
-      modelStatus: 'ai_service_unavailable',
-      error: err.message,
-    };
+    console.warn(`[AI Service] Video model warming up; retrying (${attempt}/${maxAttempts - 1})...`);
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
   }
+
+  return {
+    framesProcessed: 0,
+    personDetectionRatio: null,
+    modelStatus: 'ai_service_unavailable',
+  };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
