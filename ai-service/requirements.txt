@@ -7,15 +7,15 @@ pydantic
 sentence-transformers
 
 # Phase 5 — Audio Analysis (MFCC feature extraction)
-# If librosa fails on Windows, install manually: pip install librosa
 librosa
 numpy
 scikit-learn
 
-# Phase 6 — Video Analysis (YOLOv8 pretrained)
-# If opencv-python-headless fails, use: pip install opencv-python
+# Phase 6 — Video Analysis
 ultralytics
 opencv-python
+# MediaPipe Face/Pose landmarks for observable gaze/head/pose signals
+mediapipe
 
 # Phase 7 — Fusion
 python-multipart
