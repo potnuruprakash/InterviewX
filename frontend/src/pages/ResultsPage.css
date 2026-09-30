@@ -2079,6 +2079,69 @@
   line-height: 1.45;
 }
 
+/* --------------------------------------------------------------------------
+   VIDEO ANALYSIS SECTION
+   -------------------------------------------------------------------------- */
+
+.video-analysis-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.section-badge-cyan {
+  font-size: 11px;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.video-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .video-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .video-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+[data-theme='light'] .section-badge-cyan {
+  background: rgba(2, 132, 199, 0.08);
+  border-color: rgba(2, 132, 199, 0.25);
+  color: #0284c7;
+}
+
+[data-theme='light'] .observable-notes-box {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+[data-theme='light'] .notes-bullet-list {
+  color: #475569;
+}
+
+[data-theme='light'] .notes-box-title {
+  color: #64748b;
+}
+
+[data-theme='light'] .scientific-caveat-box {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0369a1;
+}
+
 /* Shared: unavailable section card */
 .section-unavailable-card {
   display: flex;

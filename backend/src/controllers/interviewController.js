@@ -995,8 +995,8 @@ const submitVideoResponse = async (req, res) => {
     response.videoFilePath = videoPath;
     response.videoFileSize = req.file.size;
     response.videoEvaluation = {
-      framesProcessed: videoResult.framesProcessed || 0,
-      personDetectionRatio: videoResult.personDetectionRatio || null,
+      framesProcessed: videoResult.framesProcessed ?? 0,
+      personDetectionRatio: videoResult.personDetectionRatio ?? null,
       faceVisibilityRatio: videoResult.faceVisibilityRatio ?? null,
       gazeAttentionRatio: videoResult.gazeAttentionRatio ?? null,
       postureStability: videoResult.postureStability || null,
@@ -1004,14 +1004,14 @@ const submitVideoResponse = async (req, res) => {
       postureScore: videoResult.postureScore ?? null,
       shoulderTiltDegrees: videoResult.shoulderTiltDegrees ?? null,
       cameraEngagement: videoResult.cameraEngagement || null,
-      observableMetrics: videoResult.metrics || null,
+      observableMetrics: videoResult.metrics || videoResult.observableMetrics || null,
       videoQualityIndicator: videoResult.videoQualityIndicator || null,
       modelStatus: videoResult.modelStatus || 'processed',
       processingConfidence: videoResult.processingConfidence ?? null,
       visibleMovement: videoResult.metrics?.movement_stability_index != null
         ? (videoResult.metrics.movement_stability_index >= 80 ? 'stable' : 'visible_movement')
         : null,
-      feedback: videoResult.metrics?.observable_observations?.join(' ') || null,
+      feedback: videoResult.feedback || videoResult.metrics?.observable_observations?.join(' ') || null,
     };
 
     await response.save();

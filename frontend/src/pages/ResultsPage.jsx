@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuthApi } from '../services/api'
 import {
   CheckCircle, AlertCircle, TrendingUp, Home, BarChart2,
-  Target, BookOpen, Mic, Video, Brain, ChevronDown, ChevronUp,
+  Target, BookOpen, Mic, Video, VideoOff, Brain, ChevronDown, ChevronUp,
   Award, Zap, ArrowRight, Sparkles, RefreshCw, Clock,
   ShieldCheck, Check, Layers, Code, Play
 } from 'lucide-react'
@@ -320,11 +320,30 @@ const QuestionAccordionCard = memo(({ q, isExpanded, onToggle }) => {
                 </span>
               )}
               {q.videoEvaluation?.framesProcessed > 0 && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                  <Video size={12} color="#06b6d4" />
-                  Video: {q.videoEvaluation.framesProcessed} frames analyzed
-                  {q.videoEvaluation.personDetectionRatio && ` · Person visible ${Math.round(q.videoEvaluation.personDetectionRatio * 100)}%`}
-                </span>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#38bdf8' }}>
+                    <Video size={12} color="#06b6d4" />
+                    Video: {q.videoEvaluation.framesProcessed} frames analyzed
+                  </span>
+                  {typeof q.videoEvaluation.personDetectionRatio === 'number' && (
+                    <span>· Person: {Math.round(q.videoEvaluation.personDetectionRatio > 1 ? q.videoEvaluation.personDetectionRatio : q.videoEvaluation.personDetectionRatio * 100)}%</span>
+                  )}
+                  {typeof q.videoEvaluation.faceVisibilityRatio === 'number' && (
+                    <span>· Face: {Math.round(q.videoEvaluation.faceVisibilityRatio > 1 ? q.videoEvaluation.faceVisibilityRatio : q.videoEvaluation.faceVisibilityRatio * 100)}%</span>
+                  )}
+                  {typeof q.videoEvaluation.gazeAttentionRatio === 'number' && (
+                    <span>· Camera/Eye Alignment: {Math.round(q.videoEvaluation.gazeAttentionRatio > 1 ? q.videoEvaluation.gazeAttentionRatio : q.videoEvaluation.gazeAttentionRatio * 100)}%</span>
+                  )}
+                  {typeof q.videoEvaluation.postureScore === 'number' && (
+                    <span>· Posture: {Math.round(q.videoEvaluation.postureScore > 1 ? q.videoEvaluation.postureScore : q.videoEvaluation.postureScore * 100)}%</span>
+                  )}
+                  {typeof q.videoEvaluation.shoulderTiltDegrees === 'number' && (
+                    <span>· Tilt: {q.videoEvaluation.shoulderTiltDegrees.toFixed(1)}°</span>
+                  )}
+                  {q.videoEvaluation.cameraEngagement && q.videoEvaluation.cameraEngagement !== 'unavailable' && (
+                    <span>· {q.videoEvaluation.cameraEngagement.replace(/_/g, ' ')}</span>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -847,14 +866,27 @@ export default function ResultsPage() {
     )
   }, [fe, questionBreakdown])
 
+  // Helper to format categorical labels cleanly
+  const formatVideoLabel = (str) => {
+    if (!str || typeof str !== 'string') return ''
+    return str
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ')
+  }
+
   // Communication metrics aggregated across questions
   const commSummary = useMemo(() => {
     if (!hasCommData) return null
     const audioQuestions = questionBreakdown.filter(q => q?.audioEvaluation?.speakingDuration && q.audioEvaluation.speakingDuration > 0)
     const videoQuestions = questionBreakdown.filter(q => q?.videoEvaluation?.framesProcessed && q.videoEvaluation.framesProcessed > 0)
 
-    const avgPace = audioQuestions.length > 0
-      ? Math.round(audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.speakingPace || 135), 0) / audioQuestions.length)
+    const validPaces = audioQuestions
+      .map(q => q.audioEvaluation?.speakingPace)
+      .filter(v => typeof v === 'number' && !isNaN(v))
+    const avgPace = validPaces.length > 0
+      ? Math.round(validPaces.reduce((acc, v) => acc + v, 0) / validPaces.length)
       : null
 
     const totalFillers = audioQuestions.length > 0
@@ -865,8 +897,11 @@ export default function ResultsPage() {
       ? Math.round(audioQuestions.reduce((acc, q) => acc + (q.audioEvaluation?.speakingDuration || 0), 0) / audioQuestions.length)
       : null
 
-    const avgPersonDetected = videoQuestions.length > 0
-      ? Math.round((videoQuestions.reduce((acc, q) => acc + (q.videoEvaluation?.personDetectionRatio ?? 0.95), 0) / videoQuestions.length) * 100)
+    const validPersonRatios = videoQuestions
+      .map(q => q.videoEvaluation?.personDetectionRatio)
+      .filter(v => typeof v === 'number' && !isNaN(v))
+    const avgPersonDetected = validPersonRatios.length > 0
+      ? Math.round((validPersonRatios.reduce((acc, v) => acc + v, 0) / validPersonRatios.length) * 100)
       : null
 
     return {
@@ -880,6 +915,148 @@ export default function ResultsPage() {
       videoStatus: fe?.videoStatus || (videoQuestions.length > 0 ? 'available' : 'unavailable'),
     }
   }, [hasCommData, questionBreakdown, fe])
+
+  // Dedicated Video Analysis Summary strictly from real backend metrics
+  const videoSummary = useMemo(() => {
+    // Identify all questions that contain videoEvaluation.framesProcessed > 0
+    const videoQuestions = questionBreakdown.filter(
+      q => typeof q?.videoEvaluation?.framesProcessed === 'number' && q.videoEvaluation.framesProcessed > 0
+    )
+
+    const isProcessing =
+      fe?.videoStatus === 'processing' ||
+      questionBreakdown.some(
+        q => q?.videoEvaluation?.modelStatus === 'processing' || q?.videoEvaluation?.modelStatus === 'pending'
+      )
+
+    if (videoQuestions.length === 0) {
+      return {
+        hasVideoData: false,
+        isProcessing,
+        status: isProcessing ? 'processing' : (fe?.videoStatus || 'unavailable'),
+        totalFrames: 0,
+        videoQuestionsCount: 0,
+        personVisibility: null,
+        faceVisibility: null,
+        cameraEyeAlignment: null,
+        postureScore: null,
+        postureStabilityIndex: null,
+        postureStabilityLabel: null,
+        postureStabilityDisplay: 'Unavailable',
+        shoulderTiltDegrees: null,
+        cameraEngagement: null,
+        videoQualityIndicator: null,
+        observableFeedback: [],
+      }
+    }
+
+    // Helper: average only valid numbers without fake fallbacks
+    const avgMetric = (extractor) => {
+      const vals = videoQuestions
+        .map(extractor)
+        .filter(v => typeof v === 'number' && !isNaN(v))
+      if (vals.length === 0) return null
+      return vals.reduce((acc, v) => acc + v, 0) / vals.length
+    }
+
+    const totalFrames = videoQuestions.reduce((acc, q) => acc + (q.videoEvaluation?.framesProcessed || 0), 0)
+
+    // Person Visibility: videoEvaluation.personDetectionRatio
+    const rawPersonVis = avgMetric(q => q.videoEvaluation?.personDetectionRatio)
+    const personVisibility = rawPersonVis !== null ? Math.round(rawPersonVis > 1 ? rawPersonVis : rawPersonVis * 100) : null
+
+    // Face Visibility: videoEvaluation.faceVisibilityRatio
+    const rawFaceVis = avgMetric(q => q.videoEvaluation?.faceVisibilityRatio)
+    const faceVisibility = rawFaceVis !== null ? Math.round(rawFaceVis > 1 ? rawFaceVis : rawFaceVis * 100) : null
+
+    // Camera / Eye Alignment: videoEvaluation.gazeAttentionRatio
+    const rawGaze = avgMetric(q => q.videoEvaluation?.gazeAttentionRatio)
+    const cameraEyeAlignment = rawGaze !== null ? Math.round(rawGaze > 1 ? rawGaze : rawGaze * 100) : null
+
+    // Posture Score: videoEvaluation.postureScore
+    const rawPostureScore = avgMetric(q => q.videoEvaluation?.postureScore)
+    const postureScore = rawPostureScore !== null ? Math.round(rawPostureScore > 1 ? rawPostureScore : rawPostureScore * 100) : null
+
+    // Posture Stability Index: prefer videoEvaluation.postureStabilityIndex
+    const rawPostureStabilityIndex = avgMetric(q => q.videoEvaluation?.postureStabilityIndex)
+    const postureStabilityIndex = rawPostureStabilityIndex !== null ? Math.round(rawPostureStabilityIndex > 1 ? rawPostureStabilityIndex : rawPostureStabilityIndex * 100) : null
+
+    // Categorical Posture Stability from videoEvaluation.postureStability
+    const postureLabels = videoQuestions
+      .map(q => q.videoEvaluation?.postureStability)
+      .filter(l => Boolean(l) && l !== 'unavailable')
+    const postureStabilityLabel = postureLabels.length > 0 ? postureLabels[0] : null
+
+    // Composite Posture Stability display (e.g. "87% · Stable")
+    let postureStabilityDisplay = 'Unavailable'
+    if (postureStabilityIndex !== null && postureStabilityLabel) {
+      postureStabilityDisplay = `${postureStabilityIndex}% · ${formatVideoLabel(postureStabilityLabel)}`
+    } else if (postureStabilityIndex !== null) {
+      postureStabilityDisplay = `${postureStabilityIndex}%`
+    } else if (postureStabilityLabel) {
+      postureStabilityDisplay = formatVideoLabel(postureStabilityLabel)
+    }
+
+    // Shoulder Alignment: videoEvaluation.shoulderTiltDegrees
+    const rawShoulderTilt = avgMetric(q => q.videoEvaluation?.shoulderTiltDegrees)
+    const shoulderTiltDegrees = rawShoulderTilt !== null ? Number(rawShoulderTilt.toFixed(1)) : null
+
+    // Camera Engagement: videoEvaluation.cameraEngagement
+    const engagementValues = videoQuestions
+      .map(q => q.videoEvaluation?.cameraEngagement)
+      .filter(e => Boolean(e) && e !== 'unavailable')
+    const cameraEngagement = engagementValues.length > 0 ? engagementValues[0] : null
+
+    // Video Quality: videoEvaluation.videoQualityIndicator
+    const qualityValues = videoQuestions
+      .map(q => q.videoEvaluation?.videoQualityIndicator)
+      .filter(Boolean)
+    const videoQualityIndicator = qualityValues.length > 0 ? qualityValues[0] : null
+
+    // Observable Feedback: only real backend strings
+    const feedbackList = []
+    const seenFeedback = new Set()
+    for (const q of videoQuestions) {
+      const ve = q.videoEvaluation
+      if (Array.isArray(ve?.observableMetrics?.observable_observations)) {
+        for (const obs of ve.observableMetrics.observable_observations) {
+          if (typeof obs === 'string' && obs.trim() && !seenFeedback.has(obs.trim())) {
+            seenFeedback.add(obs.trim())
+            feedbackList.push(obs.trim())
+          }
+        }
+      }
+      if (typeof ve?.feedback === 'string' && ve.feedback.trim() && !seenFeedback.has(ve.feedback.trim())) {
+        seenFeedback.add(ve.feedback.trim())
+        feedbackList.push(ve.feedback.trim())
+      } else if (Array.isArray(ve?.feedback)) {
+        for (const f of ve.feedback) {
+          if (typeof f === 'string' && f.trim() && !seenFeedback.has(f.trim())) {
+            seenFeedback.add(f.trim())
+            feedbackList.push(f.trim())
+          }
+        }
+      }
+    }
+
+    return {
+      hasVideoData: true,
+      isProcessing: false,
+      videoQuestionsCount: videoQuestions.length,
+      totalFrames,
+      personVisibility,
+      faceVisibility,
+      cameraEyeAlignment,
+      postureScore,
+      postureStabilityIndex,
+      postureStabilityLabel,
+      postureStabilityDisplay,
+      shoulderTiltDegrees,
+      cameraEngagement,
+      videoQualityIndicator,
+      observableFeedback: feedbackList,
+    }
+  }, [questionBreakdown, fe])
 
   // Key Strength & Primary Weakness — memoized so asynchronous roadmap arrival
   // doesn't trigger unnecessary re-derivation of all dependent JSX sections
@@ -1555,6 +1732,237 @@ export default function ResultsPage() {
             </div>
           </section>
         )}
+
+        {/* ==================================================================
+            VIDEO ANALYSIS (Observable Video Signals Only)
+            ================================================================== */}
+        <section className="video-analysis-section animate-fade-in" id="video-analysis-section">
+          <div className="section-header-compact" style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Video size={18} color="#06b6d4" />
+              <div>
+                <h2 className="section-title-sm" style={{ letterSpacing: '0.04em' }}>VIDEO ANALYSIS</h2>
+                <p className="section-desc-xs" style={{ margin: 0, color: '#94a3b8', fontSize: '12px' }}>
+                  Observable video signals from your interview responses
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {videoSummary.hasVideoData && videoSummary.totalFrames > 0 && (
+                <span className="section-badge-cyan" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  <Video size={11} /> {videoSummary.totalFrames} frames analyzed
+                </span>
+              )}
+              <span className="section-badge-muted">Observable Signals Only</span>
+            </div>
+          </div>
+
+          {!videoSummary.hasVideoData ? (
+            videoSummary.isProcessing ? (
+              <div className="section-unavailable-card">
+                <RefreshCw size={20} className="icon-spin text-cyan" />
+                <div className="unavail-content">
+                  <h3 className="unavail-title" style={{ color: '#38bdf8' }}>Video analysis is still processing.</h3>
+                  <p className="unavail-sub">
+                    Video frames are currently being analyzed by the pipeline. Observable signals will appear here once processing completes.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="section-unavailable-card">
+                <VideoOff size={20} className="icon-muted" />
+                <div className="unavail-content">
+                  <h3 className="unavail-title">No video analysis is available for this interview.</h3>
+                  <p className="unavail-sub">
+                    Video was not recorded for these responses or camera capture was disabled. Technical evaluations remain fully valid.
+                  </p>
+                </div>
+              </div>
+            )
+          ) : (
+            <>
+              {/* Observable Metric Cards Grid */}
+              <div className="comm-stats-grid video-stats-grid">
+                {/* 1. Person Visibility */}
+                <div className="comm-stat-card">
+                  <div className="comm-stat-header">
+                    <span className="comm-stat-title">Person Visibility</span>
+                    <Video size={14} className="comm-stat-icon" style={{ color: '#06b6d4' }} />
+                  </div>
+                  <div className="comm-stat-main">
+                    <span className="comm-stat-num">
+                      {videoSummary.personVisibility !== null ? `${videoSummary.personVisibility}%` : 'Unavailable'}
+                    </span>
+                    <span className={`comm-stat-pill ${videoSummary.personVisibility !== null ? (videoSummary.personVisibility >= 80 ? 'pill-optimal' : 'pill-warning') : 'pill-note'}`}>
+                      {videoSummary.personVisibility !== null ? (videoSummary.personVisibility >= 80 ? 'High' : 'Variable') : 'Unavailable'}
+                    </span>
+                  </div>
+                  <p className="comm-stat-desc">
+                    Percentage of analyzed frames where a person was detected.
+                  </p>
+                </div>
+
+                {/* 2. Face Visibility */}
+                <div className="comm-stat-card">
+                  <div className="comm-stat-header">
+                    <span className="comm-stat-title">Face Visibility</span>
+                    <CheckCircle size={14} className="comm-stat-icon" style={{ color: '#06b6d4' }} />
+                  </div>
+                  <div className="comm-stat-main">
+                    <span className="comm-stat-num">
+                      {videoSummary.faceVisibility !== null ? `${videoSummary.faceVisibility}%` : 'Unavailable'}
+                    </span>
+                    <span className={`comm-stat-pill ${videoSummary.faceVisibility !== null ? (videoSummary.faceVisibility >= 80 ? 'pill-optimal' : 'pill-warning') : 'pill-note'}`}>
+                      {videoSummary.faceVisibility !== null ? (videoSummary.faceVisibility >= 80 ? 'Consistent' : 'Intermittent') : 'Unavailable'}
+                    </span>
+                  </div>
+                  <p className="comm-stat-desc">
+                    Percentage of analyzed frames where the face was visible.
+                  </p>
+                </div>
+
+                {/* 3. Camera / Eye Alignment */}
+                <div className="comm-stat-card">
+                  <div className="comm-stat-header">
+                    <span className="comm-stat-title">Camera / Eye Alignment</span>
+                    <Target size={14} className="comm-stat-icon" style={{ color: '#06b6d4' }} />
+                  </div>
+                  <div className="comm-stat-main">
+                    <span className="comm-stat-num">
+                      {videoSummary.cameraEyeAlignment !== null ? `${videoSummary.cameraEyeAlignment}%` : 'Unavailable'}
+                    </span>
+                    <span className={`comm-stat-pill ${videoSummary.cameraEyeAlignment !== null ? (videoSummary.cameraEyeAlignment >= 75 ? 'pill-optimal' : 'pill-warning') : 'pill-note'}`}>
+                      {videoSummary.cameraEyeAlignment !== null ? (videoSummary.cameraEyeAlignment >= 75 ? 'Direct' : 'Variable') : 'Unavailable'}
+                    </span>
+                  </div>
+                  <p className="comm-stat-desc">
+                    Estimated alignment of facial/iris landmarks with the camera direction.
+                  </p>
+                </div>
+
+                {/* 4. Posture Score */}
+                <div className="comm-stat-card">
+                  <div className="comm-stat-header">
+                    <span className="comm-stat-title">Posture Score</span>
+                    <TrendingUp size={14} className="comm-stat-icon" style={{ color: '#06b6d4' }} />
+                  </div>
+                  <div className="comm-stat-main">
+                    <span className="comm-stat-num">
+                      {videoSummary.postureScore !== null ? `${videoSummary.postureScore}%` : 'Unavailable'}
+                    </span>
+                    <span className={`comm-stat-pill ${videoSummary.postureScore !== null ? (videoSummary.postureScore >= 80 ? 'pill-optimal' : 'pill-note') : 'pill-note'}`}>
+                      {videoSummary.postureScore !== null ? (videoSummary.postureScore >= 80 ? 'Aligned' : 'Variable') : 'Unavailable'}
+                    </span>
+                  </div>
+                  <p className="comm-stat-desc">
+                    Observable body-position alignment based on pose landmarks.
+                  </p>
+                </div>
+
+                {/* 5. Posture Stability */}
+                <div className="comm-stat-card">
+                  <div className="comm-stat-header">
+                    <span className="comm-stat-title">Posture Stability</span>
+                    <ShieldCheck size={14} className="comm-stat-icon" style={{ color: '#06b6d4' }} />
+                  </div>
+                  <div className="comm-stat-main">
+                    <span className="comm-stat-num">
+                      {videoSummary.postureStabilityDisplay}
+                    </span>
+                    <span className={`comm-stat-pill ${videoSummary.postureStabilityIndex !== null ? (videoSummary.postureStabilityIndex >= 80 ? 'pill-optimal' : 'pill-warning') : 'pill-note'}`}>
+                      {videoSummary.postureStabilityLabel ? formatVideoLabel(videoSummary.postureStabilityLabel) : (videoSummary.postureStabilityIndex !== null ? 'Measured' : 'Unavailable')}
+                    </span>
+                  </div>
+                  <p className="comm-stat-desc">
+                    Observable pose landmark stability and position consistency across frames.
+                  </p>
+                </div>
+
+                {/* 6. Shoulder Alignment */}
+                <div className="comm-stat-card">
+                  <div className="comm-stat-header">
+                    <span className="comm-stat-title">Shoulder Alignment</span>
+                    <BarChart2 size={14} className="comm-stat-icon" style={{ color: '#06b6d4' }} />
+                  </div>
+                  <div className="comm-stat-main">
+                    <span className="comm-stat-num">
+                      {videoSummary.shoulderTiltDegrees !== null ? `${videoSummary.shoulderTiltDegrees}°` : 'Unavailable'}
+                    </span>
+                    <span className={`comm-stat-pill ${videoSummary.shoulderTiltDegrees !== null ? (videoSummary.shoulderTiltDegrees <= 8 ? 'pill-optimal' : 'pill-warning') : 'pill-note'}`}>
+                      {videoSummary.shoulderTiltDegrees !== null ? (videoSummary.shoulderTiltDegrees <= 8 ? 'Level' : 'Tilted') : 'Unavailable'}
+                    </span>
+                  </div>
+                  <p className="comm-stat-desc">
+                    Measured shoulder tilt from pose landmarks.
+                  </p>
+                </div>
+
+                {/* 7. Camera Engagement (if available) */}
+                {videoSummary.cameraEngagement && (
+                  <div className="comm-stat-card">
+                    <div className="comm-stat-header">
+                      <span className="comm-stat-title">Camera Engagement</span>
+                      <Video size={14} className="comm-stat-icon" style={{ color: '#06b6d4' }} />
+                    </div>
+                    <div className="comm-stat-main">
+                      <span className="comm-stat-num" style={{ fontSize: '18px', textTransform: 'capitalize' }}>
+                        {formatVideoLabel(videoSummary.cameraEngagement)}
+                      </span>
+                      <span className="comm-stat-pill pill-optimal">
+                        Observed
+                      </span>
+                    </div>
+                    <p className="comm-stat-desc">
+                      Categorical camera orientation and framing engagement.
+                    </p>
+                  </div>
+                )}
+
+                {/* 8. Video Quality (if available) */}
+                {videoSummary.videoQualityIndicator && (
+                  <div className="comm-stat-card">
+                    <div className="comm-stat-header">
+                      <span className="comm-stat-title">Video Quality</span>
+                      <Sparkles size={14} className="comm-stat-icon" style={{ color: '#06b6d4' }} />
+                    </div>
+                    <div className="comm-stat-main">
+                      <span className="comm-stat-num" style={{ fontSize: '18px', textTransform: 'capitalize' }}>
+                        {formatVideoLabel(videoSummary.videoQualityIndicator)}
+                      </span>
+                      <span className={`comm-stat-pill ${videoSummary.videoQualityIndicator.toLowerCase() === 'good' ? 'pill-optimal' : 'pill-note'}`}>
+                        Framing
+                      </span>
+                    </div>
+                    <p className="comm-stat-desc">
+                      Observed subject framing and resolution quality across frames.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Observable Feedback list (Section 5) */}
+              {videoSummary.observableFeedback.length > 0 && (
+                <div className="observable-notes-box" style={{ marginTop: '14px' }}>
+                  <span className="notes-box-title">Observable Feedback</span>
+                  <ul className="notes-bullet-list">
+                    {videoSummary.observableFeedback.map((fb, idx) => (
+                      <li key={idx}>{fb}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Scientific Caveat Box (Section 11) */}
+              <div className="scientific-caveat-box" style={{ marginTop: '14px' }}>
+                <ShieldCheck size={16} color="#06b6d4" style={{ flexShrink: 0, marginTop: '1px' }} />
+                <div>
+                  <strong>Objective Signal Note: </strong>
+                  These metrics describe observable video signals such as face visibility, camera/eye alignment, posture landmarks, and framing. They are not measures of personality, confidence, honesty, intelligence, or hiring suitability.
+                </div>
+              </div>
+            </>
+          )}
+        </section>
 
         {/* ==================================================================
             H. RECOMMENDED NEXT PRACTICE (Connected to Train Me)
