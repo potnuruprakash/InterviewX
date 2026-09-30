@@ -291,16 +291,30 @@ export default function InterviewPage() {
     // 1. Stop speech recognition
     if (isListening) stopListening()
 
-    // 2. Stop media recording and obtain completed Blobs before proceeding
+    // 2. Stop media recording and obtain completed Blobs before proceeding.
+    // Do not gate this on React's isMediaRecording state: MediaRecorder has its
+    // own lifecycle and can still contain the completed response when React state
+    // has already changed (for example during a question transition).
     let currentVideo = videoBlob
-    if (videoRecorderRef.current && isMediaRecording) {
+    if (videoRecorderRef.current && videoEnabled) {
       try {
         const recordedVideo = await videoRecorderRef.current.stopAndGetBlob()
-        if (recordedVideo) {
+        if (recordedVideo && recordedVideo.size > 0) {
           currentVideo = recordedVideo
+          console.log('[InterviewMedia] video_blob_ready', {
+            interviewId: id,
+            questionId: currentQuestion.id,
+            bytes: recordedVideo.size,
+            type: recordedVideo.type,
+          })
+        } else {
+          console.warn('[InterviewMedia] video_blob_empty', {
+            interviewId: id,
+            questionId: currentQuestion.id,
+          })
         }
       } catch (recErr) {
-        console.warn('[Interview] Video stop error:', recErr)
+        console.warn('[InterviewMedia] Video stop error:', recErr)
       }
     }
 
@@ -308,7 +322,7 @@ export default function InterviewPage() {
     if (audioRecorderRef.current && isMediaRecording) {
       try {
         const recordedAudio = await audioRecorderRef.current.stopAndGetBlob()
-        if (recordedAudio) {
+        if (recordedAudio && recordedAudio.size > 0) {
           currentAudio = recordedAudio
         }
       } catch (recErr) {
