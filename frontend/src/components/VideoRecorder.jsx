@@ -91,17 +91,20 @@ const VideoRecorder = forwardRef(function VideoRecorder(
     }
   }, [streamActive])
 
-  // Start / Stop MediaRecorder when isRecording changes
+  // Start / stop recording when either recording state or camera readiness changes.
+  // The interview can request recording before getUserMedia() finishes; in that case
+  // the first attempt must wait for streamActive instead of silently returning.
   useEffect(() => {
-    if (isRecording) {
+    if (isRecording && streamActive) {
       startMediaRecording()
-    } else if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+    } else if (!isRecording && mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       stopMediaRecording()
     }
-  }, [isRecording])
+  }, [isRecording, streamActive])
 
   const startMediaRecording = () => {
     if (!streamRef.current) return
+    if (mediaRecorderRef.current?.state === 'recording') return
     chunksRef.current = []
     lastBlobRef.current = null
 
