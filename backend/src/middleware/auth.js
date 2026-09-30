@@ -57,8 +57,10 @@ const requireAuth = (req, res, next) => {
     }
   }
 
-  // Production authentication through verified Clerk session
-  if (!userId) {
+  // In CI/test mode, authentication is intentionally provided only by the
+  // explicit x-test-clerk-user-id test adapter above. Never fall through to
+  // getAuth() or accept a client-controlled development header here.
+  if (!userId && !isTestAuthEnabled) {
     try {
       const auth = getAuth(req);
       if (auth && auth.userId) {
@@ -70,16 +72,7 @@ const requireAuth = (req, res, next) => {
   }
 
   // Production identity must come from verified Clerk authentication.
-  // Note: Unverified JWT payload decoding without cryptographic signature verification
-  // has been permanently removed to prevent forged token attacks.
-
-  // Fallback 2: Automated backend test scripts / dev fallback in non-production environments
-  if (!userId && process.env.NODE_ENV !== 'production') {
-    const devUserId = req.headers['x-dev-clerk-user-id'] || req.headers['x-test-clerk-user-id'];
-    if (devUserId && typeof devUserId === 'string' && devUserId.startsWith('user_')) {
-      userId = devUserId;
-    }
-  }
+  // Unverified JWT decoding and client-controlled dev-header fallbacks are not supported.
 
   if (!userId) {
     return res.status(401).json({
