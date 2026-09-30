@@ -997,10 +997,17 @@ const submitVideoResponse = async (req, res) => {
     response.videoEvaluation = {
       framesProcessed: videoResult.framesProcessed || 0,
       personDetectionRatio: videoResult.personDetectionRatio || null,
-      faceVisibilityRatio: videoResult.faceVisibilityRatio || null,
+      faceVisibilityRatio: videoResult.faceVisibilityRatio ?? null,
+      gazeAttentionRatio: videoResult.gazeAttentionRatio ?? null,
+      postureStability: videoResult.postureStability || null,
+      cameraEngagement: videoResult.cameraEngagement || null,
       videoQualityIndicator: videoResult.videoQualityIndicator || null,
       modelStatus: videoResult.modelStatus || 'processed',
-      processingConfidence: videoResult.processingConfidence || null,
+      processingConfidence: videoResult.processingConfidence ?? null,
+      visibleMovement: videoResult.metrics?.movement_stability_index != null
+        ? (videoResult.metrics.movement_stability_index >= 80 ? 'stable' : 'visible_movement')
+        : null,
+      feedback: videoResult.metrics?.observable_observations?.join(' ') || null,
     };
 
     await response.save();
