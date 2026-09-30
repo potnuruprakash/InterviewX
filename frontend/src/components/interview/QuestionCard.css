@@ -178,14 +178,6 @@
   color: #6366f1;
 }
 
-/* ── 2. Upper-Right Floating Video Anchor ─────────────────────── */
-.question-floating-video-anchor {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: clamp(280px, 24vw, 350px);
-  z-index: 15;
-}
 
 /* Skeleton Loading State */
 .question-skeleton-state {
@@ -215,9 +207,6 @@
   .question-content-flow {
     padding-right: 380px;
   }
-  .question-floating-video-anchor {
-    width: 360px;
-  }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
@@ -226,9 +215,6 @@
   }
   .question-content-flow {
     padding-right: 300px;
-  }
-  .question-floating-video-anchor {
-    width: 280px;
   }
   .enterprise-question-text {
     font-size: 22px;
@@ -246,13 +232,5 @@
   .enterprise-question-text {
     font-size: 20px;
     line-height: 1.4;
-  }
-  .question-floating-video-anchor {
-    position: static;
-    margin-top: 14px;
-    width: 100%;
-    max-width: 320px;
-    margin-left: auto;
-    margin-right: auto;
   }
 }

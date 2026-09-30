@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { AlertCircle, AlertTriangle, LogOut, CheckCircle } from 'lucide-react'
+import { AlertCircle, AlertTriangle } from 'lucide-react'
 
 /**
  * Dialogs for End Interview & Skip Question confirmation
@@ -13,9 +13,9 @@ export const EndInterviewModal = memo(function EndInterviewModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-backdrop animate-fade-in" role="dialog" aria-modal="true">
-      <div className="skip-confirm-modal glass-card animate-scale-up">
-        <div className="skip-modal-icon">
+    <div className="modal-overlay modal-backdrop animate-fade-in" role="dialog" aria-modal="true">
+      <div className="end-confirm-modal glass-card animate-scale-up">
+        <div className="skip-modal-icon end-modal-icon">
           <AlertCircle size={32} color="#ef4444" />
         </div>
         <h3 className="skip-modal-title">End Interview Session?</h3>
@@ -55,7 +55,7 @@ export const SkipConfirmModal = memo(function SkipConfirmModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-backdrop animate-fade-in" role="dialog" aria-modal="true">
+    <div className="modal-overlay modal-backdrop animate-fade-in" role="dialog" aria-modal="true">
       <div className="skip-confirm-modal glass-card animate-scale-up">
         <div className="skip-modal-icon">
           <AlertTriangle size={32} color="#f59e0b" />
@@ -86,3 +86,4 @@ export const SkipConfirmModal = memo(function SkipConfirmModal({
     </div>
   )
 })
+

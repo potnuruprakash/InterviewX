@@ -1,36 +1,51 @@
 /* ============================================================
-   FLOATING VIDEO WINDOW STYLES
+   ENTERPRISE DRAGGABLE FLOATING VIDEO WINDOW STYLES
    ============================================================ */
 
 .floating-video-card {
-  width: 100%;
+  position: fixed;
+  z-index: 100;
+  width: clamp(260px, 24vw, 350px);
   max-width: 360px;
-  background: var(--bg-card, rgba(15, 23, 42, 0.85));
-  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.12));
+  background: var(--bg-card, rgba(15, 23, 42, 0.92));
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.14));
   border-radius: var(--radius-lg, 12px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: all 0.25s ease;
-  z-index: 20;
+  user-select: none;
 }
 
 [data-theme='light'] .floating-video-card {
   background: #ffffff;
   border-color: #cbd5e1;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
 }
 
-/* ── 1. Header Bar ────────────────────────────────────────────── */
+.floating-video-card.is-dragging {
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(99, 102, 241, 0.5);
+  opacity: 0.98;
+}
+
+/* ── 1. Drag Header Bar ───────────────────────────────────────── */
 .fvw-header-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   user-select: none;
+  cursor: grab;
+  touch-action: none;
+  transition: background 0.15s ease;
+}
+
+.fvw-header-bar:active,
+.fvw-header-bar.is-dragging {
+  cursor: grabbing;
+  background: rgba(99, 102, 241, 0.15);
 }
 
 [data-theme='light'] .fvw-header-bar {
@@ -38,11 +53,18 @@
   border-bottom-color: #f1f5f9;
 }
 
+[data-theme='light'] .fvw-header-bar:active,
+[data-theme='light'] .fvw-header-bar.is-dragging {
+  cursor: grabbing;
+  background: #eef2ff;
+}
+
 .fvw-info-left {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  pointer-events: none; /* Let drag pass through to header */
 }
 
 .fvw-user-tag {
@@ -148,7 +170,7 @@
 }
 
 .fvw-action-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--text-primary, #ffffff);
 }
 
@@ -257,7 +279,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.25);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -318,23 +340,24 @@
 
 /* ── 4. Minimized Compact Bubble Pill ─────────────────────────── */
 .floating-cam-pill {
+  position: fixed;
+  z-index: 100;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
   border-radius: 9999px;
-  background: var(--bg-card, rgba(15, 23, 42, 0.9));
-  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  background: var(--bg-card, rgba(15, 23, 42, 0.95));
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.16));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   user-select: none;
-  z-index: 20;
 }
 
 .floating-cam-pill:hover {
   border-color: #6366f1;
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 6px 22px rgba(99, 102, 241, 0.3);
 }
 
 .pill-dot-status {
@@ -371,24 +394,4 @@
 
 .pill-restore-icon {
   color: #818cf8;
-}
-
-/* ── 5. Fullscreen Modal Mode ─────────────────────────────────── */
-.floating-video-card.is-fullscreen-modal {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 90vw;
-  max-width: 800px;
-  z-index: 1000;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
-}
-
-.fvw-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  z-index: 999;
 }

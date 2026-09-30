@@ -22,7 +22,6 @@ function QuestionCard({
   question,
   questionNumber = 1,
   totalQuestions = 10,
-  floatingVideo = null,
 }) {
   if (!question) {
     return (
@@ -113,12 +112,6 @@ function QuestionCard({
         )}
       </div>
 
-      {/* ── Upper-Right Floating Video Window Anchor ───────────────────── */}
-      {floatingVideo && (
-        <div className="question-floating-video-anchor">
-          {floatingVideo}
-        </div>
-      )}
     </article>
   )
 }

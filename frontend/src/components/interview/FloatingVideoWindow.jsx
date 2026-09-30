@@ -1,21 +1,18 @@
-import { useState, memo } from 'react'
-import {
-  Video, VideoOff, Mic, MicOff, Minus, Maximize2,
-  Minimize2
-} from 'lucide-react'
+import { useState, useRef, useEffect, useCallback, memo } from 'react'
+import { Video, VideoOff, Mic, MicOff, Minus } from 'lucide-react'
 import VideoRecorder from '../VideoRecorder'
 import './FloatingVideoWindow.css'
 
 /**
- * Enterprise Floating Video Window Component
+ * Enterprise Draggable Floating Video Window Component
  *
- * Anchored in the upper-right of the Question Card workspace.
+ * - Clean draggable window anchored initially to upper-right workspace
+ * - Draggable via the top header handle using pointer events (mouse + touch)
+ * - Strict viewport boundary clamping (never disappears off-screen)
  * - 16:9 aspect ratio
- * - Fixed/compact width (approx 320–360px on desktop)
- * - Minimizable into a floating compact pill
- * - Fullscreen preview expansion modal
- * - Continuous VideoRecorder mounting (never loses ref or media stream)
- * - Camera & Mic toggle controls with REC indicator
+ * - Camera and Mic toggle controls
+ * - Continuous VideoRecorder mounting (never unmounted, preserving media stream & recorder ref)
+ * - Minimizable into a sleek status pill
  */
 function FloatingVideoWindow({
   userName = 'Candidate',
@@ -28,8 +25,48 @@ function FloatingVideoWindow({
   videoRecorderRef,
   disabled = false,
 }) {
+  // Calculate default initial position (upper-right of question card workspace)
+  const calculateDefaultPosition = useCallback(() => {
+    const winW = typeof window !== 'undefined' ? window.innerWidth : 1200
+    const cardW = cardRef.current?.offsetWidth || Math.min(350, Math.max(260, winW * 0.24))
+
+    const qCard = document.querySelector('.enterprise-question-card')
+    if (qCard) {
+      const rect = qCard.getBoundingClientRect()
+      const targetX = Math.max(12, Math.min(rect.right - cardW - 16, winW - cardW - 12))
+      const targetY = Math.max(68, rect.top + 14)
+      return { x: Math.round(targetX), y: Math.round(targetY) }
+    }
+
+    const fallbackX = winW >= 1024
+      ? Math.max(12, winW * 0.72 - cardW - 20)
+      : Math.max(12, winW - cardW - 16)
+    return { x: Math.round(fallbackX), y: 76 }
+  }, [])
+
+  const [position, setPosition] = useState(() => {
+    if (typeof window === 'undefined') return { x: 800, y: 76 }
+    const winW = window.innerWidth
+    const cardW = Math.min(350, Math.max(260, winW * 0.24))
+    const qCard = typeof document !== 'undefined' ? document.querySelector('.enterprise-question-card') : null
+    if (qCard) {
+      const rect = qCard.getBoundingClientRect()
+      const targetX = Math.max(12, Math.min(rect.right - cardW - 16, winW - cardW - 12))
+      const targetY = Math.max(68, rect.top + 14)
+      return { x: Math.round(targetX), y: Math.round(targetY) }
+    }
+    const fallbackX = winW >= 1024
+      ? Math.max(12, winW * 0.72 - cardW - 20)
+      : Math.max(12, winW - cardW - 16)
+    return { x: Math.round(fallbackX), y: 76 }
+  })
+  const [isDragging, setIsDragging] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  const cardRef = useRef(null)
+  const pillRef = useRef(null)
+  const dragStartRef = useRef({ startX: 0, startY: 0, origX: 0, origY: 0 })
+  const isDraggingRef = useRef(false)
 
   const userInitials = (userName || 'Candidate')
     .split(' ')
@@ -39,12 +76,98 @@ function FloatingVideoWindow({
     .substring(0, 2)
     .toUpperCase() || 'C'
 
+  // Clamp position on window resize so it never goes off-screen
+  useEffect(() => {
+    const handleResize = () => {
+      setPosition((prev) => {
+        if (!prev) return prev
+        const winW = window.innerWidth
+        const winH = window.innerHeight
+        const elem = isMinimized ? pillRef.current : cardRef.current
+        const w = elem?.offsetWidth || 340
+        const h = elem?.offsetHeight || 220
+        const minTop = 64
+        const minLeft = 8
+        const maxLeft = Math.max(minLeft, winW - w - 8)
+        const maxTop = Math.max(minTop, winH - h - 8)
+
+        return {
+          x: Math.max(minLeft, Math.min(prev.x, maxLeft)),
+          y: Math.max(minTop, Math.min(prev.y, maxTop)),
+        }
+      })
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [isMinimized])
+
+  // ── Drag Handlers (Header bar only) ────────────────────────────────────────
+  const handlePointerDown = (e) => {
+    // Left-click or touch only
+    if (e.button !== undefined && e.button !== 0) return
+
+    e.preventDefault()
+
+    const currentPos = position || calculateDefaultPosition()
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: currentPos.x,
+      origY: currentPos.y,
+    }
+    isDraggingRef.current = true
+    setIsDragging(true)
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {}
+  }
+
+  const handlePointerMove = (e) => {
+    if (!isDraggingRef.current) return
+
+    const deltaX = e.clientX - dragStartRef.current.startX
+    const deltaY = e.clientY - dragStartRef.current.startY
+
+    const winW = window.innerWidth
+    const winH = window.innerHeight
+    const elem = cardRef.current
+    const cardW = elem?.offsetWidth || 340
+    const cardH = elem?.offsetHeight || 220
+
+    const minTop = 64 // Beneath 60px header + 4px progress track
+    const minLeft = 8
+    const maxLeft = Math.max(minLeft, winW - cardW - 8)
+    const maxTop = Math.max(minTop, winH - cardH - 8)
+
+    const rawX = dragStartRef.current.origX + deltaX
+    const rawY = dragStartRef.current.origY + deltaY
+
+    const clampedX = Math.max(minLeft, Math.min(rawX, maxLeft))
+    const clampedY = Math.max(minTop, Math.min(rawY, maxTop))
+
+    setPosition({ x: Math.round(clampedX), y: Math.round(clampedY) })
+  }
+
+  const handlePointerUp = (e) => {
+    if (!isDraggingRef.current) return
+    isDraggingRef.current = false
+    setIsDragging(false)
+
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {}
+  }
+
   return (
     <>
       {/* ── Minimized Floating Pill View ────────────────────────────── */}
       {isMinimized && (
         <div
+          ref={pillRef}
           className="floating-cam-pill animate-fade-in"
+          style={position ? { left: `${position.x}px`, top: `${position.y}px` } : undefined}
           onClick={() => setIsMinimized(false)}
           role="button"
           tabIndex={0}
@@ -62,19 +185,31 @@ function FloatingVideoWindow({
             )}
           </div>
           <span className="pill-user-name">{userName}</span>
-          <Maximize2 size={12} className="pill-restore-icon" />
+          <Video size={12} className="pill-restore-icon" />
         </div>
       )}
 
-      {/* ── Standard Floating Video Window ─────────────────────────── */}
+      {/* ── Standard Floating Draggable Video Window ────────────────── */}
       <div
-        className={`floating-video-card glass-card ${isFullscreen ? 'is-fullscreen-modal' : ''}`}
-        style={{ display: isMinimized ? 'none' : 'flex' }}
+        ref={cardRef}
+        className={`floating-video-card glass-card ${isDragging ? 'is-dragging' : ''}`}
+        style={{
+          display: isMinimized ? 'none' : 'flex',
+          left: position ? `${position.x}px` : undefined,
+          top: position ? `${position.y}px` : undefined,
+        }}
         role="region"
         aria-label="Candidate camera view"
       >
-        {/* Header: Candidate Info, REC status, Window Controls */}
-        <div className="fvw-header-bar">
+        {/* Header: Drag Handle, REC/Live indicator, Candidate Name, Minimize Button */}
+        <div
+          className={`fvw-header-bar ${isDragging ? 'is-dragging' : ''}`}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          title="Drag to reposition camera anywhere"
+        >
           <div className="fvw-info-left">
             {videoEnabled && isRecording ? (
               <span className="fvw-rec-badge" title="Recording active for analysis">
@@ -98,36 +233,24 @@ function FloatingVideoWindow({
           </div>
 
           <div className="fvw-window-actions">
-            {/* Fullscreen Preview Toggle */}
+            {/* Minimize Window (Stops drag propagation) */}
             <button
               type="button"
               className="fvw-action-icon-btn"
-              onClick={() => setIsFullscreen(!isFullscreen)}
-              title={isFullscreen ? 'Exit full camera preview' : 'Expand camera preview'}
-              aria-label={isFullscreen ? 'Exit full camera preview' : 'Expand camera preview'}
+              onClick={() => setIsMinimized(true)}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Minimize camera view"
+              aria-label="Minimize camera view"
             >
-              {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              <Minus size={14} />
             </button>
-
-            {/* Minimize Window */}
-            {!isFullscreen && (
-              <button
-                type="button"
-                className="fvw-action-icon-btn"
-                onClick={() => setIsMinimized(true)}
-                title="Minimize camera view"
-                aria-label="Minimize camera view"
-              >
-                <Minus size={14} />
-              </button>
-            )}
           </div>
         </div>
 
         {/* 16:9 Aspect Ratio Video Viewport */}
         <div className="fvw-viewport-box">
           <div className="fvw-aspect-16-9">
-            {/* Always keep VideoRecorder mounted so ref and streams are NEVER lost */}
+            {/* Continuously mounted VideoRecorder so ref and stream are never interrupted */}
             <div
               className="fvw-recorder-mount"
               style={{ display: videoEnabled ? 'block' : 'none' }}
@@ -141,7 +264,7 @@ function FloatingVideoWindow({
               />
             </div>
 
-            {/* Offline Avatar Viewport when video is turned off */}
+            {/* Offline Fallback when camera is disabled */}
             {!videoEnabled && (
               <div className="fvw-avatar-fallback animate-fade-in">
                 <div className="fallback-avatar-circle">
@@ -195,14 +318,6 @@ function FloatingVideoWindow({
           <span className="fvw-aspect-spec">16:9 HD</span>
         </div>
       </div>
-
-      {/* Fullscreen Backdrop when in modal mode */}
-      {isFullscreen && (
-        <div
-          className="fvw-modal-backdrop animate-fade-in"
-          onClick={() => setIsFullscreen(false)}
-        />
-      )}
     </>
   )
 }

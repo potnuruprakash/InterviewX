@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Brain, Camera, CameraOff, Mic, MicOff, LogOut } from 'lucide-react'
+import { Brain, LogOut } from 'lucide-react'
 import InterviewTimer from './InterviewTimer'
 import './InterviewHeader.css'
 
@@ -11,7 +11,7 @@ import './InterviewHeader.css'
  * Clean information hierarchy:
  * - Left: Logo, role, interview type
  * - Center: Question progress (Question X of Total)
- * - Right: Countdown timer, compact device indicators, segregated End Session
+ * - Right: Countdown timer, segregated End Session
  */
 function InterviewHeader({
   targetRole = 'Software Engineer',
@@ -20,8 +20,6 @@ function InterviewHeader({
   durationMinutes = 30,
   onTimerExpire,
   isComplete = false,
-  videoEnabled = true,
-  isMicActive = true,
   onEndInterview,
   onBrandClick,
   questionNumber,
@@ -78,7 +76,7 @@ function InterviewHeader({
           )}
         </div>
 
-        {/* ── Right: Timer + Compact Devices + End Session ────────────── */}
+        {/* ── Right: Timer + End Session ───────────────────────────── */}
         <div className="topbar-section-right">
           {/* Isolated Non-Jittering Countdown Timer */}
           <InterviewTimer
@@ -87,29 +85,6 @@ function InterviewHeader({
             onExpire={onTimerExpire}
             isComplete={isComplete}
           />
-
-          {/* Compact Device Status Cluster */}
-          <div className="topbar-device-cluster" aria-label="Audio and Video hardware status">
-            <div
-              className={`device-indicator-icon ${videoEnabled ? 'is-on' : 'is-off'}`}
-              title={videoEnabled ? 'Camera is active' : 'Camera is off'}
-              aria-label={videoEnabled ? 'Camera active' : 'Camera disabled'}
-            >
-              {videoEnabled ? <Camera size={15} /> : <CameraOff size={15} />}
-              <span className={`device-status-dot ${videoEnabled ? 'dot-active' : 'dot-off'}`} />
-            </div>
-
-            <div
-              className={`device-indicator-icon ${isMicActive ? 'is-on' : 'is-off'}`}
-              title={isMicActive ? 'Microphone is active' : 'Microphone is muted'}
-              aria-label={isMicActive ? 'Microphone active' : 'Microphone muted'}
-            >
-              {isMicActive ? <Mic size={15} /> : <MicOff size={15} />}
-              <span className={`device-status-dot ${isMicActive ? 'dot-active' : 'dot-off'}`} />
-            </div>
-          </div>
-
-          <div className="topbar-divider-end" />
 
           {/* Destructive Action: End Session */}
           <button

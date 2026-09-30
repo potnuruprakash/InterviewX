@@ -629,8 +629,6 @@ export default function InterviewPage() {
         durationMinutes={interview?.durationMinutes || 30}
         onTimerExpire={handleTimeoutAutoEnd}
         isComplete={isComplete}
-        videoEnabled={videoEnabled}
-        isMicActive={isMicActive}
         onEndInterview={() => setShowEndConfirm(true)}
         onBrandClick={() => navigate('/dashboard')}
         questionNumber={Math.min(currentQIndex + 1, totalQ)}
@@ -657,30 +655,30 @@ export default function InterviewPage() {
         </div>
       )}
 
+      {/* ── Draggable Floating Video Window (Global Viewport Clamped) ─────── */}
+      <FloatingVideoWindow
+        userName={user?.fullName || user?.firstName || 'Candidate'}
+        videoEnabled={videoEnabled}
+        onToggleVideo={handleToggleVideo}
+        isMicActive={isMicActive}
+        onToggleMic={handleToggleMic}
+        isRecording={isMediaRecording && videoEnabled}
+        onVideoBlob={(blob) => setVideoBlob(blob)}
+        videoRecorderRef={videoRecorderRef}
+        disabled={submitting || skipping || completing}
+      />
+
       {/* ── Main Focused Interview Workspace (Two-Column Responsive Layout) ── */}
       <main className="interview-workspace-main">
         <div className="interview-workspace-container">
           <div className="interview-workspace-columns">
-            {/* ── LEFT COLUMN (~70–75% width): Question + Floating Video, Answer Card, Action Bar, Previous Feedback ── */}
+            {/* ── LEFT COLUMN (~70–75% width): Question, Answer Card, Action Bar, Previous Feedback ── */}
             <div className="workspace-left-column">
-              {/* 1. Question Card with upper-right Floating Video Window */}
+              {/* 1. Question Card (text is protected on the right for floating video) */}
               <QuestionCard
                 question={currentQuestion}
                 questionNumber={Math.min(currentQIndex + 1, totalQ)}
                 totalQuestions={totalQ}
-                floatingVideo={
-                  <FloatingVideoWindow
-                    userName={user?.fullName || user?.firstName || 'Candidate'}
-                    videoEnabled={videoEnabled}
-                    onToggleVideo={handleToggleVideo}
-                    isMicActive={isMicActive}
-                    onToggleMic={handleToggleMic}
-                    isRecording={isMediaRecording && videoEnabled}
-                    onVideoBlob={(blob) => setVideoBlob(blob)}
-                    videoRecorderRef={videoRecorderRef}
-                    disabled={submitting || skipping || completing}
-                  />
-                }
               />
 
               {/* 2. Large Answer Card + Dedicated Action Bar below it */}
