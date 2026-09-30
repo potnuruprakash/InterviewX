@@ -1,7 +1,10 @@
 """
-Video Analysis Pipeline Orchestrator
-Connects frame sampling, YOLOv8 person detection, face orientation,
-facial expression analysis, and temporal aggregation into a single reliable service.
+Video analysis pipeline.
+
+YOLO: person presence/framing/multi-person detection.
+MediaPipe Face Mesh/Iris: face visibility, head orientation, gaze alignment.
+MediaPipe Pose: observable shoulder/torso posture and movement.
+Expression classification is optional and only reported when a verified model exists.
 """
 
 import os
@@ -11,6 +14,7 @@ from typing import Dict, Any, Optional
 from app.video.preprocessing.frame_sampler import extract_sampled_frames, DEFAULT_SAMPLE_FPS
 from app.video.detector.yolo_detector import get_yolo_detector
 from app.video.landmarks.face_analyzer import get_face_analyzer
+from app.video.landmarks.pose_analyzer import get_pose_analyzer
 from app.video.expression.expression_classifier import get_expression_classifier
 from app.video.tracking.temporal_tracker import TemporalTracker, FrameTimelineEvent
 from app.video.metrics.temporal_metrics import compute_video_metrics
@@ -19,83 +23,73 @@ logger = logging.getLogger(__name__)
 
 
 class VideoAnalysisPipeline:
-    """Orchestrates end-to-end video analysis."""
-
     def __init__(self):
         self.yolo_detector = get_yolo_detector()
         self.face_analyzer = get_face_analyzer()
+        self.pose_analyzer = get_pose_analyzer()
         self.expression_classifier = get_expression_classifier()
-        logger.info("[VideoPipeline] Video Analysis Pipeline initialized successfully.")
+        logger.info("[VideoPipeline] Initialized.")
 
     def get_audit_report(self) -> Dict[str, Any]:
-        """Returns verified model and dataset audit information."""
         return {
-            "dataset": "RAVDESS (referenced externally; no raw dataset files present in repo)",
-            "model_task": "detect (Object Detection for candidate presence & framing)",
-            "yolo_model": self.yolo_detector.model_path,
-            "yolo_status": self.yolo_detector.status,
-            "expression_model_status": self.expression_classifier.status,
-            "is_custom_expression_model_verified": self.expression_classifier.is_verified,
-            "supported_expression_classes": self.expression_classifier.supported_classes,
-            "verification_statement": self.expression_classifier.audit_note,
-            "actor_independent_split_status": "Not applicable — standard COCO pretrained detection weights are active.",
+            "dataset": "No interview-specific video dataset is bundled in the repository.",
+            "models": {
+                "person_detection": self.yolo_detector.model_path,
+                "face_gaze": "MediaPipe Face Mesh/Iris",
+                "pose": "MediaPipe Pose",
+                "expression": self.expression_classifier.model_path or None,
+            },
+            "model_status": {
+                "yolo": self.yolo_detector.status,
+                "face_gaze": "loaded" if self.face_analyzer._mesh is not None else "fallback",
+                "pose": self.pose_analyzer.status,
+                "expression": self.expression_classifier.status,
+            },
             "metrics_available": {
                 "person_presence": True,
                 "framing_quality": True,
                 "multi_person_detection": True,
-                "camera_orientation": True,
-                "expression_distribution": True,
-                "psychological_or_personality_inferences": False,  # Explicitly forbidden
+                "face_visibility": True,
+                "gaze_alignment": self.face_analyzer._mesh is not None,
+                "head_orientation": self.face_analyzer._mesh is not None,
+                "pose_alignment": self.pose_analyzer.is_available,
+                "posture_stability": self.pose_analyzer.is_available,
+                "psychological_or_personality_inferences": False,
             },
             "limitations": [
-                "RAVDESS contains acted, laboratory emotional recordings which do not directly reflect natural candidate responses in technical interviews.",
-                "YOLOv8n object detection identifies person presence and bounds, but standard detection weights do not perform emotion classification.",
-                "Classification confidence is a statistical measure of model certainty, never candidate emotional confidence or competence.",
+                "Gaze is an observable screen/camera alignment estimate, not a measure of attention, honesty, confidence, or competence.",
+                "Posture is an observable landmark alignment/stability signal, not a personality or hiring-fitness score.",
+                "Expression classification is omitted unless verified custom classification weights are configured.",
             ],
         }
 
     def process_video(self, video_path: str, fps: int = DEFAULT_SAMPLE_FPS) -> Dict[str, Any]:
-        """
-        Executes the full video analysis workflow on a video file.
-        """
         if not os.path.exists(video_path):
-            return {
-                "success": False,
-                "modelStatus": "file_not_found",
-                "note": f"Video file not found at path: {video_path}",
-                "metrics": None,
-            }
+            return {"success": False, "modelStatus": "file_not_found", "note": f"Video not found: {video_path}", "metrics": None}
 
         frames = extract_sampled_frames(video_path, fps=fps)
         if not frames:
-            return {
-                "success": False,
-                "modelStatus": "frame_extraction_failed",
-                "note": "Could not extract frames from video file.",
-                "metrics": None,
-            }
+            return {"success": False, "modelStatus": "frame_extraction_failed", "note": "Could not extract frames.", "metrics": None}
 
         tracker = TemporalTracker()
 
         for frame_sample in frames:
-            # 1. YOLOv8 Person & Framing Detection
             detection = self.yolo_detector.detect_frame(frame_sample.image)
 
-            # 2. Face & Orientation Analysis
             face_result = self.face_analyzer.analyze_head_region(
                 frame_sample.image,
                 head_bbox=detection.head_bbox,
                 person_bbox=detection.pixel_bbox,
             )
 
-            # 3. Facial Expression Analysis
+            pose_result = self.pose_analyzer.analyze(frame_sample.image)
+
             expr_result = self.expression_classifier.classify_face(
                 frame_sample.image,
                 face_bbox=face_result.face_bbox,
                 smile_detected=face_result.smile_expressive_detected,
             )
 
-            # 4. Record to Temporal Tracker
             tracker.record_frame(
                 FrameTimelineEvent(
                     timestamp_sec=frame_sample.timestamp_sec,
@@ -109,17 +103,21 @@ class VideoAnalysisPipeline:
                     expression=expr_result.predicted_expression,
                     expression_confidence=expr_result.confidence,
                     bbox=detection.bbox,
+                    pose_detected=pose_result.pose_detected,
+                    posture_score=pose_result.posture_score,
+                    shoulder_tilt_degrees=pose_result.shoulder_tilt_degrees,
+                    torso_center_x=pose_result.torso_center_x,
+                    torso_center_y=pose_result.torso_center_y,
+                    gaze_method=face_result.gaze_method,
                 )
             )
 
-        # 5. Compute Final Temporal Metrics
         metrics = compute_video_metrics(
             tracker=tracker,
             audit_note=self.expression_classifier.audit_note,
             is_custom_model=self.expression_classifier.is_verified,
         )
 
-        # Build backward-compatible fields alongside enhanced metrics
         return {
             "success": True,
             "modelStatus": "analyzed",
@@ -127,17 +125,21 @@ class VideoAnalysisPipeline:
             "personDetectedFrames": sum(1 for e in tracker.events if e.person_detected),
             "personDetectionRatio": metrics["person_visibility"],
             "faceVisibilityRatio": metrics["face_visibility"],
+            "gazeAttentionRatio": metrics["gaze_alignment_ratio"],
+            "postureStability": metrics["posture_stability_label"],
+            "postureStabilityIndex": metrics["posture_stability_index"],
+            "postureScore": metrics["posture_score"],
+            "shoulderTiltDegrees": metrics["average_shoulder_tilt_degrees"],
+            "cameraEngagement": metrics["camera_engagement"],
             "videoQualityIndicator": "good" if metrics["good_framing"] >= 0.70 else "fair" if metrics["good_framing"] >= 0.40 else "poor",
             "processingConfidence": metrics["expression_classification_confidence"],
             "modelName": self.yolo_detector.model_path,
-            "note": "Observable presence, framing, and expression statistics. No psychological inferences.",
-            # Enhanced Empirical Metrics
+            "note": "Observable presence, framing, gaze alignment, head orientation, and pose statistics only.",
             "metrics": metrics,
             "audit": self.get_audit_report(),
         }
 
 
-# Global pipeline singleton
 _pipeline_instance: Optional[VideoAnalysisPipeline] = None
 
 
