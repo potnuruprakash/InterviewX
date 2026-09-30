@@ -439,21 +439,31 @@ const submitResponse = async (req, res) => {
     // ── Build multimodal evaluation (text only initially) ────────────
     const multimodalEval = buildEvaluation(textEvaluation, null, null);
 
-    // Save response
-    const response = await Response.create({
-      clerkUserId,
-      interviewId: interview._id,
-      questionId,
-      answerText: textToEvaluate,
-      responseType: responseType || (code ? 'coding' : 'text'),
-      code: code || null,
-      language: language || null,
-      status: 'submitted',
-      textEvaluation,
-      multimodalEvaluation: multimodalEval,
-      evaluation, // legacy
-      submittedAt: new Date(),
-    });
+    // Save response. The pre-insert existence check above is only an
+    // optimization; concurrent requests can still race between the check and
+    // this insert. The unique MongoDB index is the correctness boundary.
+    let response;
+    try {
+      response = await Response.create({
+        clerkUserId,
+        interviewId: interview._id,
+        questionId,
+        answerText: textToEvaluate,
+        responseType: responseType || (code ? 'coding' : 'text'),
+        code: code || null,
+        language: language || null,
+        status: 'submitted',
+        textEvaluation,
+        multimodalEvaluation: multimodalEval,
+        evaluation, // legacy
+        submittedAt: new Date(),
+      });
+    } catch (createError) {
+      if (createError?.code === 11000) {
+        return sendError(res, 409, 'RESPONSE_EXISTS', 'Answer already submitted for this question.');
+      }
+      throw createError;
+    }
 
     // Mark question as answered
     question.status = 'answered';
