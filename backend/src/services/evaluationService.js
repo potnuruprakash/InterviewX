@@ -66,17 +66,66 @@ const developmentEvaluate = (questionText, answerText, difficulty = 'medium') =>
 const detectNonSubstantiveAnswer = (answerText, semanticScore = null, conceptCoverage = null, expectedConcepts = []) => {
   const normalized = String(answerText || '').trim().toLowerCase();
   const wordCount = normalized ? normalized.split(/\s+/).length : 0;
+
   if (!normalized) return { isNonSubstantive: true, reason: 'empty_answer' };
-  const nonAnswerPhrases = ['i dont know', "i don't know", 'not sure', 'no idea', 'i have no idea', 'cannot answer', "can't answer", 'skip'];
-  if (nonAnswerPhrases.includes(normalized)) return { isNonSubstantive: true, reason: 'non_answer_phrase' };
+
+  const nonAnswerPhrases = [
+    'i dont know',
+    "i don't know",
+    'not sure',
+    'no idea',
+    'i have no idea',
+    'cannot answer',
+    "can't answer",
+    'skip',
+    'no answer',
+    'nothing',
+    'pass',
+  ];
+  if (nonAnswerPhrases.includes(normalized)) {
+    return { isNonSubstantive: true, reason: 'non_answer_phrase' };
+  }
+
   const hasExpectedConcept = expectedConcepts.some((concept) => {
     const value = String(concept || '').trim().toLowerCase();
     return value && normalized.includes(value);
   });
-  if (wordCount <= 2 && !hasExpectedConcept) return { isNonSubstantive: true, reason: 'too_short' };
-  if (wordCount <= 7 && !hasExpectedConcept && typeof semanticScore === 'number' && semanticScore < 15 && (typeof conceptCoverage !== 'number' || conceptCoverage <= 0)) {
+
+  // A short answer can still be valid when it contains clear technical or
+  // professional substance (for example, "Java developer with Spring Boot").
+  const substantiveIndicators = [
+    /\\b(?:java|python|javascript|typescript|react|node(?:\\.js)?|spring|spring boot|sql|mongodb|docker|kubernetes|aws|azure|gcp|api|rest|git|linux|html|css|c\\+\\+|c#|\.net|backend|frontend|full[- ]?stack|software engineer|developer|programmer|intern|experience|project|projects|application|system|service|database|microservices?|testing|deployment|cloud|architecture|algorithm|data structure|skills?|team|role|work(?:ed|ing)?|built|developed|designed|implemented|created|managed|led)\\b/i,
+    /\\b(?:i|i'm|im|my|we|our|he|she|they)\\b/i,
+    /\\b(?:am|is|are|was|were|have|has|had|worked|built|developed|designed|implemented|used|use|using|enjoy|enjoyed|learned|learning)\\b/i,
+    /\\d+(?:\\.\\d+)?\\s*(?:years?|months?|projects?)?/i,
+  ].some((pattern) => pattern.test(normalized));
+
+  // Reject disconnected keyword fragments such as "name workout enjoy".
+  // This is intentionally independent of SBERT because semantic similarity
+  // can assign non-zero scores to arbitrary short word lists.
+  const hasSentenceStructure =
+    /[.!?,;:]/.test(normalized) ||
+    /\\b(?:i|i'm|im|my|we|our|he|she|they)\\b/i.test(normalized);
+
+  if (!hasExpectedConcept && wordCount <= 7 && !substantiveIndicators && !hasSentenceStructure) {
+    return { isNonSubstantive: true, reason: 'keyword_fragment' };
+  }
+
+  if (wordCount <= 2 && !hasExpectedConcept && !substantiveIndicators) {
+    return { isNonSubstantive: true, reason: 'too_short' };
+  }
+
+  if (
+    wordCount <= 7 &&
+    !hasExpectedConcept &&
+    !substantiveIndicators &&
+    typeof semanticScore === 'number' &&
+    semanticScore < 25 &&
+    (typeof conceptCoverage !== 'number' || conceptCoverage <= 0)
+  ) {
     return { isNonSubstantive: true, reason: 'insufficient_relevance' };
   }
+
   return { isNonSubstantive: false, reason: null };
 };
 const buildFiveDimensionEvaluation = (questionText, answerText, baseScore, expectedConcepts = [], sbertResult = null) => {
