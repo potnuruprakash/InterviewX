@@ -180,6 +180,38 @@
   flex-shrink: 0;
 }
 
+.topbar-question-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-medium);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+[data-theme='light'] .topbar-question-pill {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.question-pill-label {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.question-pill-val strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.pill-slash {
+  color: var(--text-muted);
+}
+
 .btn-cockpit-end {
   display: inline-flex;
   align-items: center;
@@ -202,16 +234,57 @@
   color: #fca5a5;
 }
 
+
+/* ── Light Theme Overrides ────────────────────────────────────── */
+[data-theme='light'] .interview-cockpit-topbar {
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom-color: #e2e8f0;
+}
+
+[data-theme='light'] .brand-title {
+  background: linear-gradient(135deg, #0f172a 40%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+[data-theme='light'] .topbar-divider {
+  background: #cbd5e1;
+}
+
+[data-theme='light'] .topbar-target-role {
+  color: #0f172a;
+}
+
+[data-theme='light'] .topbar-interview-type {
+  color: #64748b;
+}
+
+[data-theme='light'] .device-pip {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
+[data-theme='light'] .device-pip.device-on {
+  color: #0f172a;
+  border-color: #86efac;
+}
+
+[data-theme='light'] .device-pip.device-off {
+  color: #94a3b8;
+  border-color: #fecaca;
+}
+
 /* ── Responsive Topbar ────────────────────────────────────────── */
 @media (max-width: 1024px) {
-  .topbar-section-center {
+  .interview-status-indicator {
     display: none;
   }
 }
 
 @media (max-width: 768px) {
   .topbar-inner-container {
-    padding: 10px 14px;
+    padding: 8px 12px;
     gap: 8px;
   }
   .device-status-indicators {
@@ -222,5 +295,22 @@
   }
   .topbar-divider {
     display: none;
+  }
+  .topbar-target-role {
+    max-width: 90px;
+    font-size: 11px;
+  }
+  .topbar-question-pill {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  .question-pill-label {
+    display: none;
+  }
+  .btn-cockpit-end span {
+    display: none;
+  }
+  .btn-cockpit-end {
+    padding: 6px 8px;
   }
 }

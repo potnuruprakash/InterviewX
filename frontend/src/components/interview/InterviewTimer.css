@@ -91,3 +91,47 @@
   color: #f87171;
   font-weight: 800;
 }
+
+/* ── Light Theme Overrides ────────────────────────────────────── */
+[data-theme='light'] .interview-timer-badge {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme='light'] .interview-timer-badge .timer-badge-icon {
+  color: #64748b;
+}
+
+[data-theme='light'] .interview-timer-badge .timer-badge-remaining {
+  color: #64748b;
+}
+
+[data-theme='light'] .timer-status-warning {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+[data-theme='light'] .timer-status-warning .timer-badge-icon {
+  color: #d97706;
+}
+
+[data-theme='light'] .timer-status-warning .timer-badge-remaining {
+  color: #b45309;
+}
+
+[data-theme='light'] .timer-status-urgent {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+[data-theme='light'] .timer-status-urgent .timer-badge-icon {
+  color: #ef4444;
+}
+
+[data-theme='light'] .timer-status-urgent .timer-badge-remaining {
+  color: #b91c1c;
+}
+

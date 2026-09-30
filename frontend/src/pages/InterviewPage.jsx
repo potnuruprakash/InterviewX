@@ -13,7 +13,8 @@ import AICoachDrawer from '../components/AICoachDrawer'
 import {
   InterviewHeader,
   QuestionCard,
-  FloatingVideoWindow,
+  InterviewCameraCard,
+  InterviewSignalsCard,
   EndInterviewModal,
   SkipConfirmModal,
 } from '../components/interview'
@@ -630,6 +631,8 @@ export default function InterviewPage() {
         isMicActive={isMicActive}
         onEndInterview={() => setShowEndConfirm(true)}
         onBrandClick={() => navigate('/dashboard')}
+        questionNumber={Math.min(currentQIndex + 1, totalQ)}
+        totalQuestions={totalQ}
       />
 
       {/* Progress Track */}
@@ -652,135 +655,151 @@ export default function InterviewPage() {
         </div>
       )}
 
-      {/* ── Main Focused Interview Area ──────────────────────────────────── */}
-      <main className="interview-cockpit-main">
-        <div className="interview-content-container">
-          {/* Primary Question Card */}
-          <QuestionCard
-            question={currentQuestion}
-            questionNumber={Math.min(currentQIndex + 1, totalQ)}
-            totalQuestions={totalQ}
-          />
-
-          {/* Answer Composer */}
-          <AnswerComposer
-            answer={answer}
-            onAnswerChange={setAnswer}
-            isListening={isListening}
-            interimTranscript={interimTranscript}
-            speechStatus={speechStatus}
-            speechError={speechError}
-            isSpeechSupported={isSpeechSupported}
-            onSubmit={handleSubmit}
-            onSkip={handleInitiateSkip}
-            onClear={handleClearAnswer}
-            submitting={submitting}
-            skipping={skipping}
-            mediaSubmitting={mediaSubmitting}
-            disabled={!currentQuestion || completing}
-            hasAudioAttached={Boolean(audioBlob)}
-            hasVideoAttached={Boolean(videoBlob)}
-          />
-
-          {/* Error Banner */}
-          {error && (
-            <div className="interview-error-banner animate-fade-in">
-              <AlertCircle size={15} />
-              <span>{error}</span>
+      {/* ── Main Focused Interview Workspace (CSS Grid) ────────────────── */}
+      <main className="interview-workspace-main">
+        <div className="interview-workspace-container">
+          <div className="interview-workspace-grid">
+            {/* 1. Question Section */}
+            <div className="workspace-question-area">
+              <QuestionCard
+                question={currentQuestion}
+                questionNumber={Math.min(currentQIndex + 1, totalQ)}
+                totalQuestions={totalQ}
+              />
             </div>
-          )}
 
-          {/* Media Notice Banner (Non-destructive) */}
-          {mediaNotice && (
-            <div
-              className="interview-notice-banner animate-fade-in"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 14px',
-                background: 'rgba(245, 158, 11, 0.1)',
-                border: '1px solid rgba(245, 158, 11, 0.25)',
-                borderRadius: '8px',
-                color: '#fbbf24',
-                fontSize: '13px',
-                margin: '10px 0',
-              }}
-            >
-              <AlertTriangle size={15} style={{ flexShrink: 0 }} />
-              <span>{mediaNotice}</span>
+            {/* 2. Video Camera Section */}
+            <div className="workspace-video-area">
+              <InterviewCameraCard
+                userName={user?.fullName || user?.firstName || 'Candidate'}
+                videoEnabled={videoEnabled}
+                onToggleVideo={handleToggleVideo}
+                isMicActive={isMicActive}
+                onToggleMic={handleToggleMic}
+                isRecording={isMediaRecording && videoEnabled}
+                onVideoBlob={(blob) => setVideoBlob(blob)}
+                videoRecorderRef={videoRecorderRef}
+                disabled={submitting || skipping || completing}
+              />
             </div>
-          )}
 
-          {/* Evaluated Previous Answer (Collapsible / Unobtrusive Feedback) */}
-          {lastEval && (
-            <div className="previous-eval-card glass-card animate-fade-in">
-              <div className="previous-eval-header">
-                <div className="eval-status-left">
-                  <ShieldCheck size={16} className="eval-success-icon" />
-                  <span className="eval-card-title">Previous Answer Evaluated</span>
-                </div>
-                <div className="eval-tag-group">
-                  <span className="badge badge-green">AI Evaluated</span>
-                  <span className="eval-score-badge">
-                    {lastEval.textEvaluation?.textScore ?? lastEval.evaluation?.score ?? '—'}/100
-                  </span>
-                </div>
-              </div>
+            {/* 3. Answer Composer Section */}
+            <div className="workspace-answer-area">
+              <AnswerComposer
+                answer={answer}
+                onAnswerChange={setAnswer}
+                isListening={isListening}
+                interimTranscript={interimTranscript}
+                speechStatus={speechStatus}
+                speechError={speechError}
+                isSpeechSupported={isSpeechSupported}
+                onSubmit={handleSubmit}
+                onSkip={handleInitiateSkip}
+                onClear={handleClearAnswer}
+                submitting={submitting}
+                skipping={skipping}
+                mediaSubmitting={mediaSubmitting}
+                disabled={!currentQuestion || completing}
+                hasAudioAttached={Boolean(audioBlob)}
+                hasVideoAttached={Boolean(videoBlob)}
+              />
 
-              {lastEval.textEvaluation?.strengths?.length > 0 && (
-                <div className="eval-concepts-row">
-                  <span className="concepts-label">Covered Strengths:</span>
-                  <div className="concept-tags-list">
-                    {lastEval.textEvaluation.strengths.slice(0, 3).map((s, i) => (
-                      <span key={i} className="concept-chip concept-covered">{s}</span>
-                    ))}
+              {/* Error Banner */}
+              {error && (
+                <div className="interview-error-banner animate-fade-in">
+                  <AlertCircle size={15} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* Media Notice Banner (Non-destructive) */}
+              {mediaNotice && (
+                <div
+                  className="interview-notice-banner animate-fade-in"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 14px',
+                    background: 'rgba(245, 158, 11, 0.1)',
+                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                    borderRadius: '8px',
+                    color: '#fbbf24',
+                    fontSize: '13px',
+                    margin: '8px 0',
+                  }}
+                >
+                  <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+                  <span>{mediaNotice}</span>
+                </div>
+              )}
+
+              {/* Evaluated Previous Answer (Collapsible / Unobtrusive Feedback) */}
+              {lastEval && (
+                <div className="previous-eval-card glass-card animate-fade-in">
+                  <div className="previous-eval-header">
+                    <div className="eval-status-left">
+                       <ShieldCheck size={16} className="eval-success-icon" />
+                      <span className="eval-card-title">Previous Answer Evaluated</span>
+                    </div>
+                    <div className="eval-tag-group">
+                      <span className="badge badge-green">AI Evaluated</span>
+                      <span className="eval-score-badge">
+                        {lastEval.textEvaluation?.textScore ?? lastEval.evaluation?.score ?? '—'}/100
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {lastEval.textEvaluation?.missingConcepts?.length > 0 && (
-                <div className="eval-concepts-row">
-                  <span className="concepts-label">Suggested Additions:</span>
-                  <div className="concept-tags-list">
-                    {lastEval.textEvaluation.missingConcepts.slice(0, 3).map((c, i) => (
-                      <span key={i} className="concept-chip concept-missing">{c}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
+                  {lastEval.textEvaluation?.strengths?.length > 0 && (
+                    <div className="eval-concepts-row">
+                      <span className="concepts-label">Covered Strengths:</span>
+                      <div className="concept-tags-list">
+                        {lastEval.textEvaluation.strengths.slice(0, 3).map((s, i) => (
+                          <span key={i} className="concept-chip concept-covered">{s}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-              {(lastEval.textEvaluation?.feedback || lastEval.evaluation?.feedback) && (
-                <p className="eval-feedback-paragraph">
-                  {lastEval.textEvaluation?.feedback || lastEval.evaluation?.feedback}
-                </p>
-              )}
+                  {lastEval.textEvaluation?.missingConcepts?.length > 0 && (
+                    <div className="eval-concepts-row">
+                      <span className="concepts-label">Suggested Additions:</span>
+                      <div className="concept-tags-list">
+                        {lastEval.textEvaluation.missingConcepts.slice(0, 3).map((c, i) => (
+                          <span key={i} className="concept-chip concept-missing">{c}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-              {lastEval.textEvaluation?.improvementSuggestion && (
-                <div className="eval-improvement-row">
-                  <Sparkles size={12} />
-                  <span>{lastEval.textEvaluation.improvementSuggestion}</span>
+                  {(lastEval.textEvaluation?.feedback || lastEval.evaluation?.feedback) && (
+                    <p className="eval-feedback-paragraph">
+                      {lastEval.textEvaluation?.feedback || lastEval.evaluation?.feedback}
+                    </p>
+                  )}
+
+                  {lastEval.textEvaluation?.improvementSuggestion && (
+                    <div className="eval-improvement-row">
+                      <Sparkles size={12} />
+                      <span>{lastEval.textEvaluation.improvementSuggestion}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
+
+            {/* 4. Session Signals & Guidelines Section */}
+            <div className="workspace-side-area">
+              <InterviewSignalsCard
+                videoEnabled={videoEnabled}
+                isMicActive={isMicActive}
+                speechStatus={speechStatus}
+                targetSkill={currentQuestion?.targetSkill || currentQuestion?.skill}
+              />
+            </div>
+          </div>
         </div>
       </main>
-
-      {/* ── Floating Candidate Video Window (Draggable, Minimizable) ─────── */}
-      <FloatingVideoWindow
-        interviewId={id}
-        userName={user?.fullName || user?.firstName || 'Candidate'}
-        videoEnabled={videoEnabled}
-        onToggleVideo={handleToggleVideo}
-        isMicActive={isMicActive}
-        onToggleMic={handleToggleMic}
-        isRecording={isMediaRecording && videoEnabled}
-        onVideoBlob={(blob) => setVideoBlob(blob)}
-        videoRecorderRef={videoRecorderRef}
-        speechError={speechError}
-        disabled={submitting || skipping || completing}
-      />
 
       {/* ── Modals & Drawers ─────────────────────────────────────────────── */}
       <EndInterviewModal

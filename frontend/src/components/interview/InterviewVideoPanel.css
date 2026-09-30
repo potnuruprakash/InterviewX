@@ -1,0 +1,498 @@
+/* ============================================================
+   INTERVIEW VIDEO PANEL (RIGHT WORKSPACE PANEL)
+   ============================================================ */
+
+.interview-video-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ── 1. Camera Feed Card ────────────────────────────────────── */
+.ivp-camera-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.ivp-camera-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+[data-theme='light'] .ivp-camera-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+/* Card Header */
+.ivp-camera-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+[data-theme='light'] .ivp-camera-header {
+  background: #f8fafc;
+  border-bottom-color: #f1f5f9;
+}
+
+.ivp-user-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.ivp-user-icon {
+  color: var(--accent-secondary);
+  flex-shrink: 0;
+}
+
+.ivp-user-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+/* Status Badges */
+.rec-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rec-live {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.rec-dot-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: recPulse 1.2s infinite ease-in-out;
+}
+
+@keyframes recPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.4;
+  }
+}
+
+.rec-standby {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.rec-dot-idle {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.rec-disabled {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.rec-dot-off {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+/* Viewport 16:9 Container */
+.ivp-viewport-container {
+  width: 100%;
+  background: #000000;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ivp-aspect-ratio-box {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #050508;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ivp-video-recorder-mount {
+  width: 100%;
+  height: 100%;
+}
+
+.ivp-video-recorder-mount .camera-embed-wrapper,
+.ivp-video-recorder-mount .camera-viewport {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.ivp-video-recorder-mount .camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Offline Avatar State */
+.ivp-camera-off-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  text-align: center;
+}
+
+.ivp-avatar-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.3) 0%, rgba(6, 182, 212, 0.3) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ivp-avatar-text {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.ivp-camera-off-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ivp-enable-cam-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  margin-top: 2px;
+}
+
+/* Card Footer Controls */
+.ivp-camera-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-top: 1px solid var(--border-subtle);
+  gap: 8px;
+}
+
+[data-theme='light'] .ivp-camera-footer {
+  background: #f8fafc;
+  border-top-color: #f1f5f9;
+}
+
+.ivp-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ivp-control-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.ivp-control-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.ivp-control-btn.is-active {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.35);
+  color: #c4b5fd;
+}
+
+.ivp-control-btn.is-off,
+.ivp-control-btn.is-muted {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+.ivp-resolution-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+/* ── 2. Session Signals Card ────────────────────────────────── */
+.ivp-signals-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme='light'] .ivp-signals-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+.ivp-signals-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ivp-signals-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.ivp-signals-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+.ivp-signals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ivp-signal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+[data-theme='light'] .ivp-signal-row {
+  background: #f8fafc;
+  border-color: #f1f5f9;
+}
+
+.ivp-signal-icon-box {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.signal-blue {
+  background: rgba(6, 182, 212, 0.12);
+  color: #06b6d4;
+}
+
+.signal-purple {
+  background: rgba(124, 58, 237, 0.12);
+  color: #a78bfa;
+}
+
+.signal-emerald {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.ivp-signal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ivp-signal-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ivp-signal-status {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.signal-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-green {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+.status-amber {
+  background: #f59e0b;
+}
+
+.status-gray {
+  background: var(--text-muted);
+}
+
+/* Tips Box */
+.ivp-tips-box {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(124, 58, 237, 0.05);
+  border: 1px solid rgba(124, 58, 237, 0.15);
+}
+
+[data-theme='light'] .ivp-tips-box {
+  background: #faf5ff;
+  border-color: #f3e8ff;
+}
+
+.ivp-tip-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-accent);
+  margin-bottom: 6px;
+}
+
+.ivp-tip-sparkle {
+  color: var(--accent-secondary);
+}
+
+.ivp-tips-list {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.ivp-tips-list kbd {
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+/* ── Mobile Layout Adjustments ──────────────────────────────── */
+@media (max-width: 1023px) {
+  .ivp-signals-card {
+    display: none; /* Hide secondary signals card on smaller devices to keep viewport focused */
+  }
+}
+
+@media (max-width: 767px) {
+  .interview-video-panel {
+    gap: 10px;
+  }
+
+  .ivp-camera-header {
+    padding: 8px 12px;
+  }
+
+  .ivp-camera-footer {
+    padding: 6px 10px;
+  }
+
+  .ivp-viewport-container {
+    padding: 4px;
+  }
+}

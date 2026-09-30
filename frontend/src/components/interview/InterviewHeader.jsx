@@ -21,6 +21,8 @@ function InterviewHeader({
   isMicActive = true,
   onEndInterview,
   onBrandClick,
+  questionNumber,
+  totalQuestions,
 }) {
   const formattedType = interviewType
     ? interviewType.toLowerCase().includes('interview')
@@ -57,11 +59,19 @@ function InterviewHeader({
           </div>
         </div>
 
-        {/* ── Center: Interview in progress ───────────────────────────── */}
+        {/* ── Center: Question Progress + Live Status ─────────────────── */}
         <div className="topbar-section-center">
+          {questionNumber != null && totalQuestions != null && (
+            <div className="topbar-question-pill" title={`Question ${questionNumber} of ${totalQuestions}`}>
+              <span className="question-pill-label">Question</span>
+              <span className="question-pill-val">
+                <strong>{questionNumber}</strong> <span className="pill-slash">/</span> {totalQuestions}
+              </span>
+            </div>
+          )}
           <div className="interview-status-indicator">
             <span className="live-status-pulse" />
-            <span className="live-status-label">Interview in progress</span>
+            <span className="live-status-label">In Progress</span>
           </div>
         </div>
 

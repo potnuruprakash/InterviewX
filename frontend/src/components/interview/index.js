@@ -1,5 +1,6 @@
 export { default as InterviewTimer } from './InterviewTimer'
 export { default as FloatingVideoWindow } from './FloatingVideoWindow'
+export { default as InterviewVideoPanel, InterviewCameraCard, InterviewSignalsCard } from './InterviewVideoPanel'
 export { default as InterviewHeader } from './InterviewHeader'
 export { default as QuestionCard } from './QuestionCard'
 export { EndInterviewModal, SkipConfirmModal } from './InterviewEndDialog'
