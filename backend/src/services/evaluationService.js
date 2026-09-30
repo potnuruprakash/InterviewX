@@ -59,6 +59,26 @@ const developmentEvaluate = (questionText, answerText, difficulty = 'medium') =>
  * Derives structured 5-dimension scores from text evaluation.
  * Dimensions: correctness, completeness, technicalDepth, reasoning, relevance
  */
+/**
+ * Detect responses that contain too little substance to support a normal
+ * technical evaluation. Short but relevant technical answers are still evaluated.
+ */
+const detectNonSubstantiveAnswer = (answerText, semanticScore = null, conceptCoverage = null, expectedConcepts = []) => {
+  const normalized = String(answerText || '').trim().toLowerCase();
+  const wordCount = normalized ? normalized.split(/\s+/).length : 0;
+  if (!normalized) return { isNonSubstantive: true, reason: 'empty_answer' };
+  const nonAnswerPhrases = ['i dont know', "i don't know", 'not sure', 'no idea', 'i have no idea', 'cannot answer', "can't answer", 'skip'];
+  if (nonAnswerPhrases.includes(normalized)) return { isNonSubstantive: true, reason: 'non_answer_phrase' };
+  const hasExpectedConcept = expectedConcepts.some((concept) => {
+    const value = String(concept || '').trim().toLowerCase();
+    return value && normalized.includes(value);
+  });
+  if (wordCount <= 2 && !hasExpectedConcept) return { isNonSubstantive: true, reason: 'too_short' };
+  if (wordCount <= 7 && !hasExpectedConcept && typeof semanticScore === 'number' && semanticScore < 15 && (typeof conceptCoverage !== 'number' || conceptCoverage <= 0)) {
+    return { isNonSubstantive: true, reason: 'insufficient_relevance' };
+  }
+  return { isNonSubstantive: false, reason: null };
+};
 const buildFiveDimensionEvaluation = (questionText, answerText, baseScore, expectedConcepts = [], sbertResult = null) => {
   const words = answerText ? answerText.trim().split(/\s+/) : [];
   const wordCount = words.length;
@@ -170,25 +190,49 @@ const evaluateResponse = async (questionText, answerText, difficulty = 'medium',
   let legacyEval;
 
   if (sbertAvailable) {
-    const fiveDim = buildFiveDimensionEvaluation(
-      questionText,
+    const nonSubstantive = detectNonSubstantiveAnswer(
       answerText,
-      sbertResult.textScore,
-      expectedConcepts,
-      sbertResult
+      sbertResult.semanticScore,
+      sbertResult.conceptCoverage,
+      expectedConcepts
     );
+
+    const fiveDim = nonSubstantive.isNonSubstantive
+      ? {
+          correctness: 0,
+          completeness: 0,
+          technicalDepth: 0,
+          reasoning: 0,
+          relevance: 0,
+          overallScore: 0,
+          strengths: [],
+          weaknesses: ['Response did not contain enough relevant technical content to evaluate.'],
+          recommendedNextDifficulty: 'easy',
+        }
+      : buildFiveDimensionEvaluation(
+          questionText,
+          answerText,
+          sbertResult.textScore,
+          expectedConcepts,
+          sbertResult
+        );
 
     textEvaluation = {
       ...fiveDim,
       semanticScore: sbertResult.semanticScore,
       conceptCoverage: sbertResult.conceptCoverage,
       textScore: fiveDim.overallScore,
-      feedback: sbertResult.feedback,
-      strengths: [...new Set([...fiveDim.strengths, ...(sbertResult.strengths || [])])],
+      feedback: nonSubstantive.isNonSubstantive
+        ? 'The response did not address the question with enough substantive technical content.'
+        : sbertResult.feedback,
+      strengths: [...new Set([...fiveDim.strengths, ...(nonSubstantive.isNonSubstantive ? [] : (sbertResult.strengths || []))])],
       weaknesses: fiveDim.weaknesses,
-      missingConcepts: sbertResult.missingConcepts || [],
-      improvementSuggestion: sbertResult.improvementSuggestion || null,
+      missingConcepts: sbertResult.missingConcepts || expectedConcepts.slice(0, 5),
+      improvementSuggestion: nonSubstantive.isNonSubstantive
+        ? 'Provide a technical explanation that addresses: ' + expectedConcepts.slice(0, 5).join(', ') + '.'
+        : (sbertResult.improvementSuggestion || null),
       confidence: sbertResult.confidence,
+      evaluationStatus: nonSubstantive.isNonSubstantive ? 'non_substantive' : 'evaluated',
       modelStatus: 'sbert_evaluated',
     };
 
@@ -203,23 +247,42 @@ const evaluateResponse = async (questionText, answerText, difficulty = 'medium',
   } else {
     // Development fallback
     const devEval = developmentEvaluate(questionText, answerText, difficulty);
-    const fiveDim = buildFiveDimensionEvaluation(
-      questionText,
-      answerText,
-      devEval.score,
-      expectedConcepts,
-      null
-    );
+    const nonSubstantive = detectNonSubstantiveAnswer(answerText, null, null, expectedConcepts);
+
+    const fiveDim = nonSubstantive.isNonSubstantive
+      ? {
+          correctness: 0,
+          completeness: 0,
+          technicalDepth: 0,
+          reasoning: 0,
+          relevance: 0,
+          overallScore: 0,
+          strengths: [],
+          weaknesses: ['Response did not contain enough relevant technical content to evaluate.'],
+          recommendedNextDifficulty: 'easy',
+        }
+      : buildFiveDimensionEvaluation(
+          questionText,
+          answerText,
+          devEval.score,
+          expectedConcepts,
+          null
+        );
 
     textEvaluation = {
       ...fiveDim,
       semanticScore: null,
       conceptCoverage: null,
       textScore: fiveDim.overallScore,
-      feedback: devEval.feedback,
-      missingConcepts: expectedConcepts.length > 0 ? expectedConcepts.slice(0, 3) : [],
-      improvementSuggestion: fiveDim.weaknesses.length > 0 ? `Focus on: ${fiveDim.weaknesses.join(', ')}` : null,
+      feedback: nonSubstantive.isNonSubstantive
+        ? 'The response did not address the question with enough substantive technical content.'
+        : devEval.feedback,
+      missingConcepts: expectedConcepts.length > 0 ? expectedConcepts.slice(0, 5) : [],
+      improvementSuggestion: nonSubstantive.isNonSubstantive
+        ? 'Provide a technical explanation that addresses: ' + expectedConcepts.slice(0, 5).join(', ') + '.'
+        : (fiveDim.weaknesses.length > 0 ? 'Focus on: ' + fiveDim.weaknesses.join(', ') : null),
       confidence: null,
+      evaluationStatus: nonSubstantive.isNonSubstantive ? 'non_substantive' : 'evaluated',
       modelStatus: sbertResult?.modelStatus || 'ai_service_unavailable',
     };
 
