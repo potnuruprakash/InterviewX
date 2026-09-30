@@ -62,10 +62,7 @@ authApi.interceptors.request.use(async (config) => {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    const resolvedUserId = currentUserId || (typeof window !== 'undefined' ? window.Clerk?.user?.id : null)
-    if (resolvedUserId) {
-      config.headers['x-dev-clerk-user-id'] = resolvedUserId
-    }
+
   } catch (err) {
     console.warn('[API] Could not retrieve Clerk token:', err.message)
   }
@@ -89,10 +86,6 @@ authApi.interceptors.response.use(
         }
         if (freshToken) {
           originalRequest.headers.Authorization = `Bearer ${freshToken}`
-          const resolvedUserId = currentUserId || (typeof window !== 'undefined' ? window.Clerk?.user?.id : null)
-          if (resolvedUserId) {
-            originalRequest.headers['x-dev-clerk-user-id'] = resolvedUserId
-          }
           return authApi(originalRequest)
         }
       } catch (retryErr) {
