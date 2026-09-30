@@ -34,6 +34,41 @@ const aiConversationSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Dedicated chat-session metadata used by the Dashboard and Results chat APIs.
+    title: {
+      type: String,
+      default: 'New Chat',
+    },
+    contextType: {
+      type: String,
+      enum: ['dashboard', 'results'],
+      default: 'dashboard',
+      index: true,
+    },
+    sourceInterviewId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Interview',
+      default: null,
+      index: true,
+    },
+    topic: {
+      type: String,
+      default: 'General Interview Preparation',
+    },
+    difficulty: {
+      type: String,
+      default: 'Intermediate',
+    },
+    lastMessagePreview: {
+      type: String,
+      default: '',
+    },
+    status: {
+      type: String,
+      enum: ['active', 'archived'],
+      default: 'active',
+      index: true,
+    },
     goal: {
       type: String,
       default: 'General interview preparation and technical skill improvement',
