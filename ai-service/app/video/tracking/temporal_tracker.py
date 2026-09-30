@@ -1,6 +1,5 @@
 """
-Temporal Frame Tracking & Stability Module
-Tracks bounding box stability, movement, and expression transitions across video timestamps.
+Temporal tracking for observable video signals.
 """
 
 import math
@@ -21,11 +20,15 @@ class FrameTimelineEvent:
     expression: str
     expression_confidence: float
     bbox: Optional[List[float]]
+    pose_detected: bool = False
+    posture_score: Optional[float] = None
+    shoulder_tilt_degrees: Optional[float] = None
+    torso_center_x: Optional[float] = None
+    torso_center_y: Optional[float] = None
+    gaze_method: str = "unavailable"
 
 
 class TemporalTracker:
-    """Tracks sequence of frame events and calculates movement stability and transitions."""
-
     def __init__(self):
         self.events: List[FrameTimelineEvent] = []
 
@@ -33,56 +36,44 @@ class TemporalTracker:
         self.events.append(event)
 
     def calculate_movement_stability(self) -> Dict[str, any]:
-        """
-        Calculates centroid drift across consecutive frames with detected persons.
-        Returns stability index (0 - 100) and movement descriptor.
-        """
-        valid_boxes = [e.bbox for e in self.events if e.person_detected and e.bbox is not None]
-        if len(valid_boxes) < 2:
-            return {
-                "stability_index": 85.0,
-                "movement_assessment": "steady",
-                "average_drift": 0.0,
-            }
+        valid = [e.bbox for e in self.events if e.person_detected and e.bbox is not None]
+        if len(valid) < 2:
+            return {"stability_index": 85.0, "movement_assessment": "steady", "average_drift": 0.0}
 
         drifts = []
-        for i in range(1, len(valid_boxes)):
-            prev_b = valid_boxes[i - 1]
-            curr_b = valid_boxes[i]
-            prev_cx = (prev_b[0] + prev_b[2]) / 2.0
-            prev_cy = (prev_b[1] + prev_b[3]) / 2.0
-            curr_cx = (curr_b[0] + curr_b[2]) / 2.0
-            curr_cy = (curr_b[1] + curr_b[3]) / 2.0
+        for prev_b, curr_b in zip(valid, valid[1:]):
+            prev_cx, prev_cy = (prev_b[0] + prev_b[2]) / 2, (prev_b[1] + prev_b[3]) / 2
+            curr_cx, curr_cy = (curr_b[0] + curr_b[2]) / 2, (curr_b[1] + curr_b[3]) / 2
+            drifts.append(math.sqrt((curr_cx - prev_cx) ** 2 + (curr_cy - prev_cy) ** 2))
 
-            dist = math.sqrt((curr_cx - prev_cx) ** 2 + (curr_cy - prev_cy) ** 2)
-            drifts.append(dist)
+        avg_drift = sum(drifts) / len(drifts)
+        stability = max(30.0, min(100.0, round(100.0 - avg_drift * 200.0, 1)))
+        assessment = "steady" if stability >= 80 else "moderate_movement" if stability >= 60 else "frequent_movement"
+        return {"stability_index": stability, "movement_assessment": assessment, "average_drift": round(avg_drift, 3)}
 
-        avg_drift = sum(drifts) / len(drifts) if drifts else 0.0
-        # Drift > 0.15 normalized distance per sample is heavy movement
-        stability = max(30.0, min(100.0, round(100.0 - (avg_drift * 200.0), 1)))
+    def calculate_pose_stability(self) -> Dict[str, any]:
+        scores = [e.posture_score for e in self.events if e.pose_detected and e.posture_score is not None]
+        centers = [(e.torso_center_x, e.torso_center_y) for e in self.events if e.pose_detected and e.torso_center_x is not None]
 
-        if stability >= 80:
-            assessment = "steady"
-        elif stability >= 60:
-            assessment = "moderate_movement"
-        else:
-            assessment = "frequent_movement"
+        if not scores:
+            return {"available": False, "posture_score": None, "stability_index": None, "average_center_drift": None}
 
+        posture_score = round(sum(scores) / len(scores), 3)
+        center_drift = 0.0
+        if len(centers) > 1:
+            center_drift = sum(
+                math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
+                for a, b in zip(centers, centers[1:])
+            ) / (len(centers) - 1)
+
+        stability = max(0.0, min(1.0, posture_score * (1.0 - min(1.0, center_drift * 3.0))))
         return {
-            "stability_index": stability,
-            "movement_assessment": assessment,
-            "average_drift": round(avg_drift, 3),
+            "available": True,
+            "posture_score": round(posture_score, 3),
+            "stability_index": round(stability, 3),
+            "average_center_drift": round(center_drift, 4),
         }
 
     def calculate_expression_transitions(self) -> int:
-        """Counts how many times the dominant facial expression transitioned."""
-        valid_expressions = [e.expression for e in self.events if e.face_detected and e.expression]
-        if len(valid_expressions) < 2:
-            return 0
-
-        transitions = 0
-        for i in range(1, len(valid_expressions)):
-            if valid_expressions[i] != valid_expressions[i - 1]:
-                transitions += 1
-
-        return transitions
+        valid = [e.expression for e in self.events if e.face_detected and e.expression]
+        return sum(1 for a, b in zip(valid, valid[1:]) if a != b) if len(valid) > 1 else 0
