@@ -103,6 +103,7 @@ const VideoRecorder = forwardRef(function VideoRecorder(
   const startMediaRecording = () => {
     if (!streamRef.current) return
     chunksRef.current = []
+    lastBlobRef.current = null
 
     try {
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
@@ -141,13 +142,20 @@ const VideoRecorder = forwardRef(function VideoRecorder(
     }
   }
 
+  const lastBlobRef = useRef(null)
+
   const stopAndGetBlob = () => {
     return new Promise((resolve) => {
       const mr = mediaRecorderRef.current
       if (!mr || mr.state === 'inactive') {
+        if (lastBlobRef.current) {
+          resolve(lastBlobRef.current)
+          return
+        }
         if (chunksRef.current.length > 0) {
           const mimeType = mr?.mimeType || 'video/webm'
           const blob = new Blob(chunksRef.current, { type: mimeType })
+          lastBlobRef.current = blob
           resolve(blob.size > 0 ? blob : null)
         } else {
           resolve(null)
@@ -158,25 +166,51 @@ const VideoRecorder = forwardRef(function VideoRecorder(
       const mimeType = mr.mimeType || 'video/webm'
       const prevOnStop = mr.onstop
 
+      let hasResolved = false
+      const timeoutId = setTimeout(() => {
+        if (!hasResolved) {
+          hasResolved = true
+          if (chunksRef.current.length > 0) {
+            const blob = new Blob(chunksRef.current, { type: mimeType })
+            lastBlobRef.current = blob
+            resolve(blob.size > 0 ? blob : null)
+          } else {
+            resolve(null)
+          }
+        }
+      }, 3000)
+
       mr.onstop = (e) => {
+        clearTimeout(timeoutId)
         try {
           if (prevOnStop) prevOnStop(e)
         } catch (err) {
           console.warn('[VideoRecorder] onstop handler err:', err)
         }
-        if (chunksRef.current.length > 0) {
-          const blob = new Blob(chunksRef.current, { type: mimeType })
-          resolve(blob.size > 0 ? blob : null)
-        } else {
-          resolve(null)
+        if (!hasResolved) {
+          hasResolved = true
+          if (chunksRef.current.length > 0) {
+            const blob = new Blob(chunksRef.current, { type: mimeType })
+            lastBlobRef.current = blob
+            resolve(blob.size > 0 ? blob : null)
+          } else {
+            resolve(null)
+          }
         }
       }
 
       try {
+        if (typeof mr.requestData === 'function' && mr.state === 'recording') {
+          try { mr.requestData() } catch (_) {}
+        }
         mr.stop()
       } catch (err) {
+        clearTimeout(timeoutId)
         console.warn('[VideoRecorder] Error in stop():', err)
-        resolve(null)
+        if (!hasResolved) {
+          hasResolved = true
+          resolve(chunksRef.current.length > 0 ? new Blob(chunksRef.current, { type: mimeType }) : null)
+        }
       }
     })
   }

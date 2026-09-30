@@ -47,6 +47,7 @@ export default function InterviewPage() {
   const [videoBlob, setVideoBlob] = useState(null)
   const [isMediaRecording, setIsMediaRecording] = useState(false)
   const [mediaSubmitting, setMediaSubmitting] = useState(false)
+  const [mediaNotice, setMediaNotice] = useState(null)
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const startedRef = useRef(null)
@@ -130,21 +131,21 @@ export default function InterviewPage() {
     initInterview()
   }, [id, isLoaded, isSignedIn, navigate, authApi])
 
-  // ── Auto-start Speech Recognition for New Questions ───────────────────────
+  // ── Auto-start Speech Recognition & Media Recording for New Questions ────
   useEffect(() => {
     if (!currentQuestion || loading || isComplete) return
-    if (!isSpeechSupported) return
-    if (isListening) return
     if (autoStartedSpeechRef.current === currentQuestion.id) return
 
     autoStartedSpeechRef.current = currentQuestion.id
     const timer = setTimeout(() => {
-      startListening()
+      if (isSpeechSupported && !isListening) {
+        startListening()
+      }
       setIsMediaRecording(true)
     }, 400)
 
     return () => clearTimeout(timer)
-  }, [currentQuestion?.id, loading, isComplete, isSpeechSupported, isListening, startListening])
+  }, [currentQuestion, loading, isComplete, isSpeechSupported, isListening, startListening])
 
   // ── Timeout Expiry Handler (Hits 00:00) ────────────────────────────────────
   const handleTimeoutAutoEnd = useCallback(async () => {
@@ -214,49 +215,107 @@ export default function InterviewPage() {
     }, 200)
   }, [isListening, isSpeechSupported, resetSpeech, startListening, stopListening])
 
-  // ── Media Upload Synchronization (Background) ─────────────────────────────
+  // ── Media Upload Synchronization (Structured Results) ─────────────────────
   const submitMedia = async (responseId, questionId, curAudioBlob, curVideoBlob) => {
-    const promises = []
+    const results = {
+      audio: { submitted: false, error: null, data: null },
+      video: { submitted: false, error: null, data: null },
+    }
 
-    if (curAudioBlob) {
+    const tasks = []
+
+    if (curAudioBlob && curAudioBlob.size > 0) {
       const formData = new FormData()
       formData.append('audio', curAudioBlob, 'recording.webm')
       formData.append('responseId', responseId)
       formData.append('questionId', questionId)
-      promises.push(
+      tasks.push(
         authApi
           .post(`/api/interviews/${id}/audio-response`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
           })
-          .catch((e) => console.warn('[Interview] Audio upload notice:', e.message))
+          .then((res) => {
+            results.audio = { submitted: true, error: null, data: res.data }
+          })
+          .catch((e) => {
+            console.warn('[Interview] Audio upload notice:', e?.message || e)
+            results.audio = {
+              submitted: false,
+              error: e?.response?.data?.message || e?.message || 'Audio upload failed',
+              data: null,
+            }
+          })
       )
     }
 
-    if (curVideoBlob) {
+    if (curVideoBlob && curVideoBlob.size > 0) {
       const formData = new FormData()
       formData.append('video', curVideoBlob, 'recording.webm')
       formData.append('responseId', responseId)
       formData.append('questionId', questionId)
-      promises.push(
+      tasks.push(
         authApi
           .post(`/api/interviews/${id}/video-response`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
           })
-          .catch((e) => console.warn('[Interview] Video upload notice:', e.message))
+          .then((res) => {
+            results.video = { submitted: true, error: null, data: res.data }
+          })
+          .catch((e) => {
+            console.warn('[Interview] Video upload notice:', e?.message || e)
+            results.video = {
+              submitted: false,
+              error: e?.response?.data?.message || e?.message || 'Video upload failed',
+              data: null,
+            }
+          })
       )
     }
 
-    if (promises.length > 0) {
+    if (tasks.length > 0) {
       setMediaSubmitting(true)
-      await Promise.all(promises).finally(() => setMediaSubmitting(false))
+      try {
+        await Promise.all(tasks)
+      } finally {
+        setMediaSubmitting(false)
+      }
     }
+
+    return results
   }
 
   // ── Submit Answer ─────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!currentQuestion || submitting || skipping || completing || isComplete) return
 
+    // 1. Stop speech recognition
     if (isListening) stopListening()
+
+    // 2. Stop media recording and obtain completed Blobs before proceeding
+    let currentVideo = videoBlob
+    if (videoRecorderRef.current && isMediaRecording) {
+      try {
+        const recordedVideo = await videoRecorderRef.current.stopAndGetBlob()
+        if (recordedVideo) {
+          currentVideo = recordedVideo
+        }
+      } catch (recErr) {
+        console.warn('[Interview] Video stop error:', recErr)
+      }
+    }
+
+    let currentAudio = audioBlob
+    if (audioRecorderRef.current && isMediaRecording) {
+      try {
+        const recordedAudio = await audioRecorderRef.current.stopAndGetBlob()
+        if (recordedAudio) {
+          currentAudio = recordedAudio
+        }
+      } catch (recErr) {
+        console.warn('[Interview] Audio stop error:', recErr)
+      }
+    }
+
     setIsMediaRecording(false)
 
     const textToSubmit = answer.trim()
@@ -264,6 +323,7 @@ export default function InterviewPage() {
 
     setSubmitting(true)
     setError(null)
+    setMediaNotice(null)
 
     try {
       const payload = {
@@ -274,16 +334,19 @@ export default function InterviewPage() {
         language: null,
       }
 
+      // Step 1: Submit text response to create MongoDB Response record
       const res = await authApi.post(`/api/interviews/${id}/responses`, payload)
 
       const responseId = res.data.response?.id
       const questionId = currentQuestion.id
-      const currentAudio = audioBlob
-      const currentVideo = videoBlob
 
-      // Upload and analyze media before advancing so final results include all modalities.
-      // This prevents the Results page from being generated/cached before video analysis completes.
-      await submitMedia(responseId, questionId, currentAudio, currentVideo)
+      // Step 2 & 3 & 4: Upload and analyze media before advancing so final results include video metrics
+      const mediaResults = await submitMedia(responseId, questionId, currentAudio, currentVideo)
+
+      // If video was recorded but failed, display non-destructive notice without blocking
+      if (currentVideo && mediaResults.video?.error) {
+        setMediaNotice('Video analysis could not be completed. Your technical evaluation is still available.')
+      }
 
       setLastEval(res.data.response)
       setAnswer('')
@@ -610,6 +673,28 @@ export default function InterviewPage() {
             <div className="interview-error-banner animate-fade-in">
               <AlertCircle size={15} />
               <span>{error}</span>
+            </div>
+          )}
+
+          {/* Media Notice Banner (Non-destructive) */}
+          {mediaNotice && (
+            <div
+              className="interview-notice-banner animate-fade-in"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 14px',
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                borderRadius: '8px',
+                color: '#fbbf24',
+                fontSize: '13px',
+                margin: '10px 0',
+              }}
+            >
+              <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+              <span>{mediaNotice}</span>
             </div>
           )}
 

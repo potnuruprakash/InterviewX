@@ -55,6 +55,7 @@ const AudioRecorder = forwardRef(function AudioRecorder(
 
   const startRecording = async () => {
     chunksRef.current = []
+    lastBlobRef.current = null
     let stream = streamRef.current
     if (!stream) {
       stream = await requestMic()
@@ -88,6 +89,8 @@ const AudioRecorder = forwardRef(function AudioRecorder(
     }
   }
 
+  const lastBlobRef = useRef(null)
+
   const stopRecording = () => {
     try {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -96,6 +99,76 @@ const AudioRecorder = forwardRef(function AudioRecorder(
     } catch (err) {
       console.warn('[AudioRecorder] Stop error:', err.message)
     }
+  }
+
+  const stopAndGetBlob = () => {
+    return new Promise((resolve) => {
+      const mr = mediaRecorderRef.current
+      if (!mr || mr.state === 'inactive') {
+        if (lastBlobRef.current) {
+          resolve(lastBlobRef.current)
+          return
+        }
+        if (chunksRef.current.length > 0) {
+          const blob = new Blob(chunksRef.current, { type: mr?.mimeType || 'audio/webm' })
+          lastBlobRef.current = blob
+          resolve(blob.size > 0 ? blob : null)
+        } else {
+          resolve(null)
+        }
+        return
+      }
+
+      const mimeType = mr.mimeType || 'audio/webm'
+      const prevOnStop = mr.onstop
+
+      let hasResolved = false
+      const timeoutId = setTimeout(() => {
+        if (!hasResolved) {
+          hasResolved = true
+          if (chunksRef.current.length > 0) {
+            const blob = new Blob(chunksRef.current, { type: mimeType })
+            lastBlobRef.current = blob
+            resolve(blob.size > 0 ? blob : null)
+          } else {
+            resolve(null)
+          }
+        }
+      }, 3000)
+
+      mr.onstop = (e) => {
+        clearTimeout(timeoutId)
+        try {
+          if (prevOnStop) prevOnStop(e)
+        } catch (err) {
+          console.warn('[AudioRecorder] onstop handler err:', err)
+        }
+        if (!hasResolved) {
+          hasResolved = true
+          if (chunksRef.current.length > 0) {
+            const blob = new Blob(chunksRef.current, { type: mimeType })
+            lastBlobRef.current = blob
+            resolve(blob.size > 0 ? blob : null)
+          } else {
+            resolve(null)
+          }
+        }
+      }
+
+      try {
+        if (typeof mr.requestData === 'function' && mr.state === 'recording') {
+          try { mr.requestData() } catch (_) {}
+        }
+        mr.stop()
+      } catch (err) {
+        clearTimeout(timeoutId)
+        console.warn('[AudioRecorder] Stop error in stopAndGetBlob:', err.message)
+        if (!hasResolved) {
+          hasResolved = true
+          resolve(chunksRef.current.length > 0 ? new Blob(chunksRef.current, { type: mimeType }) : null)
+        }
+      }
+    })
   }
 
   useEffect(() => {
@@ -115,6 +188,7 @@ const AudioRecorder = forwardRef(function AudioRecorder(
   useImperativeHandle(ref, () => ({
     startRecording,
     stopRecording,
+    stopAndGetBlob,
     cleanup,
   }))
 

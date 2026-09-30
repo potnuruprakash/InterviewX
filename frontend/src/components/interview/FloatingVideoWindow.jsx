@@ -175,54 +175,55 @@ function FloatingVideoWindow({
     .substring(0, 2)
     .toUpperCase() || 'U'
 
-  // Minimized Compact Bubble View
-  if (isMinimized) {
-    return (
+  // Render Floating Video Window (keeps VideoRecorder mounted when minimized so recording/stream is uninterrupted)
+  return (
+    <>
+      {/* Minimized Compact Bubble View */}
+      {isMinimized && (
+        <div
+          ref={windowRef}
+          className={`floating-video-bubble ${isDragging ? 'is-dragging' : ''}`}
+          style={{
+            transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onClick={() => !isDragging && setIsMinimized(false)}
+          role="button"
+          tabIndex={0}
+          aria-label="Restore candidate video window"
+          title="Candidate camera minimized — click to restore"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              setIsMinimized(false)
+            }
+          }}
+        >
+          <div className="bubble-avatar">
+            {videoEnabled && !cameraPermissionError ? (
+              <Video size={16} className="bubble-cam-icon live" />
+            ) : (
+              <span className="bubble-initials">{userInitials}</span>
+            )}
+          </div>
+          <div className="bubble-status-dots">
+            <span className={`status-pip ${videoEnabled ? 'active' : 'off'}`} title={videoEnabled ? 'Camera on' : 'Camera off'} />
+            <span className={`status-pip ${isMicActive ? 'active' : 'muted'}`} title={isMicActive ? 'Mic on' : 'Mic muted'} />
+          </div>
+        </div>
+      )}
+
+      {/* Full Floating Video Window */}
       <div
-        ref={windowRef}
-        className={`floating-video-bubble ${isDragging ? 'is-dragging' : ''}`}
+        ref={isMinimized ? undefined : windowRef}
+        className={`floating-video-window ${isDragging ? 'is-dragging' : ''}`}
         style={{
           transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+          width: `${windowWidth}px`,
+          display: isMinimized ? 'none' : undefined,
         }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onClick={() => !isDragging && setIsMinimized(false)}
-        role="button"
-        tabIndex={0}
-        aria-label="Restore candidate video window"
-        title="Candidate camera minimized — click to restore"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            setIsMinimized(false)
-          }
-        }}
-      >
-        <div className="bubble-avatar">
-          {videoEnabled && !cameraPermissionError ? (
-            <Video size={16} className="bubble-cam-icon live" />
-          ) : (
-            <span className="bubble-initials">{userInitials}</span>
-          )}
-        </div>
-        <div className="bubble-status-dots">
-          <span className={`status-pip ${videoEnabled ? 'active' : 'off'}`} title={videoEnabled ? 'Camera on' : 'Camera off'} />
-          <span className={`status-pip ${isMicActive ? 'active' : 'muted'}`} title={isMicActive ? 'Mic on' : 'Mic muted'} />
-        </div>
-      </div>
-    )
-  }
-
-  // Full Floating Video Window
-  return (
-    <div
-      ref={windowRef}
-      className={`floating-video-window ${isDragging ? 'is-dragging' : ''}`}
-      style={{
-        transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
-        width: `${windowWidth}px`,
-      }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -362,6 +363,7 @@ function FloatingVideoWindow({
         </div>
       </div>
     </div>
+    </>
   )
 }
 
