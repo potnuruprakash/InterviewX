@@ -80,7 +80,7 @@ jobs:
 
           for i in {1..30}; do
             if (echo > /dev/tcp/127.0.0.1/8000) >/dev/null 2>&1; then
-              echo "AI service is ready."
+              echo "AI service port is ready."
               break
             fi
 
@@ -92,6 +92,29 @@ jobs:
             fi
 
             sleep 1
+          done
+
+          echo "Waiting for authenticated AI text-evaluation readiness..."
+          for i in {1..60}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST http://127.0.0.1:8000/api/ai/text-evaluate \
+              -H "Content-Type: application/json" \
+              -H "X-Internal-Service-Key: test_internal_ai_secret_key_ci" \
+              --data '{"question":"health check","answer":"health check","expectedConcepts":[]}' || true)
+
+            if [ "$status" = "200" ]; then
+              echo "AI service model is ready."
+              break
+            fi
+
+            if [ "$i" -eq 60 ]; then
+              echo "AI service model did not become ready."
+              echo "===== AI SERVICE LOG ====="
+              cat "$RUNNER_TEMP/ai-service.log" || true
+              exit 1
+            fi
+
+            sleep 2
           done
 
       # --------------------------------------------------------
