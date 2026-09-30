@@ -281,8 +281,9 @@ export default function InterviewPage() {
       const currentAudio = audioBlob
       const currentVideo = videoBlob
 
-      // Background upload of audio/video modalities for Librosa & YOLO evaluation
-      submitMedia(responseId, questionId, currentAudio, currentVideo)
+      // Upload and analyze media before advancing so final results include all modalities.
+      // This prevents the Results page from being generated/cached before video analysis completes.
+      await submitMedia(responseId, questionId, currentAudio, currentVideo)
 
       setLastEval(res.data.response)
       setAnswer('')
