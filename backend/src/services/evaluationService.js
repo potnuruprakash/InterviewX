@@ -328,16 +328,17 @@ const evaluateVideo = async (videoFilePath) => {
 
   try {
     const rawResult = await aiService.analyzeVideo(videoFilePath);
-    const faceRatio = rawResult.faceVisibilityRatio ?? null;
-    const personRatio = rawResult.personDetectionRatio ?? null;
+    // These values are produced by the Python video pipeline from actual frame landmarks.
+    // Do not derive gaze from face visibility or posture from person-detection ratio.
+    const gazeAttentionRatio = rawResult.gazeAttentionRatio ?? rawResult.metrics?.gaze_alignment_ratio ?? null;
+    const postureStability = rawResult.postureStability ?? rawResult.metrics?.posture_stability_label ?? null;
+    const cameraEngagement = rawResult.cameraEngagement ?? rawResult.metrics?.camera_engagement ?? null;
 
-    const gazeAttentionRatio = faceRatio !== null ? Number(Math.min(1, Math.max(0, faceRatio * 0.95)).toFixed(2)) : null;
-    const postureStability = personRatio !== null ? (personRatio > 0.85 ? 'stable_posture' : 'frequent_repositioning') : null;
-    const cameraEngagement = gazeAttentionRatio !== null ? (gazeAttentionRatio > 0.8 ? 'direct_camera_engagement' : 'periodic_gaze_shift') : null;
-
-    let feedback = 'Candidate maintained consistent camera engagement and stable posture throughout the response.';
-    if (gazeAttentionRatio !== null && gazeAttentionRatio < 0.75) {
-      feedback = 'Periodic gaze shifts were observed during technical explanation, typical of recalling architectural details.';
+    let feedback = 'Observable camera alignment and pose signals were processed.';
+    if (gazeAttentionRatio !== null && gazeAttentionRatio < 0.55) {
+      feedback = 'The video contained limited camera/eye alignment across visible-face frames.';
+    } else if (gazeAttentionRatio !== null && gazeAttentionRatio >= 0.80) {
+      feedback = 'The video showed generally consistent camera/eye alignment across visible-face frames.';
     }
 
     return {
@@ -345,7 +346,7 @@ const evaluateVideo = async (videoFilePath) => {
       gazeAttentionRatio,
       postureStability,
       cameraEngagement,
-      feedback: rawResult.feedback || feedback,
+      feedback: rawResult.feedback || rawResult.metrics?.observable_observations?.join(' ') || feedback,
       modelStatus: rawResult.modelStatus || 'processed',
     };
   } catch (err) {
