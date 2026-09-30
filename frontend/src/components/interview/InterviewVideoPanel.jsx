@@ -1,15 +1,16 @@
 import { memo } from 'react'
 import {
-  Video, VideoOff, Mic, MicOff, User, Sparkles, Shield, Eye
+  Video, VideoOff, Mic, MicOff, User
 } from 'lucide-react'
 import VideoRecorder from '../VideoRecorder'
 import './InterviewVideoPanel.css'
 
 /**
- * InterviewCameraCard Component
+ * Enterprise Camera Card
  *
- * Fixed 16:9 aspect ratio candidate camera view.
- * Embeds VideoRecorder without layout shifting.
+ * Fixed 16:9 aspect ratio candidate camera feed.
+ * Keeps VideoRecorder continuously mounted to preserve streams and blobs.
+ * Compact, subtle recording indicators, zero bulky decorative frames.
  */
 export const InterviewCameraCard = memo(function InterviewCameraCard({
   userName = 'Candidate',
@@ -31,43 +32,42 @@ export const InterviewCameraCard = memo(function InterviewCameraCard({
     .toUpperCase() || 'C'
 
   return (
-    <div className="ivp-camera-card glass-card">
-      {/* Header: Candidate Info & Recording Status */}
-      <div className="ivp-camera-header">
-        <div className="ivp-user-label">
-          <User size={13} className="ivp-user-icon" />
-          <span className="ivp-user-name" title={userName}>
+    <div className="enterprise-camera-card glass-card">
+      {/* ── Header: Candidate Name & Quiet Status ────────────────────── */}
+      <div className="camera-header-row">
+        <div className="camera-user-info">
+          <User size={12} className="user-info-icon" />
+          <span className="user-info-name" title={userName}>
             {userName}
           </span>
         </div>
 
-        {/* Live Recording Badge */}
-        <div className="ivp-status-badge">
+        <div className="camera-status-pill-wrap">
           {videoEnabled && isRecording ? (
-            <span className="rec-badge rec-live" title="Video recording in progress">
-              <span className="rec-dot-pulse" />
+            <span className="rec-status-pill is-recording">
+              <span className="rec-pulse-dot" />
               <span>REC</span>
             </span>
           ) : videoEnabled ? (
-            <span className="rec-badge rec-standby" title="Camera stream active">
-              <span className="rec-dot-idle" />
-              <span>Live Feed</span>
+            <span className="rec-status-pill is-standby">
+              <span className="standby-dot" />
+              <span>Live</span>
             </span>
           ) : (
-            <span className="rec-badge rec-disabled" title="Camera turned off">
-              <span className="rec-dot-off" />
-              <span>Camera Off</span>
+            <span className="rec-status-pill is-off">
+              <span className="off-dot" />
+              <span>Off</span>
             </span>
           )}
         </div>
       </div>
 
-      {/* 16:9 Stable Camera Viewport */}
-      <div className="ivp-viewport-container">
-        <div className="ivp-aspect-ratio-box">
-          {/* Always keep VideoRecorder mounted so its ref and streams are not lost */}
+      {/* ── Fixed 16:9 Viewport Container ────────────────────────────── */}
+      <div className="camera-viewport-shell">
+        <div className="camera-aspect-16-9">
+          {/* Always mount VideoRecorder so ref and audio/video blob methods are active */}
           <div
-            className="ivp-video-recorder-mount"
+            className="video-recorder-mount-node"
             style={{ display: videoEnabled ? 'block' : 'none' }}
           >
             <VideoRecorder
@@ -79,20 +79,20 @@ export const InterviewCameraCard = memo(function InterviewCameraCard({
             />
           </div>
 
-          {/* Offline Avatar Viewport when video is disabled */}
+          {/* Clean Offline State when camera is turned off */}
           {!videoEnabled && (
-            <div className="ivp-camera-off-state animate-fade-in">
-              <div className="ivp-avatar-circle">
-                <span className="ivp-avatar-text">{userInitials}</span>
+            <div className="camera-offline-view animate-fade-in">
+              <div className="offline-avatar-badge">
+                <span>{userInitials}</span>
               </div>
-              <span className="ivp-camera-off-label">Camera is turned off</span>
+              <span className="offline-note">Camera turned off</span>
               <button
                 type="button"
-                className="btn btn-ghost btn-xs ivp-enable-cam-btn"
+                className="btn-enable-camera"
                 onClick={onToggleVideo}
                 disabled={disabled}
               >
-                <Video size={12} />
+                <Video size={11} />
                 <span>Turn On Camera</span>
               </button>
             </div>
@@ -100,48 +100,44 @@ export const InterviewCameraCard = memo(function InterviewCameraCard({
         </div>
       </div>
 
-      {/* Camera & Mic Controls Toolbar */}
-      <div className="ivp-camera-footer">
-        <div className="ivp-toggle-group">
-          {/* Camera Toggle */}
+      {/* ── Footer Controls: Compact Camera & Mic Toggles ─────────────── */}
+      <div className="camera-footer-controls">
+        <div className="hardware-toggles-cluster">
           <button
             type="button"
-            className={`ivp-control-btn ${videoEnabled ? 'is-active' : 'is-off'}`}
+            className={`btn-hw-toggle ${videoEnabled ? 'is-active' : 'is-inactive'}`}
             onClick={onToggleVideo}
             disabled={disabled}
             title={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
             aria-label={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
           >
-            {videoEnabled ? <Video size={13} /> : <VideoOff size={13} />}
+            {videoEnabled ? <Video size={12} /> : <VideoOff size={12} />}
             <span>{videoEnabled ? 'Camera' : 'Cam Off'}</span>
           </button>
 
-          {/* Mic Toggle */}
           <button
             type="button"
-            className={`ivp-control-btn ${isMicActive ? 'is-active' : 'is-muted'}`}
+            className={`btn-hw-toggle ${isMicActive ? 'is-active' : 'is-inactive'}`}
             onClick={onToggleMic}
             disabled={disabled}
             title={isMicActive ? 'Mute microphone' : 'Unmute microphone'}
             aria-label={isMicActive ? 'Mute microphone' : 'Unmute microphone'}
           >
-            {isMicActive ? <Mic size={13} /> : <MicOff size={13} />}
-            <span>{isMicActive ? 'Mic Active' : 'Muted'}</span>
+            {isMicActive ? <Mic size={12} /> : <MicOff size={12} />}
+            <span>{isMicActive ? 'Mic' : 'Muted'}</span>
           </button>
         </div>
 
-        <div className="ivp-resolution-tag" title="HD 16:9 Standard Video Capture">
-          <span>HD 16:9</span>
-        </div>
+        <span className="resolution-spec">16:9 HD</span>
       </div>
     </div>
   )
 })
 
 /**
- * InterviewSignalsCard Component
+ * Enterprise Unified Session & Guidelines Panel
  *
- * Real-time multimodal signals and candidate guidance tips.
+ * Compact, quiet right sidebar that supports the interview without visual competition.
  */
 export const InterviewSignalsCard = memo(function InterviewSignalsCard({
   videoEnabled = true,
@@ -150,68 +146,58 @@ export const InterviewSignalsCard = memo(function InterviewSignalsCard({
   targetSkill,
 }) {
   return (
-    <div className="ivp-signals-card glass-card">
-      <div className="ivp-signals-header">
-        <span className="ivp-signals-title">Session Signals</span>
-        <span className="ivp-signals-badge">AI Active</span>
-      </div>
-
-      {/* Signal Indicators List */}
-      <div className="ivp-signals-list">
-        <div className="ivp-signal-row">
-          <div className="ivp-signal-icon-box signal-blue">
-            <Eye size={13} />
-          </div>
-          <div className="ivp-signal-content">
-            <span className="ivp-signal-name">Vision Analysis</span>
-            <span className="ivp-signal-status">
-              {videoEnabled ? 'YOLO & MediaPipe tracking' : 'Camera disabled'}
-            </span>
-          </div>
-          <span className={`signal-status-dot ${videoEnabled ? 'status-green' : 'status-gray'}`} />
+    <div className="enterprise-session-panel glass-card">
+      {/* Session Diagnostics */}
+      <div className="session-section-block">
+        <div className="session-section-header">
+          <span className="session-section-title">SESSION</span>
+          <span className="session-status-badge">Active</span>
         </div>
 
-        <div className="ivp-signal-row">
-          <div className="ivp-signal-icon-box signal-purple">
-            <Mic size={13} />
+        <div className="session-rows-list">
+          <div className="session-item-row">
+            <div className="item-row-left">
+              <span className={`status-indicator-dot ${videoEnabled ? 'dot-green' : 'dot-muted'}`} />
+              <span className="item-label">Camera analysis</span>
+            </div>
+            <span className="item-value">{videoEnabled ? 'Active' : 'Off'}</span>
           </div>
-          <div className="ivp-signal-content">
-            <span className="ivp-signal-name">Voice & Transcription</span>
-            <span className="ivp-signal-status">
+
+          <div className="session-item-row">
+            <div className="item-row-left">
+              <span className={`status-indicator-dot ${isMicActive ? 'dot-green' : 'dot-amber'}`} />
+              <span className="item-label">Voice transcription</span>
+            </div>
+            <span className="item-value">
               {isMicActive
                 ? speechStatus === 'recording'
-                  ? 'Transcribing live...'
-                  : 'Automatic STT active'
-                : 'Microphone muted'}
+                  ? 'Live'
+                  : 'Ready'
+                : 'Muted'}
             </span>
           </div>
-          <span className={`signal-status-dot ${isMicActive ? 'status-green' : 'status-amber'}`} />
-        </div>
 
-        <div className="ivp-signal-row">
-          <div className="ivp-signal-icon-box signal-emerald">
-            <Shield size={13} />
-          </div>
-          <div className="ivp-signal-content">
-            <span className="ivp-signal-name">Adaptive Sequence</span>
-            <span className="ivp-signal-status">
-              {targetSkill ? `Skill: ${targetSkill}` : 'Dynamic difficulty active'}
+          <div className="session-item-row">
+            <div className="item-row-left">
+              <span className="status-indicator-dot dot-green" />
+              <span className="item-label">Adaptive sequence</span>
+            </div>
+            <span className="item-value" title={targetSkill || 'Active'}>
+              {targetSkill ? targetSkill : 'Active'}
             </span>
           </div>
-          <span className="signal-status-dot status-green" />
         </div>
       </div>
 
-      {/* Quick Best Practices Tips */}
-      <div className="ivp-tips-box">
-        <div className="ivp-tip-title">
-          <Sparkles size={12} className="ivp-tip-sparkle" />
-          <span>Workspace Guidelines</span>
-        </div>
-        <ul className="ivp-tips-list">
-          <li>Keep camera eye-level for accurate posture metrics.</li>
-          <li>Spoken answers transcribe live into your answer box.</li>
-          <li>Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to submit your answer.</li>
+      <div className="session-divider-rule" />
+
+      {/* Guidelines */}
+      <div className="session-section-block">
+        <div className="session-section-title">GUIDELINES</div>
+        <ul className="guidelines-compact-list">
+          <li>Keep camera eye-level for best visual analysis</li>
+          <li>Speak naturally or type directly in the editor</li>
+          <li>Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to submit your answer</li>
         </ul>
       </div>
     </div>
@@ -223,7 +209,7 @@ export const InterviewSignalsCard = memo(function InterviewSignalsCard({
  */
 function InterviewVideoPanel(props) {
   return (
-    <aside className="interview-video-panel" aria-label="Candidate Video & Session Monitoring">
+    <aside className="enterprise-video-panel" aria-label="Candidate Video & Session Monitoring">
       <InterviewCameraCard {...props} />
       <InterviewSignalsCard {...props} />
     </aside>

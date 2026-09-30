@@ -1,27 +1,28 @@
-import { useRef } from 'react'
+import { useRef, memo } from 'react'
 import {
-  Send, Trash2, Loader2, Sparkles, SkipForward,
-  Mic, MicOff, AlertCircle, CheckCircle
+  Send, Trash2, Loader2, SkipForward,
+  MicOff, AlertCircle, CheckCircle2
 } from 'lucide-react'
 import './AnswerComposer.css'
 
 /**
- * AnswerComposer — Redesigned for automatic speech recognition.
+ * Enterprise AnswerComposer Workspace
  *
- * - No more Voice/Video/Text mode selector
- * - No more "Start speaking" / "Stop speaking" buttons
- * - Shows a subtle speech status indicator
- * - Appends speech automatically via parent's useSpeechRecognition hook
- * - Candidate can freely edit the transcribed text
+ * Integrated interview editor with:
+ * - Clear section title & subtle listening/recording state row
+ * - Unobtrusive inline transcription status
+ * - Large, comfortable writing area without overlapping elements
+ * - Word & character count row safely below the text
+ * - Solid bottom action bar (Skip secondary, Submit Answer primary 44-48px)
  */
-export default function AnswerComposer({
-  answer,
+function AnswerComposer({
+  answer = '',
   onAnswerChange,
-  isListening,
-  interimTranscript,
+  isListening = false,
+  interimTranscript = '',
   speechStatus,
   speechError,
-  isSpeechSupported,
+  isSpeechSupported = true,
   onSubmit,
   onSkip,
   onClear,
@@ -34,183 +35,170 @@ export default function AnswerComposer({
 }) {
   const textareaRef = useRef(null)
 
-  const words = answer.trim() ? answer.trim().split(/\s+/).length : 0
+  const trimmed = answer.trim()
+  const words = trimmed ? trimmed.split(/\s+/).length : 0
   const characters = answer.length
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
-      if (answer.trim() && !submitting && !disabled) {
+      if (trimmed && !submitting && !skipping && !disabled) {
         onSubmit()
       }
     }
   }
 
-  // Determine speech status for indicator
-  let micStatusClass = 'mic-status-idle'
-  let micStatusText = 'Microphone ready'
-  let MicIcon = Mic
+  // Derive candidate-friendly status
+  let statusIcon = null
+  let statusText = 'Type or speak your answer'
+  let statusTone = 'tone-idle'
 
-  if (!isSpeechSupported) {
-    micStatusClass = 'mic-status-warn'
-    micStatusText = 'Speech not supported — type your answer'
-    MicIcon = MicOff
-  } else if (speechError) {
-    micStatusClass = 'mic-status-error'
-    micStatusText = 'Mic unavailable — type your answer'
-    MicIcon = MicOff
+  if (submitting) {
+    statusIcon = <Loader2 size={12} className="spin-icon" />
+    statusText = 'Evaluating response…'
+    statusTone = 'tone-processing'
+  } else if (mediaSubmitting) {
+    statusIcon = <Loader2 size={12} className="spin-icon" />
+    statusText = 'Analyzing response…'
+    statusTone = 'tone-processing'
   } else if (isListening) {
-    micStatusClass = 'mic-status-active'
-    micStatusText = 'Listening automatically...'
-    MicIcon = Mic
+    statusIcon = <span className="status-live-dot" />
+    statusText = 'Listening automatically'
+    statusTone = 'tone-live'
   } else if (speechStatus === 'processing') {
-    micStatusClass = 'mic-status-processing'
-    micStatusText = 'Transcribing...'
-    MicIcon = Mic
-  } else if (speechStatus === 'ready' || answer.trim()) {
-    micStatusClass = 'mic-status-ready'
-    micStatusText = 'Transcript ready — edit freely'
-    MicIcon = CheckCircle
+    statusIcon = <Loader2 size={12} className="spin-icon" />
+    statusText = 'Converting response to text…'
+    statusTone = 'tone-processing'
+  } else if (hasAudioAttached || hasVideoAttached) {
+    statusIcon = <CheckCircle2 size={12} className="status-check-icon" />
+    statusText = 'Recording captured'
+    statusTone = 'tone-success'
+  } else if (speechError) {
+    statusIcon = <AlertCircle size={12} className="status-warn-icon" />
+    statusText = 'Type your answer manually'
+    statusTone = 'tone-warn'
+  } else if (!isSpeechSupported) {
+    statusIcon = <MicOff size={12} />
+    statusText = 'Speech unavailable · Type your answer'
+    statusTone = 'tone-idle'
   }
 
   return (
-    <div className="answer-composer glass-card animate-fade-in">
-      {/* Header */}
-      <div className="composer-header">
-        <div className="composer-title-group">
-          <span className="composer-title">Your Answer</span>
-          <span className="composer-subtitle">Speak naturally or type — your answer appears here automatically</span>
-        </div>
+    <div className="enterprise-answer-workspace glass-card animate-fade-in">
+      {/* ── 1. Header: Section Label & Subtle Status Row ───────────────── */}
+      <div className="workspace-header-row">
+        <div className="workspace-title-label">YOUR ANSWER</div>
 
-        {/* Subtle mic status indicator */}
-        <div className={`mic-status-pill ${micStatusClass}`}>
-          {isListening ? (
-            <span className="mic-pulse-wrapper">
-              <span className="mic-pulse-ring" />
-              <Mic size={12} className="mic-icon-active" />
-            </span>
-          ) : (
-            <MicIcon size={12} />
-          )}
-          <span>{micStatusText}</span>
+        <div className={`workspace-status-indicator ${statusTone}`} aria-live="polite">
+          {statusIcon}
+          <span>{statusText}</span>
         </div>
       </div>
 
-      {/* Live Interim Transcript Ribbon */}
+      {/* ── 2. Subtle Inline Live Transcription (Non-intrusive) ────────── */}
       {isListening && interimTranscript && (
-        <div className="live-interim-box animate-fade-in">
-          <Sparkles size={13} className="sparkle-icon" />
-          <span className="interim-label">Transcribing:</span>
-          <span className="interim-text">"{interimTranscript}"</span>
+        <div className="workspace-interim-row animate-fade-in" aria-live="polite">
+          <span className="interim-prefix">Transcribing:</span>
+          <span className="interim-content">"{interimTranscript}"</span>
         </div>
       )}
 
-      {/* Speech error notice */}
-      {speechError && (
-        <div className="speech-error-notice animate-fade-in">
-          <AlertCircle size={13} />
-          <span>{speechError}</span>
-        </div>
-      )}
-
-      {/* Answer Textarea */}
-      <div className="textarea-container">
+      {/* ── 3. Large Comfortable Answer Area ──────────────────────────── */}
+      <div className="workspace-textarea-wrapper">
         <textarea
           ref={textareaRef}
-          className="composer-textarea"
+          className="enterprise-answer-textarea"
           value={answer}
           onChange={(e) => onAnswerChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={submitting || disabled}
-          rows={10}
+          disabled={submitting || skipping || disabled}
           placeholder={
             isSpeechSupported && !speechError
-              ? 'Your spoken answer will appear here automatically. You can also type, edit, or correct the text at any time...'
-              : 'Type your answer here... Be specific, provide technical examples, and structure your explanation clearly.'
+              ? 'Your spoken answer appears here automatically. You can also type, edit, or format your response directly…'
+              : 'Type your answer here… Structure your explanation clearly and include relevant technical examples.'
           }
-          aria-label="Interview answer text"
+          aria-label="Candidate response text"
+          rows={7}
         />
-
-        {/* Word & character counter */}
-        <div className="textarea-meta">
-          {(hasAudioAttached || hasVideoAttached) && (
-            <span className="media-attached-badge">
-              {hasVideoAttached ? '🎥' : '🎤'} Media attached
-            </span>
-          )}
-          <span className="meta-item">{words} {words === 1 ? 'word' : 'words'}</span>
-          <span className="meta-separator">·</span>
-          <span className="meta-item">{characters} chars</span>
-        </div>
       </div>
 
-      {/* Footer Actions */}
-      <div className="composer-footer">
-        <div className="footer-left">
-          {answer.trim().length > 0 && (
+      {/* ── 4. Dedicated Metadata Row (Placed safely below typing area) ── */}
+      <div className="workspace-meta-row">
+        <div className="meta-left">
+          <span className="shortcut-guide">
+            Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to submit
+          </span>
+          {answer.trim().length > 0 && onClear && (
             <button
               type="button"
-              className="btn btn-ghost btn-clear"
+              className="btn-text-clear"
               onClick={onClear}
-              disabled={submitting || disabled}
-              title="Clear current answer text"
+              disabled={submitting || skipping || disabled}
+              title="Clear answer text"
+              aria-label="Clear answer text"
             >
-              <Trash2 size={14} />
+              <Trash2 size={12} />
               <span>Clear</span>
             </button>
           )}
-          <span className="shortcut-hint">
-            Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to submit
-          </span>
         </div>
 
-        <div className="footer-right">
-          {mediaSubmitting && (
-            <span className="media-sync-indicator">
-              <Loader2 size={13} className="spin" />
-              <span>Uploading media...</span>
+        <div className="meta-right">
+          {(hasAudioAttached || hasVideoAttached) && (
+            <span className="attached-media-tag">
+              ✓ Media captured
             </span>
           )}
+          <span className="text-count-stat">
+            {words} {words === 1 ? 'word' : 'words'} · {characters} chars
+          </span>
+        </div>
+      </div>
 
+      {/* ── 5. Integrated Action Bar (Always visible & accessible) ─────── */}
+      <div className="workspace-action-bar">
+        <div className="action-bar-left">
           {onSkip && (
             <button
               type="button"
-              className="btn btn-secondary btn-skip-question"
+              className="btn-action-skip"
               onClick={onSkip}
               disabled={submitting || skipping || disabled}
-              title="Skip this question without submitting an answer"
-              id="skip-question-composer-btn"
+              title="Skip this question"
+              id="skip-question-btn"
             >
               {skipping ? (
                 <>
-                  <Loader2 size={15} className="spin" />
-                  <span>Skipping...</span>
+                  <Loader2 size={15} className="spin-icon" />
+                  <span>Skipping…</span>
                 </>
               ) : (
                 <>
-                  <SkipForward size={15} />
-                  <span>Skip</span>
+                  <SkipForward size={14} />
+                  <span>Skip Question</span>
                 </>
               )}
             </button>
           )}
+        </div>
 
+        <div className="action-bar-right">
           <button
             type="button"
-            className="btn btn-primary btn-submit-answer"
+            className="btn-action-submit"
             onClick={onSubmit}
-            disabled={!answer.trim() || submitting || skipping || disabled}
+            disabled={!trimmed || submitting || skipping || disabled}
             id="submit-answer-btn"
           >
             {submitting ? (
               <>
-                <Loader2 size={16} className="spin" />
-                <span>Evaluating...</span>
+                <Loader2 size={16} className="spin-icon" />
+                <span>Evaluating…</span>
               </>
             ) : (
               <>
-                <Send size={16} />
                 <span>Submit Answer</span>
+                <Send size={15} />
               </>
             )}
           </button>
@@ -219,3 +207,5 @@ export default function AnswerComposer({
     </div>
   )
 }
+
+export default memo(AnswerComposer)

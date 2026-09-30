@@ -1,0 +1,285 @@
+/* ============================================================
+   ENTERPRISE INTERVIEW SETUP LOADING SCREEN
+   ============================================================ */
+
+.interview-loading-root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  width: 100%;
+  padding: 24px;
+  background: var(--bg-primary, #0a0f1d);
+  color: var(--text-primary, #f8fafc);
+}
+
+[data-theme='light'] .interview-loading-root {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.loading-card {
+  max-width: 480px;
+  width: 100%;
+  padding: 36px 32px;
+  border-radius: var(--radius-xl, 16px);
+  background: var(--bg-card, rgba(15, 23, 42, 0.75));
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 20px;
+}
+
+[data-theme='light'] .loading-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
+}
+
+/* Brand Header */
+.loading-brand-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.loading-logo-pill {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-brand-icon {
+  color: var(--accent-primary, #6366f1);
+  animation: loadingIconPulse 2s ease-in-out infinite;
+}
+
+@keyframes loadingIconPulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+.loading-brand-name {
+  font-family: var(--font-display, inherit);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #ffffff 40%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+[data-theme='light'] .loading-brand-name {
+  background: linear-gradient(135deg, #0f172a 40%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Titles */
+.loading-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.loading-main-title {
+  font-family: var(--font-display, inherit);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary, #f8fafc);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+[data-theme='light'] .loading-main-title {
+  color: #0f172a;
+}
+
+.loading-main-subtitle {
+  font-size: 13.5px;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 400px;
+}
+
+/* Progress Bar */
+.loading-progress-bar-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+}
+
+[data-theme='light'] .loading-progress-bar-track {
+  background: #e2e8f0;
+}
+
+.loading-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #a855f7, #38bdf8);
+  border-radius: 9999px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.loading-progress-bar-fill.step-0 { width: 33%; }
+.loading-progress-bar-fill.step-1 { width: 66%; }
+.loading-progress-bar-fill.step-2 { width: 95%; }
+
+/* Step Checklist */
+.loading-checklist {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.loading-step-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.25s ease;
+  font-size: 13px;
+  text-align: left;
+}
+
+[data-theme='light'] .loading-step-item {
+  background: #f8fafc;
+  border-color: #f1f5f9;
+}
+
+.loading-step-item.is-complete {
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+[data-theme='light'] .loading-step-item.is-complete {
+  background: #f0fdf4;
+  border-color: #dcfce7;
+}
+
+.loading-step-item.is-active {
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+[data-theme='light'] .loading-step-item.is-active {
+  background: #eef2ff;
+  border-color: #e0e7ff;
+}
+
+.step-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.step-icon-complete {
+  color: #10b981;
+}
+
+.step-icon-pending {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme='light'] .step-icon-pending {
+  color: #cbd5e1;
+}
+
+.step-spinner-dot {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(99, 102, 241, 0.25);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: stepSpinner 0.8s linear infinite;
+}
+
+@keyframes stepSpinner {
+  to { transform: rotate(360deg); }
+}
+
+.step-label {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-secondary, #cbd5e1);
+}
+
+[data-theme='light'] .step-label {
+  color: #334155;
+}
+
+.loading-step-item.is-complete .step-label {
+  color: var(--text-primary, #f8fafc);
+  font-weight: 600;
+}
+
+[data-theme='light'] .loading-step-item.is-complete .step-label {
+  color: #0f172a;
+}
+
+.step-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #10b981;
+}
+
+.step-badge.badge-active {
+  color: #818cf8;
+}
+
+/* Delayed Notice */
+.loading-delayed-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  padding: 6px 12px;
+  border-radius: 6px;
+  width: 100%;
+}
+
+.delayed-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.btn-retry-session {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.btn-retry-session:hover {
+  background: rgba(245, 158, 11, 0.25);
+}

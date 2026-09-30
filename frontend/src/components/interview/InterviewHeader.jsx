@@ -1,14 +1,17 @@
 import { memo } from 'react'
-import { Brain, Camera, Mic, LogOut } from 'lucide-react'
+import { Brain, Camera, CameraOff, Mic, MicOff, LogOut } from 'lucide-react'
 import InterviewTimer from './InterviewTimer'
 import './InterviewHeader.css'
 
 /**
- * Top Bar for Interview Cockpit
+ * Enterprise Header for InterviewX Workspace
  *
- * Left: Logo, Target Role, Interview Type
- * Center: "Interview in progress"
- * Right: Isolated Countdown Timer, Device Status (Camera, Mic), End Session
+ * Fixed 60px height.
+ * Strict non-wrapping flex layout.
+ * Clean information hierarchy:
+ * - Left: Logo, role, interview type
+ * - Center: Question progress (Question X of Total)
+ * - Right: Countdown timer, compact device indicators, segregated End Session
  */
 function InterviewHeader({
   targetRole = 'Software Engineer',
@@ -31,7 +34,7 @@ function InterviewHeader({
     : 'Technical Interview'
 
   return (
-    <header className="interview-cockpit-topbar">
+    <header className="interview-topbar" role="banner">
       <div className="topbar-inner-container">
         {/* ── Left: Logo + Role + Interview Type ──────────────────────── */}
         <div className="topbar-section-left">
@@ -43,7 +46,9 @@ function InterviewHeader({
             title="InterviewX Dashboard"
             aria-label="InterviewX Dashboard"
           >
-            <Brain size={22} className="brand-logo-icon" />
+            <div className="topbar-logo-wrap">
+              <Brain size={18} className="brand-logo-icon" />
+            </div>
             <span className="brand-title">InterviewX</span>
           </div>
 
@@ -59,25 +64,23 @@ function InterviewHeader({
           </div>
         </div>
 
-        {/* ── Center: Question Progress + Live Status ─────────────────── */}
+        {/* ── Center: Clean Question Progress ─────────────────────────── */}
         <div className="topbar-section-center">
           {questionNumber != null && totalQuestions != null && (
-            <div className="topbar-question-pill" title={`Question ${questionNumber} of ${totalQuestions}`}>
-              <span className="question-pill-label">Question</span>
-              <span className="question-pill-val">
-                <strong>{questionNumber}</strong> <span className="pill-slash">/</span> {totalQuestions}
+            <div
+              className="topbar-question-indicator"
+              aria-label={`Question ${questionNumber} of ${totalQuestions}`}
+            >
+              <span className="question-step-text">
+                Question <strong>{questionNumber}</strong> of {totalQuestions}
               </span>
             </div>
           )}
-          <div className="interview-status-indicator">
-            <span className="live-status-pulse" />
-            <span className="live-status-label">In Progress</span>
-          </div>
         </div>
 
-        {/* ── Right: Timer + Device Status + End Interview ────────────── */}
+        {/* ── Right: Timer + Compact Devices + End Session ────────────── */}
         <div className="topbar-section-right">
-          {/* Isolated Countdown Timer */}
+          {/* Isolated Non-Jittering Countdown Timer */}
           <InterviewTimer
             startedAt={startedAt}
             durationMinutes={durationMinutes}
@@ -85,37 +88,39 @@ function InterviewHeader({
             isComplete={isComplete}
           />
 
-          {/* Device Status Indicators */}
-          <div className="device-status-indicators">
+          {/* Compact Device Status Cluster */}
+          <div className="topbar-device-cluster" aria-label="Audio and Video hardware status">
             <div
-              className={`device-pip ${videoEnabled ? 'device-on' : 'device-off'}`}
-              title={videoEnabled ? 'Camera is active' : 'Camera is disabled'}
+              className={`device-indicator-icon ${videoEnabled ? 'is-on' : 'is-off'}`}
+              title={videoEnabled ? 'Camera is active' : 'Camera is off'}
+              aria-label={videoEnabled ? 'Camera active' : 'Camera disabled'}
             >
-              <span className="device-dot" />
-              <Camera size={13} />
-              <span className="device-label">Camera</span>
+              {videoEnabled ? <Camera size={15} /> : <CameraOff size={15} />}
+              <span className={`device-status-dot ${videoEnabled ? 'dot-active' : 'dot-off'}`} />
             </div>
 
             <div
-              className={`device-pip ${isMicActive ? 'device-on' : 'device-off'}`}
+              className={`device-indicator-icon ${isMicActive ? 'is-on' : 'is-off'}`}
               title={isMicActive ? 'Microphone is active' : 'Microphone is muted'}
+              aria-label={isMicActive ? 'Microphone active' : 'Microphone muted'}
             >
-              <span className="device-dot" />
-              <Mic size={13} />
-              <span className="device-label">Mic</span>
+              {isMicActive ? <Mic size={15} /> : <MicOff size={15} />}
+              <span className={`device-status-dot ${isMicActive ? 'dot-active' : 'dot-off'}`} />
             </div>
           </div>
 
-          {/* Exit / End Session */}
+          <div className="topbar-divider-end" />
+
+          {/* Destructive Action: End Session */}
           <button
             type="button"
-            className="btn-cockpit-end"
+            className="btn-topbar-end"
             onClick={onEndInterview}
-            title="End interview session and view evaluation"
+            title="End interview session"
             aria-label="End interview session"
           >
             <LogOut size={14} />
-            <span>End Session</span>
+            <span className="end-session-label">End Session</span>
           </button>
         </div>
       </div>

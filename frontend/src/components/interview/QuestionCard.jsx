@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Sparkles, Target, Info, BookOpen, Zap, BarChart2, TrendingUp, CheckCircle } from 'lucide-react'
+import { Info, BookOpen, Zap, BarChart2, TrendingUp, CheckCircle2 } from 'lucide-react'
 import './QuestionCard.css'
 
 const DIFFICULTY_MAP = {
@@ -11,13 +11,11 @@ const DIFFICULTY_MAP = {
 /**
  * QuestionCard Component
  *
- * Focuses candidate attention on the primary question.
- * Displays:
- * - "Question X of Y"
- * - Difficulty Badge (Easy/Medium/Hard)
- * - Topic / Category
- * - Optional small "Adaptive" indicator
- * - Context note / source if applicable
+ * Designed around strong information hierarchy:
+ * 1. Clean metadata row: "Question X of Y · Medium · Skill · Topic"
+ * 2. Visual focal point: High-contrast, large question prompt (28-34px)
+ * 3. Contextual row: Gentle inline note (e.g. skill gap rationale) without alert styling
+ * 4. Subtle attribution footnote
  */
 function QuestionCard({
   question,
@@ -26,10 +24,11 @@ function QuestionCard({
 }) {
   if (!question) {
     return (
-      <article className="cockpit-question-card glass-card">
-        <div className="question-loading-state">
-          <div className="skeleton-line skeleton-title" />
-          <div className="skeleton-line skeleton-body" />
+      <article className="enterprise-question-card glass-card">
+        <div className="question-skeleton-state">
+          <div className="skeleton-bar skeleton-meta" />
+          <div className="skeleton-bar skeleton-title-1" />
+          <div className="skeleton-bar skeleton-title-2" />
         </div>
       </article>
     )
@@ -38,92 +37,77 @@ function QuestionCard({
   const difficulty = (question.difficulty || 'medium').toLowerCase()
   const diffInfo = DIFFICULTY_MAP[difficulty] || DIFFICULTY_MAP.medium
 
-  const topic = question.category || question.targetSkill || 'General Technical'
-  const isAdaptive = question.source !== 'static_bank' && question.source !== 'preset'
+  const rawTopic = question.category || question.targetSkill || 'General Technical'
+  const topic = rawTopic.replace(/_/g, ' ')
+  const isSkillGap = question.source === 'skill_gap'
 
   return (
-    <article className="cockpit-question-card glass-card animate-fade-in" key={question.id}>
-      {/* ── Question Meta Bar ────────────────────────────────────────── */}
-      <div className="cockpit-question-meta">
-        <div className="meta-left-group">
-          <span className="question-index-badge">
-            Question {questionNumber} of {totalQuestions}
-          </span>
-
-          {/* Difficulty Badge */}
-          <span className={`cockpit-diff-badge ${diffInfo.class}`}>
-            {diffInfo.label}
-          </span>
-
-          {/* Topic */}
-          <span className="cockpit-topic-badge" title={`Topic: ${topic}`}>
-            <span style={{ textTransform: 'capitalize' }}>
-              {topic.replace(/_/g, ' ')}
-            </span>
-          </span>
-
-          {/* Target Skill if different from topic */}
-          {question.targetSkill && question.targetSkill !== 'general' && question.targetSkill !== topic && (
-            <span className="cockpit-skill-badge">
-              <Target size={11} />
-              <span>{question.targetSkill}</span>
-            </span>
-          )}
-        </div>
-
-        {/* Small Adaptive Indicator */}
-        {isAdaptive && (
-          <div className="cockpit-adaptive-tag" title="Question dynamically selected by AI adaptive engine">
-            <Sparkles size={11} className="adaptive-sparkle-icon" />
-            <span>Adaptive</span>
-          </div>
+    <article className="enterprise-question-card glass-card animate-fade-in" key={question.id}>
+      {/* ── 1. Clean Metadata Row (No excessive badge clutter) ─────────── */}
+      <div className="question-meta-row">
+        <span className="question-counter">
+          Question {questionNumber} of {totalQuestions}
+        </span>
+        <span className="meta-separator">·</span>
+        <span className={`question-difficulty ${diffInfo.class}`}>
+          {diffInfo.label}
+        </span>
+        <span className="meta-separator">·</span>
+        <span className="question-topic" title={`Topic: ${topic}`}>
+          {topic}
+        </span>
+        {isSkillGap && (
+          <>
+            <span className="meta-separator">·</span>
+            <span className="question-source-tag">Skill Gap</span>
+          </>
         )}
       </div>
 
-      {/* ── Context Note if Available ─────────────────────────────────── */}
-      {question.contextNote && (
-        <div className="cockpit-context-note">
-          <Info size={13} className="context-note-icon" />
-          <span>{question.contextNote}</span>
-        </div>
-      )}
-
-      {/* ── Main Question Prompt ──────────────────────────────────────── */}
-      <h1 className="cockpit-question-prompt">
+      {/* ── 2. Primary Focal Point: The Question ────────────────────────── */}
+      <h1 className="enterprise-question-text">
         {question.text}
       </h1>
 
-      {/* ── Source Attribution (Resume / Job Description / Skill Gap) ─── */}
+      {/* ── 3. Subtle Contextual Information (Non-destructive, not an error alert) */}
+      {question.contextNote && (
+        <div className="question-contextual-info">
+          <Info size={14} className="contextual-info-icon" />
+          <span className="contextual-info-text">{question.contextNote}</span>
+        </div>
+      )}
+
+      {/* ── 4. Subtle Attribution (Targeted reasoning) ──────────────────── */}
       {question.source && question.source !== 'static_bank' && (
-        <div className="cockpit-source-attribution">
+        <div className="question-attribution-footnote">
           {question.source === 'resume' && (
             <>
-              <BookOpen size={12} />
+              <BookOpen size={12} className="attr-icon" />
               <span>Tailored to your resume experience</span>
             </>
           )}
           {question.source === 'job_description' && (
             <>
-              <Zap size={12} />
-              <span>Targeted for job description requirements</span>
+              <Zap size={12} className="attr-icon" />
+              <span>Targeted for job requirements</span>
             </>
           )}
           {question.source === 'skill_gap' && (
             <>
-              <BarChart2 size={12} />
-              <span>Focused skill gap assessment</span>
+              <BarChart2 size={12} className="attr-icon" />
+              <span>Focused skill-gap assessment</span>
             </>
           )}
           {question.source === 'experience' && (
             <>
-              <TrendingUp size={12} />
-              <span>Project & engineering experience</span>
+              <TrendingUp size={12} className="attr-icon" />
+              <span>Engineering & architecture experience</span>
             </>
           )}
           {question.source === 'behavioral' && (
             <>
-              <CheckCircle size={12} />
-              <span>Behavioral competency evaluation</span>
+              <CheckCircle2 size={12} className="attr-icon" />
+              <span>Behavioral & communication evaluation</span>
             </>
           )}
         </div>

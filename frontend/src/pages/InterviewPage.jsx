@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { useAuthApi } from '../services/api'
 import {
-  Brain, CheckCircle, AlertTriangle, ShieldCheck,
-  ChevronRight, Sparkles, AlertCircle
+  CheckCircle, AlertTriangle, ShieldCheck,
+  ChevronRight, Sparkles, AlertCircle, X
 } from 'lucide-react'
 import useSpeechRecognition from '../hooks/useSpeechRecognition'
 import AnswerComposer from '../components/AnswerComposer'
@@ -15,6 +15,7 @@ import {
   QuestionCard,
   InterviewCameraCard,
   InterviewSignalsCard,
+  InterviewLoadingScreen,
   EndInterviewModal,
   SkipConfirmModal,
 } from '../components/interview'
@@ -36,8 +37,8 @@ export default function InterviewPage() {
   const [completing, setCompleting] = useState(false)
   const [showSkipConfirm, setShowSkipConfirm] = useState(false)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
-  const [error, setError] = useState(null)
   const [lastEval, setLastEval] = useState(null)
+  const [showLastEval, setShowLastEval] = useState(true)
   const [isComplete, setIsComplete] = useState(false)
   const [timeoutNotice, setTimeoutNotice] = useState(false)
 
@@ -529,14 +530,14 @@ export default function InterviewPage() {
   // ── Loading View ──────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="interview-loading animate-fade-in">
-        <div className="loading-spinner-box">
-          <Brain size={38} className="brand-pulse-icon" />
-          <div className="custom-loader" />
-        </div>
-        <h2 className="loading-title">Setting Up Your Interview Cockpit</h2>
-        <p className="loading-subtitle">Configuring adaptive question sequence & evaluation environment...</p>
-      </div>
+      <InterviewLoadingScreen
+        onRetry={() => {
+          startedRef.current = null
+          setError(null)
+          setLoading(true)
+          window.location.reload()
+        }}
+      />
     )
   }
 
@@ -735,18 +736,26 @@ export default function InterviewPage() {
               )}
 
               {/* Evaluated Previous Answer (Collapsible / Unobtrusive Feedback) */}
-              {lastEval && (
+              {lastEval && showLastEval && (
                 <div className="previous-eval-card glass-card animate-fade-in">
                   <div className="previous-eval-header">
                     <div className="eval-status-left">
-                       <ShieldCheck size={16} className="eval-success-icon" />
-                      <span className="eval-card-title">Previous Answer Evaluated</span>
+                      <ShieldCheck size={14} className="eval-success-icon" />
+                      <span className="eval-card-title">Previous Response Feedback</span>
                     </div>
                     <div className="eval-tag-group">
-                      <span className="badge badge-green">AI Evaluated</span>
                       <span className="eval-score-badge">
-                        {lastEval.textEvaluation?.textScore ?? lastEval.evaluation?.score ?? '—'}/100
+                        Score: {lastEval.textEvaluation?.textScore ?? lastEval.evaluation?.score ?? '—'}/100
                       </span>
+                      <button
+                        type="button"
+                        className="btn-eval-dismiss"
+                        onClick={() => setShowLastEval(false)}
+                        title="Dismiss feedback"
+                        aria-label="Dismiss feedback"
+                      >
+                        <X size={13} />
+                      </button>
                     </div>
                   </div>
 
