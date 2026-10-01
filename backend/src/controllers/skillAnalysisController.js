@@ -155,7 +155,10 @@ const runSkillAnalysis = async (req, res) => {
           additionalSkills: result.additionalSkills,
           requiredSkillCount: result.requiredSkillCount,
           matchedRequiredSkillCount: result.matchedRequiredSkillCount,
+          partialSkillCount: result.partialSkillCount,
+          missingSkillCount: result.missingSkillCount,
           notIdentifiedRequiredSkillCount: result.notIdentifiedRequiredSkillCount,
+          overallMatchPercentage: result.overallMatchPercentage,
           skillCoveragePercentage: result.overallMatchPercentage,
           skillGapPercentage: result.skillGapPercentage,
         },
@@ -229,7 +232,7 @@ const getUserSkillAnalyses = async (req, res) => {
   try {
     const analyses = await SkillAnalysis.find({ clerkUserId: req.clerkUserId })
       .select(
-        'resumeId jobDescriptionId skillCoveragePercentage skillGapPercentage matchedRequiredSkillCount requiredSkillCount createdAt updatedAt analysisVersion'
+        'resumeId jobDescriptionId overallMatchPercentage skillCoveragePercentage skillGapPercentage matchedRequiredSkillCount partialSkillCount missingSkillCount requiredSkillCount createdAt updatedAt analysisVersion'
       )
       .sort({ updatedAt: -1 });
 
