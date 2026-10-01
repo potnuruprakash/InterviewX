@@ -5,8 +5,15 @@
  * No SBERT. No embeddings. No LLM.
  *
  * Compares candidate canonical skill names against JD required/preferred skills.
- * Coverage is based ONLY on required skills.
- * Preferred skills are reported separately.
+ * The main match/gap score is based on required skills:
+ *   - exact/strong match = 1.0
+ *   - related/partial match = 0.625
+ *   - missing = 0
+ *
+ * 0.625 is intentional: a partial match represents meaningful related evidence
+ * but must remain materially below an exact demonstration. It also keeps the
+ * displayed score aligned with the product's Matched / Partial / Missing model.
+ * Preferred skills are reported separately and do not inflate required-skill coverage.
  */
 
 // Related skill families for detecting partial skill competency
@@ -26,17 +33,36 @@ const RELATED_SKILL_FAMILIES = [
   ['machine learning', 'deep learning', 'pytorch', 'tensorflow', 'scikit-learn', 'pandas', 'numpy'],
 ];
 
+const MATCH_WEIGHTS = Object.freeze({
+  strong: 1,
+  partial: 0.625,
+  missing: 0,
+});
+
+/**
+ * Normalize a skill name for deterministic comparison.
+ */
+const normalizeSkill = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+
 /**
  * Check if candidate possesses a related skill in the same family/category.
  */
 const hasRelatedSkill = (candidateSet, targetSkill, targetCategory, candidateSkills) => {
-  const targetLower = targetSkill.toLowerCase().trim();
+  const targetLower = normalizeSkill(targetSkill);
 
-  // Check defined families
   for (const family of RELATED_SKILL_FAMILIES) {
-    const isTargetInFamily = family.some((member) => member === targetLower || targetLower.includes(member));
+    const normalizedFamily = family.map(normalizeSkill);
+    const isTargetInFamily = normalizedFamily.some(
+      (member) => member === targetLower || targetLower.includes(member)
+    );
+
     if (isTargetInFamily) {
-      for (const member of family) {
+      for (const member of normalizedFamily) {
         if (member !== targetLower && candidateSet.has(member)) {
           return true;
         }
@@ -44,12 +70,21 @@ const hasRelatedSkill = (candidateSet, targetSkill, targetCategory, candidateSki
     }
   }
 
-  // Check category match if category is specific
-  if (targetCategory && targetCategory !== 'other' && targetCategory !== 'concept') {
-    const matchesCategory = candidateSkills.some(
-      (s) => (s.category || '').toLowerCase() === targetCategory.toLowerCase() &&
-             s.canonicalName.toLowerCase() !== targetLower
-    );
+  if (
+    targetCategory &&
+    targetCategory !== 'other' &&
+    targetCategory !== 'concept' &&
+    Array.isArray(candidateSkills)
+  ) {
+    const matchesCategory = candidateSkills.some((s) => {
+      if (!s) return false;
+      const candidateName = normalizeSkill(s.canonicalName || s.name);
+      return (
+        normalizeSkill(s.category) === normalizeSkill(targetCategory) &&
+        candidateName !== targetLower
+      );
+    });
+
     if (matchesCategory) return true;
   }
 
@@ -58,49 +93,52 @@ const hasRelatedSkill = (candidateSet, targetSkill, targetCategory, candidateSki
 
 /**
  * Match candidate skills against required and preferred JD skills.
- * Produces tri-state matching: strongSkills, partialSkills, missingSkills.
  *
- * @param {Array<{ canonicalName: string, category: string }>} candidateSkills
- * @param {Array<{ canonicalName: string, category: string }>} requiredSkills
- * @param {Array<{ canonicalName: string, category: string }>} preferredSkills
- * @returns {Object} Matching result
+ * Produces:
+ *   strongSkills   - exact evidence
+ *   partialSkills  - related evidence
+ *   missingSkills  - no relevant evidence
  */
 const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
-  // Support passing candidateProfile object
   const skillsList = Array.isArray(candidateSkills)
     ? candidateSkills
     : (candidateSkills && Array.isArray(candidateSkills.skills) ? candidateSkills.skills : []);
 
-  // Build a set of candidate canonical skill names (lowercase for safety)
   const candidateSet = new Set(
     skillsList
       .filter((s) => s && (s.canonicalName || s.name || typeof s === 'string'))
-      .map((s) => (typeof s === 'string' ? s : (s.canonicalName || s.name)).toLowerCase().trim())
+      .map((s) => normalizeSkill(typeof s === 'string' ? s : (s.canonicalName || s.name)))
+      .filter(Boolean)
   );
 
-  // Normalize inputs to array of skill objects
   const reqList = (requiredSkills || []).map((s) =>
-    typeof s === 'string' ? { canonicalName: s, name: s, category: 'other' } : s
+    typeof s === 'string'
+      ? { canonicalName: s, name: s, category: 'other' }
+      : s
   );
+
   const prefList = (preferredSkills || []).map((s) =>
-    typeof s === 'string' ? { canonicalName: s, name: s, category: 'other' } : s
+    typeof s === 'string'
+      ? { canonicalName: s, name: s, category: 'other' }
+      : s
   );
 
   const matchedRequiredSkills = [];
   const notIdentifiedRequiredSkills = [];
-
   const strongSkills = [];
   const partialSkills = [];
   const missingSkills = [];
 
   for (const skill of reqList) {
     const skillName = skill.name || skill.canonicalName;
-    const lower = (skill.canonicalName || skillName).toLowerCase().trim();
+    const lower = normalizeSkill(skill.canonicalName || skillName);
 
     if (candidateSet.has(lower)) {
       matchedRequiredSkills.push(skillName);
       strongSkills.push(skillName);
-    } else if (hasRelatedSkill(candidateSet, skillName, skill.category, candidateSkills || [])) {
+    } else if (
+      hasRelatedSkill(candidateSet, skillName, skill.category, skillsList)
+    ) {
       notIdentifiedRequiredSkills.push(skillName);
       partialSkills.push(skillName);
     } else {
@@ -109,13 +147,12 @@ const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
     }
   }
 
-  // ── Preferred skill matching ─────────────────────────────────────
   const matchedPreferredSkills = [];
   const notIdentifiedPreferredSkills = [];
 
   for (const skill of prefList) {
     const skillName = skill.name || skill.canonicalName;
-    const lower = (skill.canonicalName || skillName).toLowerCase().trim();
+    const lower = normalizeSkill(skill.canonicalName || skillName);
 
     if (candidateSet.has(lower)) {
       matchedPreferredSkills.push(skillName);
@@ -124,18 +161,17 @@ const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
     }
   }
 
-  // ── Additional candidate skills ──────────────────────────────────
   const allJDSkillSet = new Set([
-    ...reqList.map((s) => (s.canonicalName || s.name).toLowerCase().trim()),
-    ...prefList.map((s) => (s.canonicalName || s.name).toLowerCase().trim()),
+    ...reqList.map((s) => normalizeSkill(s.canonicalName || s.name)),
+    ...prefList.map((s) => normalizeSkill(s.canonicalName || s.name)),
   ]);
 
   const additionalSkills = [];
   for (const s of skillsList) {
     const skillName = typeof s === 'string' ? s : (s.canonicalName || s.name);
-    if (!skillName) continue;
-    const lower = skillName.toLowerCase().trim();
-    if (!allJDSkillSet.has(lower) && !additionalSkills.includes(skillName)) {
+    const lower = normalizeSkill(skillName);
+
+    if (lower && !allJDSkillSet.has(lower) && !additionalSkills.includes(skillName)) {
       additionalSkills.push(skillName);
     }
   }
@@ -153,60 +189,71 @@ const matchSkills = (candidateSkills, requiredSkills, preferredSkills) => {
 };
 
 /**
- * Calculate skill coverage and gap.
- * Coverage is based on required skills with strong skills at 100% and partial skills at 50%.
+ * Calculate the overall required-skill match and skill gap.
  *
- * @param {string[]} matchedRequired
- * @param {string[]} allRequired
- * @param {string[]} partialSkills
- * @returns {{ requiredSkillCount, matchedRequiredSkillCount, notIdentifiedRequiredSkillCount, skillCoveragePercentage, skillGapPercentage }}
+ * Important:
+ * - matchedRequiredSkillCount means exact/strong matches only.
+ * - partialSkillCount is reported separately.
+ * - overallMatchPercentage includes weighted partial credit.
+ * - skillGapPercentage is the complement of the overall match.
  */
-const calculateCoverage = (matchedRequired, allRequired, partialSkills = []) => {
+const calculateCoverage = (
+  matchedRequired,
+  allRequired,
+  partialSkills = [],
+  missingSkills = []
+) => {
   const requiredSkillCount = (allRequired || []).length;
   const matchedRequiredSkillCount = (matchedRequired || []).length;
-  const partialCount = (partialSkills || []).length;
-  const notIdentifiedRequiredSkillCount = requiredSkillCount - matchedRequiredSkillCount;
+  const partialSkillCount = (partialSkills || []).length;
+  const missingSkillCount = (missingSkills || []).length;
 
-  let skillCoveragePercentage = 0;
+  let overallMatchPercentage = 0;
   let skillGapPercentage = 100;
 
   if (requiredSkillCount > 0) {
-    // Weighted coverage: strong = 1.0, partial = 0.5
-    const effectivePoints = matchedRequiredSkillCount + (partialCount * 0.5);
-    skillCoveragePercentage = Math.min(100, Math.round((effectivePoints / requiredSkillCount) * 100));
-    skillGapPercentage = Math.max(0, 100 - skillCoveragePercentage);
+    const effectivePoints =
+      matchedRequiredSkillCount * MATCH_WEIGHTS.strong +
+      partialSkillCount * MATCH_WEIGHTS.partial +
+      missingSkillCount * MATCH_WEIGHTS.missing;
+
+    overallMatchPercentage = Math.min(
+      100,
+      Math.max(0, Math.round((effectivePoints / requiredSkillCount) * 100))
+    );
+
+    skillGapPercentage = 100 - overallMatchPercentage;
   }
 
   return {
     requiredSkillCount,
     matchedRequiredSkillCount,
-    notIdentifiedRequiredSkillCount,
-    skillCoveragePercentage,
+    partialSkillCount,
+    missingSkillCount,
+    notIdentifiedRequiredSkillCount: partialSkillCount + missingSkillCount,
+    overallMatchPercentage,
+    skillCoveragePercentage: overallMatchPercentage,
     skillGapPercentage,
+    matchWeights: MATCH_WEIGHTS,
   };
 };
 
-/**
- * Combined function: match and calculate coverage in one call.
- *
- * @param {Array} candidateSkills
- * @param {Array} requiredSkills
- * @param {Array} preferredSkills
- * @returns {Object} Full analysis result
- */
 const analyzeSkillGap = (candidateSkills, requiredSkills, preferredSkills) => {
   let req = requiredSkills;
   let pref = preferredSkills;
+
   if (requiredSkills && !Array.isArray(requiredSkills) && requiredSkills.requiredSkills) {
     req = requiredSkills.requiredSkills;
     pref = requiredSkills.preferredSkills || preferredSkills || [];
   }
 
   const matching = matchSkills(candidateSkills, req, pref);
+
   const coverage = calculateCoverage(
     matching.matchedRequiredSkills,
     req,
-    matching.partialSkills
+    matching.partialSkills,
+    matching.missingSkills
   );
 
   return {
@@ -215,5 +262,9 @@ const analyzeSkillGap = (candidateSkills, requiredSkills, preferredSkills) => {
   };
 };
 
-module.exports = { matchSkills, calculateCoverage, analyzeSkillGap };
-
+module.exports = {
+  MATCH_WEIGHTS,
+  matchSkills,
+  calculateCoverage,
+  analyzeSkillGap,
+};
