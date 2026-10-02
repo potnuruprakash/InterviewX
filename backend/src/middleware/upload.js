@@ -93,7 +93,7 @@ const videoUpload = multer({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Delete a file safely. Used to clean up processing temp files.
+ * Delete a file safely. Used to clean up processing temp files immediately after analysis.
  */
 const deleteFile = (filePath) => {
   if (!filePath) return;

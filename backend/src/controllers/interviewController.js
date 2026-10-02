@@ -974,6 +974,8 @@ const submitAudioResponse = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const submitVideoResponse = async (req, res) => {
+  // Video files are processing-only artifacts. The raw recording must never be
+  // retained after this request, regardless of analysis/DB success or failure.
   const videoPath = req.file?.path;
   try {
     const { questionId, responseId } = req.body;
@@ -983,7 +985,6 @@ const submitVideoResponse = async (req, res) => {
 
     const interview = await Interview.findOne({ _id: req.params.id, clerkUserId });
     if (!interview) {
-      deleteFile(videoPath);
       return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
     }
 
@@ -995,14 +996,14 @@ const submitVideoResponse = async (req, res) => {
       : await Response.findOne({ questionId, interviewId: interview._id, clerkUserId });
 
     if (!response) {
-      deleteFile(videoPath);
       return sendError(res, 404, 'RESPONSE_NOT_FOUND', 'Submit text answer first before attaching video.');
     }
 
     // ── Phase 6: Video analysis ─────────────────────────────────────────────
     const videoResult = await evaluateVideo(videoPath);
 
-    response.videoFilePath = videoPath;
+    // Do not persist the local path: the raw video is deleted in finally{}.
+    response.videoFilePath = null;
     response.videoFileSize = req.file.size;
     response.videoEvaluation = {
       framesProcessed: videoResult.framesProcessed ?? 0,
@@ -1035,9 +1036,12 @@ const submitVideoResponse = async (req, res) => {
       videoEvaluation: response.videoEvaluation,
     });
   } catch (error) {
-    deleteFile(videoPath);
     console.error('[Interview] Video submit error:', error);
     return sendError(res, 500, 'VIDEO_SUBMIT_FAILED', 'Could not process video.', error.message);
+  } finally {
+    // Always remove the raw recording after processing. This also runs for
+    // validation failures, AI failures, DB failures, and early returns.
+    deleteFile(videoPath);
   }
 };
 
