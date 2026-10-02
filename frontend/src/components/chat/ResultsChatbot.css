@@ -323,3 +323,212 @@
     padding: 0.45rem;
   }
 }
+
+
+/* ============================================================
+   MOBILE CHAT UX V2 — Results AI
+   Results AI stays visually distinct and remains scoped to the report.
+   ============================================================ */
+@media (max-width: 768px) {
+  .results-chatbot-overlay {
+    height: 100dvh;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  .results-chatbot-panel {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .results-chatbot-header {
+    height: 56px;
+    min-height: 56px;
+    padding: 0 10px;
+    gap: 7px;
+  }
+
+  .results-header-role-tag {
+    max-width: 125px;
+    font-size: 9.5px;
+  }
+
+  .btn-header-new-chat-results {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .btn-header-new-chat-results span {
+    display: none;
+  }
+
+  .results-questions-bar {
+    min-height: 42px;
+    padding: 5px 10px;
+    gap: 6px;
+  }
+
+  .questions-bar-label {
+    font-size: 9px;
+  }
+
+  .question-pill-btn {
+    min-height: 32px;
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  .results-chatbot-stream {
+    min-height: 0;
+    padding: 11px 10px 7px;
+    gap: 12px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .results-chatbot-stream .msg-bubble-container {
+    max-width: calc(100% - 35px);
+  }
+
+  .results-chatbot-stream .stream-msg-row.from-user .msg-bubble-container {
+    max-width: 88%;
+  }
+
+  .results-chatbot-stream .msg-bubble {
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .results-suggestions-bar,
+  .results-followups-bar {
+    padding: 7px 10px 6px;
+    gap: 5px;
+    background: rgba(11, 17, 32, 0.99);
+  }
+
+  .results-suggestions-bar .suggestions-chips-row,
+  .results-followups-bar .followups-chips-row {
+    gap: 6px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .results-suggestions-bar .suggestions-chips-row::-webkit-scrollbar,
+  .results-followups-bar .followups-chips-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .results-suggestions-bar .suggestion-chip,
+  .results-followups-bar .followup-chip {
+    min-height: 36px;
+    padding: 7px 12px;
+    font-size: 12px;
+  }
+
+  .results-chatbot-footer {
+    padding: 7px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: rgba(11, 17, 32, 0.99);
+  }
+
+  .results-chatbot-footer .input-bar-container {
+    min-height: 46px;
+    gap: 6px;
+    padding: 5px 6px 5px 11px;
+    border-radius: 14px;
+  }
+
+  .results-chatbot-footer .chatbot-textarea {
+    min-height: 34px;
+    max-height: 96px;
+    font-size: 15px;
+    line-height: 1.4;
+    padding: 7px 0;
+  }
+
+  .results-chatbot-footer .btn-voice-input,
+  .results-chatbot-footer .btn-send-message,
+  .results-chatbot-footer .btn-stop-generating {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    border-radius: 11px;
+  }
+
+  .results-chatbot-footer .btn-stop-generating {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .results-chatbot-footer .btn-stop-generating span,
+  .results-chatbot-footer .input-footer-note {
+    display: none;
+  }
+
+  .results-chatbot-sidebar {
+    top: 56px;
+    bottom: 0;
+    width: min(88vw, 330px);
+    max-width: 330px;
+  }
+
+  .results-chatbot-sidebar .btn-close-sidebar-mobile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+  }
+
+  .results-chatbot-sidebar .sidebar-list {
+    padding: 8px;
+  }
+
+  .results-chatbot-sidebar .sidebar-item {
+    min-height: 48px;
+    padding: 8px 10px;
+  }
+
+  .results-chatbot-sidebar .btn-del-conv {
+    opacity: 1;
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (max-width: 380px) {
+  .results-chatbot-header,
+  .results-questions-bar {
+    padding-inline: 7px;
+  }
+
+  .results-chatbot-stream {
+    padding-inline: 8px;
+  }
+
+  .results-chatbot-footer {
+    padding-inline: 7px;
+  }
+
+  .results-header-role-tag {
+    max-width: 100px;
+  }
+
+  .results-chatbot-stream .msg-bubble {
+    font-size: 13.5px;
+  }
+
+  .results-suggestions-bar .suggestion-chip,
+  .results-followups-bar .followup-chip {
+    font-size: 11.5px;
+    padding-inline: 10px;
+  }
+}
