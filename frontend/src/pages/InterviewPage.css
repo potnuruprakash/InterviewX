@@ -593,3 +593,88 @@
     padding: 8px 8px 40px 8px;
   }
 }
+
+
+/* ============================================================
+   MOBILE UX REFINEMENT — Interview Workspace
+   Keeps desktop layout unchanged. Optimized for touch devices.
+   ============================================================ */
+@media (max-width: 767px) {
+  .interview-workspace-container {
+    padding: 8px 10px calc(28px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .interview-workspace-columns {
+    gap: 12px;
+  }
+
+  .workspace-left-column,
+  .workspace-right-column {
+    min-width: 0;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .workspace-left-column {
+    padding-bottom: 4px;
+  }
+
+  .workspace-right-column {
+    order: 2;
+  }
+
+  .interview-error-banner,
+  .interview-notice-banner,
+  .timeout-notice-banner {
+    font-size: 12px;
+    line-height: 1.45;
+    padding: 8px 10px;
+  }
+
+  .previous-eval-card {
+    padding: 13px 14px;
+  }
+
+  .previous-eval-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .eval-tag-group {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .interview-workspace-container {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .workspace-left-column,
+  .workspace-right-column {
+    gap: 10px;
+  }
+
+  .previous-eval-card {
+    padding: 12px;
+  }
+
+  .eval-concepts-row {
+    align-items: flex-start;
+  }
+
+  .complete-card {
+    padding: 28px 18px;
+  }
+
+  .complete-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .complete-actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+}
