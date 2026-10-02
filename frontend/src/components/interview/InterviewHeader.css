@@ -247,3 +247,94 @@
     justify-content: center;
   }
 }
+
+
+/* ============================================================
+   MOBILE INTERVIEW HEADER REFINEMENT
+   ============================================================ */
+@media (max-width: 767px) {
+  .interview-topbar {
+    height: 54px;
+    min-height: 54px;
+    max-height: 54px;
+  }
+
+  .topbar-inner-container {
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .topbar-section-left {
+    flex: 0 1 auto;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .topbar-brand .brand-title {
+    display: none;
+  }
+
+  .topbar-logo-wrap {
+    width: 28px;
+    height: 28px;
+  }
+
+  .topbar-section-center {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .topbar-question-indicator {
+    max-width: 100%;
+    padding: 4px 8px;
+    font-size: 11px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .topbar-section-right {
+    gap: 5px;
+  }
+
+  .interview-timer-badge {
+    gap: 4px;
+    padding: 5px 7px;
+  }
+
+  .timer-badge-icon {
+    display: none;
+  }
+
+  .timer-badge-digits {
+    font-size: 13px;
+  }
+
+  .timer-badge-remaining {
+    display: none;
+  }
+
+  .btn-topbar-end {
+    width: 30px;
+    height: 30px;
+    padding: 5px;
+  }
+}
+
+@media (max-width: 360px) {
+  .topbar-inner-container {
+    padding: 0 6px;
+  }
+
+  .topbar-question-indicator {
+    font-size: 10.5px;
+    padding-inline: 6px;
+  }
+
+  .interview-timer-badge {
+    padding-inline: 6px;
+  }
+
+  .timer-badge-digits {
+    font-size: 12px;
+  }
+}
