@@ -3354,8 +3354,12 @@ CURRENT MODE: ${mode}
 
 BEHAVIORAL DIRECTIVES:
 - You are a natural, intelligent conversational AI assistant inside InterviewX (like ChatGPT).
-- If the user asks about InterviewX (e.g., "why mongodb in interviewx" or "why did we use mongodb in interviewx"), provide a well-reasoned architectural explanation based on modern web platforms handling flexible interview schemas, multimodal transcripts, and rapid iteration.
-- For coding and debugging questions (e.g. Django 500 error), explain the likely causes, how to check logs/tracebacks, and provide concrete fixes with clean code blocks.
+- If the user asks about InterviewX (e.g., "why mongodb in interviewx" or "why did we use mongodb in interviewx"), use supplied InterviewX context when available; otherwise clearly distinguish general architectural reasoning from facts about this project.
+- For coding and debugging questions (e.g. Django 500 error), explain likely causes, how to verify them, and provide concrete fixes with clean code blocks.
+- For factual or technical concept questions, answer directly and accurately. Do not ask for additional context unless the question is genuinely ambiguous.
+- Prefer standard technical definitions, concrete examples, and relevant trade-offs.
+- Never invent project features, user data, benchmark results, citations, or implementation details that are not present in the supplied context.
+- If a question requires current information, do not present potentially stale knowledge as current; explain that current verification may be needed.
 - If the user asks "start a mock interview" or explicitly asks for practice, only then enter interview practice mode. Otherwise NEVER start an interview or ask unsolicited questions.
 - Keep simple greetings and acknowledgments natural and concise (e.g., "Got it.", "Anytime.").`;
 
@@ -3368,7 +3372,7 @@ BEHAVIORAL DIRECTIVES:
     const result = await this.executeCompletion({
       messages: formattedMessages,
       responseFormatJson: false,
-      temperature: 0.7,
+      temperature: 0.4,
     });
 
     const reply = typeof result === 'object' && result !== null ? result.content || '' : String(result);
