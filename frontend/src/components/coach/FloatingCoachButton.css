@@ -121,10 +121,26 @@
   }
 }
 
+/* Results AI Distinctive Cyan / Blue Styling */
+.floating-coach-btn.is-results-btn {
+  background: linear-gradient(135deg, #0284c7 0%, #0d9488 100%);
+  box-shadow: 0 8px 32px rgba(2, 132, 199, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.floating-coach-btn.is-results-btn:hover {
+  box-shadow: 0 12px 40px rgba(2, 132, 199, 0.6), 0 4px 12px rgba(13, 148, 136, 0.45);
+}
+
 /* Light theme overrides */
 [data-theme='light'] .floating-coach-btn {
   background: linear-gradient(135deg, #6d4aff 0%, #3b82f6 100%);
   box-shadow: 0 8px 24px rgba(109, 74, 255, 0.3);
+}
+
+[data-theme='light'] .floating-coach-btn.is-results-btn {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  box-shadow: 0 8px 24px rgba(2, 132, 199, 0.3);
 }
 
 [data-theme='light'] .floating-coach-btn.is-active {
@@ -142,16 +158,14 @@
   }
 
   .floating-coach-btn {
-    padding: 10px 14px;
-    font-size: 13px;
+    min-width: 48px;
+    min-height: 48px;
+    padding: 12px;
+    border-radius: 9999px;
+    justify-content: center;
   }
 
   .coach-btn-label {
     display: none; /* Icon-only floating pill on small screens to avoid obstruction */
-  }
-
-  .floating-coach-btn {
-    padding: 12px;
-    border-radius: 50%;
   }
 }

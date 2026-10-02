@@ -350,7 +350,39 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* 3. Performance (Single Restrained Chart) */}
+        {/* 3. Next Step & Skill Gaps Focus (Actionable Area) */}
+        <section className="dash-panel dash-next-panel">
+          <div className="dash-next-inner">
+            <div className="dash-next-info">
+              <span className="dash-eyebrow">NEXT STEP · SKILL GAP FOCUS</span>
+              <h3 className="dash-next-heading">Continue practicing for your next interview.</h3>
+              {recommendedFocus && (
+                <p className="dash-next-focus">
+                  Recommended focus: <strong>{recommendedFocus}</strong>
+                </p>
+              )}
+              {hasVoiceOrBehaviorData && latestCompleted && (
+                <div className="dash-next-voice-hint">
+                  <span>Voice & behavior analysis available from latest session</span>
+                  <span className="dash-hint-sep">·</span>
+                  <Link
+                    to={`/interview/${latestCompleted._id || latestCompleted.id}/results`}
+                    className="dash-link-subtle"
+                  >
+                    View Analysis →
+                  </Link>
+                </div>
+              )}
+            </div>
+            <div className="dash-next-action">
+              <Link to={practiceTargetUrl} className="btn btn-primary" id="dash-start-practice-btn">
+                Start Practice →
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* 4. Performance (Score Progression Chart) */}
         <section className="dash-panel dash-perf-panel">
           <div className="dash-panel-header">
             <div>
@@ -404,38 +436,6 @@ export default function Dashboard() {
               <p>Complete more interviews to track your progress.</p>
             </div>
           )}
-        </section>
-
-        {/* 4. Next Step (One Compact Actionable Area) */}
-        <section className="dash-panel dash-next-panel">
-          <div className="dash-next-inner">
-            <div className="dash-next-info">
-              <span className="dash-eyebrow">NEXT STEP</span>
-              <h3 className="dash-next-heading">Continue practicing for your next interview.</h3>
-              {recommendedFocus && (
-                <p className="dash-next-focus">
-                  Recommended focus: <strong>{recommendedFocus}</strong>
-                </p>
-              )}
-              {hasVoiceOrBehaviorData && latestCompleted && (
-                <div className="dash-next-voice-hint">
-                  <span>Voice & behavior analysis available from latest session</span>
-                  <span className="dash-hint-sep">·</span>
-                  <Link
-                    to={`/interview/${latestCompleted._id || latestCompleted.id}/results`}
-                    className="dash-link-subtle"
-                  >
-                    View Analysis →
-                  </Link>
-                </div>
-              )}
-            </div>
-            <div className="dash-next-action">
-              <Link to={practiceTargetUrl} className="btn btn-primary" id="dash-start-practice-btn">
-                Start Practice →
-              </Link>
-            </div>
-          </div>
         </section>
 
         {/* 5. Recent Interviews (Professional Compact Table) */}

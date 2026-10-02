@@ -29,7 +29,13 @@ import {
 import './DashboardChatbot.css'
 import './ResultsChatbot.css'
 
-export default function ResultsChatbot({ isOpen, onClose, resultId }) {
+export default function ResultsChatbot({
+  isOpen,
+  onClose,
+  resultId,
+  questions = [],
+  initialQuery = null,
+}) {
   const {
     getResultChatSessions,
     createResultChatSession,
@@ -162,27 +168,36 @@ export default function ResultsChatbot({ isOpen, onClose, resultId }) {
   }, [getResultChatSessions, resultId])
 
   // ── Start Brand New Session for this result ────────────────────────────────
-  const startNewSession = useCallback(async () => {
-    if (!resultId) return
-    handleStopGenerating()
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await createResultChatSession(resultId)
-      const created = res.data?.session
-      const initialMsgs = res.data?.messages || []
+  const startNewSession = useCallback(
+    async (customQuery = null) => {
+      if (!resultId) return
+      handleStopGenerating()
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await createResultChatSession(resultId)
+        const created = res.data?.session
+        const initialMsgs = res.data?.messages || []
 
-      setActiveSession(created)
-      setMessages(initialMsgs)
-      loadSessionsList()
-    } catch (err) {
-      console.error('[ResultsChatbot] Error creating session:', err)
-      setError('Could not start new Results analysis session. Please retry.')
-    } finally {
-      setLoading(false)
-      setSidebarOpen(false)
-    }
-  }, [createResultChatSession, loadSessionsList, resultId])
+        setActiveSession(created)
+        setMessages(initialMsgs)
+        loadSessionsList()
+
+        if (customQuery && created?.id) {
+          setTimeout(() => {
+            handleSendMessage(customQuery, created.id)
+          }, 150)
+        }
+      } catch (err) {
+        console.error('[ResultsChatbot] Error creating session:', err)
+        setError('Could not start new Results analysis session. Please retry.')
+      } finally {
+        setLoading(false)
+        setSidebarOpen(false)
+      }
+    },
+    [createResultChatSession, loadSessionsList, resultId]
+  )
 
   // ── Select Past Session from this Result's History ─────────────────────────
   const selectSession = useCallback(
@@ -309,9 +324,10 @@ export default function ResultsChatbot({ isOpen, onClose, resultId }) {
   }
 
   // ── Send Message ──────────────────────────────────────────────────────────
-  const handleSendMessage = async (textToSend = null) => {
+  const handleSendMessage = async (textToSend = null, targetSessionId = null) => {
     const text = (textToSend !== null ? textToSend : inputValue).trim()
-    if (!text || chatStatus !== 'IDLE' || !activeSession?.id || !resultId) return
+    const activeId = targetSessionId || activeSession?.id
+    if (!text || chatStatus !== 'IDLE' || !activeId || !resultId) return
 
     setInputValue('')
     setError(null)
@@ -341,7 +357,7 @@ export default function ResultsChatbot({ isOpen, onClose, resultId }) {
     abortControllerRef.current = new AbortController()
 
     try {
-      const res = await sendResultChatMessage(resultId, activeSession.id, { content: text })
+      const res = await sendResultChatMessage(resultId, activeId, { content: text })
       const serverUserMsg = res.data?.userMessage
       const serverAssistantMsg = res.data?.assistantMessage
       const updatedSession = res.data?.session
@@ -456,13 +472,13 @@ export default function ResultsChatbot({ isOpen, onClose, resultId }) {
   // ── NEW CHAT EVERY TIME CHATBOT OPENS ──────────────────────────────────────
   useEffect(() => {
     if (isOpen && resultId) {
-      startNewSession()
+      startNewSession(initialQuery)
       loadSessionsList()
     } else {
       setSidebarOpen(false)
       handleStopGenerating()
     }
-  }, [isOpen, resultId])
+  }, [isOpen, resultId, initialQuery])
 
   // Copy code block
   const handleCopyCode = (codeText, blockId) => {
@@ -486,11 +502,12 @@ export default function ResultsChatbot({ isOpen, onClose, resultId }) {
 
   // Default suggestions for Results AI
   const defaultSuggestions = [
+    'What was the correct answer for question 1?',
+    'Show my answer vs the ideal answer',
+    'What did I miss?',
+    'Give me an interview-ready answer',
     'Why did I get this score?',
     'Explain my weak areas',
-    'How can I improve?',
-    'Analyze my weakest question',
-    'Generate a study plan',
   ]
 
   const lastMsg = messages[messages.length - 1]
@@ -571,6 +588,31 @@ export default function ResultsChatbot({ isOpen, onClose, resultId }) {
             </button>
           </div>
         </header>
+
+        {/* ── QUESTION QUICK-BAR (IF QUESTIONS AVAILABLE) ─────────────── */}
+        {questions && questions.length > 0 && (
+          <div className="results-questions-bar" id="results-questions-bar">
+            <span className="questions-bar-label">Questions:</span>
+            <div className="questions-pills-scroll">
+              {questions.map((q, qIdx) => {
+                const qNum = q.questionNumber || qIdx + 1
+                return (
+                  <button
+                    key={q.questionId || qIdx}
+                    type="button"
+                    className="question-pill-btn"
+                    onClick={() => handleSendMessage(`What was the correct answer for question ${qNum}?`)}
+                    disabled={isGenerating}
+                    title={q.question ? `Q${qNum}: ${q.question.slice(0, 50)}...` : `Question ${qNum}`}
+                    id={`results-q-pill-${qNum}`}
+                  >
+                    <span>Q{qNum}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── SIDEBAR (HISTORY FOR THIS RESULT ONLY) ────────────────────── */}
         <aside

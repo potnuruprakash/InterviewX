@@ -9,7 +9,6 @@ import {
 import useSpeechRecognition from '../hooks/useSpeechRecognition'
 import AnswerComposer from '../components/AnswerComposer'
 import AudioRecorder from '../components/AudioRecorder'
-import AICoachDrawer from '../components/AICoachDrawer'
 import {
   InterviewHeader,
   QuestionCard,
@@ -824,9 +823,6 @@ export default function InterviewPage() {
         onConfirm={executeSkip}
         skipping={skipping}
       />
-
-      {/* Contextual AI Coach Drawer */}
-      <AICoachDrawer activeInterviewId={id} currentQuestion={currentQuestion} />
     </div>
   )
 }

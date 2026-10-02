@@ -1654,6 +1654,53 @@
 
 .tip-icon { flex-shrink: 0; margin-top: 1px; }
 
+/* Ask Results AI Action Row */
+.q-ask-coach-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.btn-ask-results-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  background: rgba(2, 132, 199, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 8px;
+  color: #38bdf8;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-ask-results-ai:hover {
+  background: rgba(2, 132, 199, 0.22);
+  border-color: rgba(56, 189, 248, 0.55);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+[data-theme='light'] .q-ask-coach-row {
+  border-top-color: #E2E8F0;
+}
+
+[data-theme='light'] .btn-ask-results-ai {
+  background: #F0F9FF;
+  border-color: #BAE6FD;
+  color: #0284C7;
+}
+
+[data-theme='light'] .btn-ask-results-ai:hover {
+  background: #E0F2FE;
+  border-color: #7DD3FC;
+  color: #0369A1;
+}
+
 /* --------------------------------------------------------------------------
    11. PROGRESSIVE DISCLOSURE HEADER + COLLAPSIBLE SECTIONS
    -------------------------------------------------------------------------- */

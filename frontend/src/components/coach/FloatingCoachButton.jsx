@@ -10,13 +10,14 @@ export default function FloatingCoachButton({
   tooltip = 'Open Dashboard AI',
   id,
 }) {
-  const buttonId = id || (label.toLowerCase().includes('result') ? 'btn-floating-results-ai' : 'btn-floating-dashboard-ai')
+  const isResults = label.toLowerCase().includes('result')
+  const buttonId = id || (isResults ? 'btn-floating-results-ai' : 'btn-floating-dashboard-ai')
 
   return (
     <div className="floating-coach-container">
       <button
         type="button"
-        className={`floating-coach-btn ${isOpen ? 'is-active' : ''}`}
+        className={`floating-coach-btn ${isOpen ? 'is-active' : ''} ${isResults ? 'is-results-btn' : ''}`}
         onClick={onClick}
         aria-label={isOpen ? 'Close Assistant' : tooltip}
         title={tooltip}

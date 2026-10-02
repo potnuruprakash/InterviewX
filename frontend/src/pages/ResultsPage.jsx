@@ -135,7 +135,7 @@ const PriorityBadge = memo(({ priority }) => {
 // --------------------------------------------------------------------------
 // Question Accordion Card Component
 // --------------------------------------------------------------------------
-const QuestionAccordionCard = memo(({ q, isExpanded, onToggle }) => {
+const QuestionAccordionCard = memo(({ q, isExpanded, onToggle, onAskResultsAI }) => {
   const isSkipped = q.status === 'skipped'
   const score = q.score !== null && q.score !== undefined ? Math.round(q.score) : null
   const tier = isSkipped ? { label: 'Skipped', color: '#f59e0b' } : getScoreTier(score)
@@ -349,6 +349,23 @@ const QuestionAccordionCard = memo(({ q, isExpanded, onToggle }) => {
               )}
             </div>
           )}
+
+          {/* Ask Results AI Action Row */}
+          <div className="q-ask-coach-row">
+            <button
+              type="button"
+              className="btn-ask-results-ai"
+              onClick={(e) => {
+                e.stopPropagation()
+                onAskResultsAI && onAskResultsAI(q.questionNumber)
+              }}
+              title={`Ask Results AI for ideal answer and comparison for Question ${q.questionNumber}`}
+              id={`btn-ask-results-ai-q${q.questionNumber}`}
+            >
+              <Sparkles size={13} />
+              <span>Ask Results AI for Ideal Answer</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -415,6 +432,12 @@ export default function ResultsPage() {
   const [practiceTopics, setPracticeTopics] = useState([])
   const [reInterviewLoading, setReInterviewLoading] = useState(false)
   const [coachOpen, setCoachOpen] = useState(false)
+  const [initialCoachQuery, setInitialCoachQuery] = useState(null)
+
+  const handleAskQuestionInCoach = useCallback((qNum) => {
+    setInitialCoachQuery(`What was the correct answer for question ${qNum}?`)
+    setCoachOpen(true)
+  }, [])
 
   const activeFetchIdRef = useRef(null)
 
@@ -1615,6 +1638,7 @@ export default function ResultsPage() {
                     q={q}
                     isExpanded={!!expandedQuestions[idx]}
                     onToggle={() => toggleQuestion(idx)}
+                    onAskResultsAI={handleAskQuestionInCoach}
                   />
                 ))
               )}
@@ -2103,15 +2127,23 @@ export default function ResultsPage() {
         {/* Results AI Floating Button & Chatbot */}
         <FloatingCoachButton
           isOpen={coachOpen}
-          onClick={() => setCoachOpen((prev) => !prev)}
+          onClick={() => {
+            if (coachOpen) setInitialCoachQuery(null)
+            setCoachOpen((prev) => !prev)
+          }}
           label="Results AI"
           tooltip="Open Results AI"
         />
         <Suspense fallback={null}>
           <ResultsChatbot
             isOpen={coachOpen}
-            onClose={() => setCoachOpen(false)}
+            onClose={() => {
+              setCoachOpen(false)
+              setInitialCoachQuery(null)
+            }}
             resultId={id}
+            questions={questionBreakdown}
+            initialQuery={initialCoachQuery}
           />
         </Suspense>
 
