@@ -395,3 +395,66 @@
 .pill-restore-icon {
   color: #818cf8;
 }
+
+
+/* ============================================================
+   MOBILE CAMERA WINDOW
+   Prevents the floating preview from covering the answer UI.
+   ============================================================ */
+@media (max-width: 767px) {
+  .floating-video-card {
+    width: min(230px, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+    right: 12px !important;
+    left: auto !important;
+    top: auto !important;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 90;
+  }
+
+  .floating-cam-pill {
+    right: 12px !important;
+    left: auto !important;
+    top: auto !important;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 90;
+    max-width: calc(100vw - 24px);
+  }
+
+  .fvw-header-bar {
+    min-height: 32px;
+    padding: 6px 8px;
+  }
+
+  .fvw-user-tag {
+    max-width: 90px;
+  }
+
+  .fvw-footer-bar {
+    padding: 6px 8px;
+  }
+
+  .fvw-btn-toggle {
+    min-height: 32px;
+    padding: 6px 8px;
+  }
+}
+
+@media (max-width: 390px) {
+  .floating-video-card {
+    width: min(210px, calc(100vw - 20px)) !important;
+    max-width: calc(100vw - 20px) !important;
+    right: 10px !important;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .fvw-btn-toggle span {
+    display: none;
+  }
+
+  .fvw-btn-toggle {
+    width: 34px;
+    justify-content: center;
+    padding-inline: 5px;
+  }
+}
