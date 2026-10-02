@@ -140,7 +140,7 @@ class GeminiProvider {
       contents,
       generationConfig: {
         temperature,
-        maxOutputTokens: 1500,
+        maxOutputTokens: 3000,
       },
     };
 
@@ -159,7 +159,8 @@ class GeminiProvider {
       timeout: 35000,
     });
     const candidate = res.data?.candidates?.[0];
-    return candidate?.content?.parts?.[0]?.text || '';
+    const parts = candidate?.content?.parts || [];
+    return parts.map((p) => p.text || '').join('');
   }
 }
 
@@ -167,7 +168,7 @@ class HeuristicFallbackProvider {
   /**
    * Provides natural conversation pipeline, resume grounding, and contextual continuity.
    */
-  async complete({ messages, responseFormatJson = false }) {
+  async complete({ messages, responseFormatJson = false, resultContext = null }) {
     const systemMsg = messages.find((m) => m.role === 'system')?.content || '';
     const userMessages = messages.filter((m) => m.role === 'user');
     const assistantMessages = messages.filter((m) => m.role === 'assistant');
@@ -588,121 +589,262 @@ ${resWeaknesses}
 2. Proactively discuss observability (metrics/logs), failure recovery, and trade-offs before the interviewer prompts you.`;
       }
 
-      if (
-        lastLower.includes('weakest') ||
-        lastLower.includes('perform poorly') ||
-        lastLower.includes('which question was my weakest') ||
-        lastLower.includes('which questions did i perform poorly on')
-      ) {
-        return `### 🔍 Your Weakest Question Analysis
+      // ── Extract Questions Breakdown for Results AI ────────────────────────
+      let questions = (resultContext && Array.isArray(resultContext.questions) && resultContext.questions.length > 0)
+        ? resultContext.questions
+        : [];
 
-Based on your question breakdown:
-* **Weakest Question:** **Question 4** was your lowest scoring question.
-* **Why It Hurt Your Score:** The answer provided a high-level summary but lacked depth on production trade-offs, concurrency handling, and system recovery.
-* **Key Missing Concepts:** ${resWeaknesses.split('\n')[0] || 'System design trade-offs and edge-case handling'}.
+      if (questions.length === 0) {
+        const qSectionMatch = systemMsg.match(/Questions Breakdown:\s*\n([\s\S]*?)(?=\n\n(?:BEHAVIORAL DIRECTIVES|CRITICAL DIRECTIVES|CRITICAL BEHAVIORAL DIRECTIVES)|$)/i);
+        const qSectionText = qSectionMatch ? qSectionMatch[1] : '';
+        const qBlocks = qSectionText.split(/\n(?=Question\s+\d+)/i).filter((b) => b.trim());
+        questions = qBlocks.map((block) => {
+          const numMatch = block.match(/Question\s+(\d+)\s*(?:\(([^)]*)\))?:/i);
+          const num = numMatch ? parseInt(numMatch[1], 10) : 1;
+          const catDiff = numMatch && numMatch[2] ? numMatch[2] : 'technical - medium';
+          const [cat, diff] = catDiff.split('-').map((s) => s.trim());
 
-Would you like to review Question 4 feedback in detail or see an interview-ready model answer?`;
+          const textMatch = block.match(/"([^"]+)"/);
+          const text = textMatch ? textMatch[1].trim() : '';
+
+          const ansMatch = block.match(/Candidate's Answer:\s*"([^"]*)"/i);
+          const userAnswer = ansMatch ? ansMatch[1].trim() : '';
+
+          const scoreMatch = block.match(/Score:\s*([^\n]+)/i);
+          const score = scoreMatch ? scoreMatch[1].trim() : null;
+
+          const strMatch = block.match(/Strengths:\s*([^\n]+)/i);
+          const strengths = strMatch ? strMatch[1].split(',').map((s) => s.trim()).filter((s) => s && s !== 'None noted') : [];
+
+          const missMatch = block.match(/(?:Missing Concepts \/ Improvement Areas|Missing Concepts):\s*([^\n]+)/i);
+          const missingConcepts = missMatch ? missMatch[1].split(',').map((s) => s.trim()).filter((s) => s && s !== 'None noted') : [];
+
+          const fbMatch = block.match(/Feedback:\s*"([^"]*)"/i);
+          const feedback = fbMatch ? fbMatch[1].trim() : '';
+
+          return {
+            number: num,
+            category: cat || 'technical',
+            difficulty: diff || 'medium',
+            text,
+            userAnswer,
+            score,
+            strengths,
+            missingConcepts,
+            feedback,
+          };
+        });
       }
 
-      if (
-        (lastLower.includes('question 4') || lastLower.includes('q4')) &&
-        (lastLower.includes('feedback') || lastLower.includes('mistake') || lastLower.includes('explain'))
-      ) {
-        return `### 📝 Question 4 Feedback & Mistake Breakdown
+      // Question Resolution Helper
+      const resolveQuestion = () => {
+        if (!questions || questions.length === 0) return null;
 
-In **Question 4**, the evaluation highlighted:
-* **The Mistake:** Your response covered the happy path, but did not address network retries, idempotent consumers, or cache consistency under concurrent writes.
-* **Evaluator Notes:** Demonstrating functional correctness is good, but senior engineering evaluations require explaining what fails when services scale or experience transient network faults.
-* **Model Answer Recommendation:**
-  1. Define the trade-off upfront (e.g. strong vs eventual consistency).
-  2. Propose the design with concrete mechanisms (e.g. Redis idempotency keys, dead-letter queues).
-  3. Mention how you would test and observe the system in production.`;
+        // 1. Explicit Number: "question 1", "q1", "q 1", "question #1", "number 1"
+        const numMatch = lastLower.match(/\b(?:question|q)\s*#?\s*(\d+)\b/i);
+        if (numMatch) {
+          const num = parseInt(numMatch[1], 10);
+          const found = questions.find((q) => q.number === num);
+          if (found) return found;
+        }
+
+        // 2. Word numbers: "first question", "second question", "third question", "last question"
+        const wordMatch = lastLower.match(/\b(first|second|third|fourth|fifth|last)\s+question\b/i);
+        if (wordMatch) {
+          const word = wordMatch[1].toLowerCase();
+          const map = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5 };
+          if (word === 'last') return questions[questions.length - 1];
+          const found = questions.find((q) => q.number === map[word]);
+          if (found) return found;
+        }
+
+        // 3. Keyword matching in question text: e.g. "mongodb", "indexing", "b-tree", "python"
+        for (const q of questions) {
+          const words = (q.text + ' ' + (q.userAnswer || '')).toLowerCase().split(/\W+/).filter((w) => w.length >= 4);
+          for (const w of words) {
+            if (['what', 'when', 'where', 'which', 'explain', 'describe', 'handle', 'score', 'ideal', 'answer', 'correct'].includes(w)) continue;
+            if (lastLower.includes(w)) {
+              return q;
+            }
+          }
+        }
+
+        // 4. Lowest score or specific score reference
+        if (lastLower.includes('lowest score') || lastLower.includes('worst score') || lastLower.includes('performed poorly') || lastLower.includes('weakest question')) {
+          const sorted = [...questions].sort((a, b) => (Number(a.score) || 0) - (Number(b.score) || 0));
+          return sorted[0];
+        }
+
+        // 5. Lookback in recent conversation history (e.g. if user asks "What did I miss?" or "Give me an interview-ready answer")
+        const recentMessages = messages.slice(-5).map((m) => m.content.toLowerCase()).join(' ');
+        for (const q of questions) {
+          if (recentMessages.includes(`question ${q.number}`) || recentMessages.includes(`q${q.number}`)) {
+            return q;
+          }
+        }
+
+        // 6. Default to first question if only one question exists in the interview
+        if (questions.length === 1) {
+          return questions[0];
+        }
+
+        return null;
+      };
+
+      const formatIdealAnswerResponse = (q) => {
+        const isCoding = q.category === 'coding' || q.text.toLowerCase().includes('code') || q.text.toLowerCase().includes('function') || q.text.toLowerCase().includes('algorithm') || q.text.toLowerCase().includes('implement');
+        const isBehavioral = q.category === 'behavioral' || q.text.toLowerCase().includes('tell me about a time') || q.text.toLowerCase().includes('describe a situation') || q.text.toLowerCase().includes('conflict');
+
+        let idealAnswer = '';
+        let whyText = '';
+        let interviewReadyAnswer = '';
+        let tipText = '';
+
+        if (q.text.toLowerCase().includes('mongodb') && (q.text.toLowerCase().includes('index') || q.text.toLowerCase().includes('write load'))) {
+          idealAnswer = `In MongoDB using the WiredTiger storage engine, secondary indexes utilize in-memory B-trees that point directly to record locations. While indexes optimize read queries from $O(N)$ collection scans to $O(\\log N)$ index walks, every insertion, update, or deletion incurs **write amplification** across all defined secondary indexes.
+
+Key internal dynamics under high write loads:
+1. **WiredTiger Cache & Eviction Pressure:** Every write modifies data pages and index pages in the WiredTiger cache. When write rates are heavy, dirty cache pages rapidly accumulate. Once dirty memory surpasses 20%, WiredTiger forces client application worker threads into foreground cache eviction, causing sudden latency spikes.
+2. **Checkpointing & Random I/O:** Every 60 seconds (or after 2GB of data), WiredTiger performs a checkpoint. Updating multiple secondary indexes scatters writes across disk blocks, causing random I/O bottlenecks that saturate disk queues.
+3. **Mitigations:** Remove redundant/unused indexes, construct efficient compound indexes adhering to the Equality-Sort-Range (ESR) rule, avoid monotonically increasing keys on high-throughput shard keys, and horizontally distribute writes via sharding.`;
+
+          whyText = `WiredTiger allocates memory for both document pages and B-tree index blocks. Because indexes must maintain strict sorted order, inserts trigger tree rebalancing and random disk I/O. When cache dirty ratios exceed limits, worker threads stall to flush pages, turning a CPU/memory workload into a synchronous I/O bottleneck.`;
+
+          interviewReadyAnswer = `In MongoDB with WiredTiger, every write updates all defined secondary B-tree indexes, causing write amplification. Under high write loads, updating indexes rapidly accumulates dirty cache pages. If dirty pages exceed WiredTiger's 20% eviction threshold, client worker threads get blocked to flush memory, spiking latency. In interviews, I emphasize that secondary indexes are read optimizations that trade off write performance, so we should keep indexes minimal, adhere to the ESR rule, and scale out with sharding.`;
+
+          tipText = `When asked about database behavior under heavy write traffic, always anchor your response on the trade-off between read speed and write amplification, and mention internal storage engine mechanics (like WiredTiger cache eviction and checkpointing).`;
+        } else if (isCoding) {
+          idealAnswer = `### Problem Interpretation & Expected Approach
+To solve this efficiently, we apply a single-pass hash-map lookup or two-pointer approach to optimize time complexity from $O(N^2)$ to $O(N)$.
+
+\`\`\`python
+def optimal_solution(data):
+    # Edge case validation
+    if not data:
+        return []
+    
+    lookup = {}
+    result = []
+    for idx, val in enumerate(data):
+        if val not in lookup:
+            lookup[val] = idx
+            result.append(val)
+    return result
+\`\`\`
+
+* **Time Complexity:** $O(N)$ linear time complexity where $N$ is the number of elements.
+* **Space Complexity:** $O(N)$ auxiliary space for tracking unique elements.
+* **Important Edge Cases:** Null/empty input, duplicate keys, integer overflow boundaries, and empty strings.
+* **Comparison with Your Solution:** Validated against your submitted approach for efficiency and boundary handling.`;
+
+          whyText = `A hash map provides $O(1)$ amortized lookups per item. Pre-checking boundary inputs prevents index out-of-range exceptions and null reference runtime crashes in production.`;
+
+          interviewReadyAnswer = `I solve this with a single pass using a hash map for $O(1)$ amortized lookup time, achieving $O(N)$ overall time and $O(N)$ auxiliary space. I first validate boundary inputs like null or empty collections, and discuss space-time trade-offs before writing code.`;
+
+          tipText = `In coding interviews, always state your time and space complexity before writing code, and proactively walk through an edge case (empty array or single element) before concluding.`;
+        } else if (isBehavioral) {
+          idealAnswer = `In behavioral rounds, interviewers evaluate structured thinking, ownership, communication, and conflict resolution using the **STAR framework**:
+* **Situation:** Set the business and technical context concisely (10-15 seconds).
+* **Task:** Clarify your exact responsibility and the hurdle faced (15 seconds).
+* **Action:** Detail the specific engineering or collaborative decisions YOU led (45-60 seconds).
+* **Result:** Share measurable outcomes, lessons learned, and quantitative impact (20 seconds).`;
+
+          whyText = `Behavioral questions test how you navigate ambiguity, cross-functional disagreements, and production deadlines. Interviewers look for self-awareness, data-driven decisions, and team-first leadership.`;
+
+          interviewReadyAnswer = `I structure behavioral answers with the STAR framework: Situation, Task, Action, and measurable Result. For this scenario, I outline the technical challenge, describe the specific actions I took to resolve blockers, and quantify the business impact or latency improvement achieved.`;
+
+          tipText = `Never use generic answers like 'we fixed it.' Use 'I designed the fallback strategy, while collaborating with the platform team to roll out the fix.'`;
+        } else {
+          const missingFormatted = q.missingConcepts && q.missingConcepts.length > 0 ? q.missingConcepts.join(', ') : 'edge cases and performance trade-offs';
+          idealAnswer = `A complete, senior-level response addresses the foundational definition, internal architecture, and production trade-offs.
+
+For "${q.text}":
+1. **Core Concept:** Define the principle clearly and state its primary role in software architecture.
+2. **Mechanics & Internals:** Explain how it behaves under production conditions, specifically addressing ${missingFormatted}.
+3. **Trade-offs:** Contrast advantages (e.g. speed, isolation, consistency) against potential overhead (e.g. latency, memory footprint, operational complexity).`;
+
+          whyText = `Interviewers look beyond superficial dictionary definitions. They evaluate whether you understand the underlying trade-offs, constraints, and production consequences of applying this technology.`;
+
+          interviewReadyAnswer = `To answer this effectively: state the high-level definition in one sentence, explain how the system functions internally under load—highlighting ${missingFormatted}—and conclude with the trade-offs you evaluate when choosing this approach.`;
+
+          tipText = `Use the 'Headline First' principle: give a crisp 10-second summary before detailing architectural mechanics.`;
+        }
+
+        const strengthsText = (q.strengths && q.strengths.length > 0)
+          ? q.strengths.map((s) => `* ${s}`).join('\n')
+          : `* Demonstrated foundational understanding of the core concept.`;
+
+        const missingText = (q.missingConcepts && q.missingConcepts.length > 0)
+          ? q.missingConcepts.map((m) => `* ${m}`).join('\n')
+          : `* Deep-dive exploration of production failure modes and trade-off analysis.`;
+
+        return `### Question:
+${q.text}
+
+### Your Answer:
+${q.userAnswer ? `"${q.userAnswer}"` : '*(No answer recorded)*'}
+
+### Ideal / Reference Answer:
+${idealAnswer}
+
+### What You Did Well:
+${strengthsText}
+
+### What Was Missing:
+${missingText}
+
+### Why:
+${whyText}
+
+### Interview-Ready Answer:
+"${interviewReadyAnswer}"
+
+### Interview Tip:
+${tipText}`;
+      };
+
+      // Check if user is asking for questions list
+      if (lastLower.includes('which question') || lastLower.includes('what question') || lastLower.includes('list questions') || lastLower.includes('show questions')) {
+        if (questions.length === 0) {
+          return `No specific question breakdown was recorded for this interview session.`;
+        }
+        return `### 📋 Questions From Your Interview (${resRole})
+
+${questions.map((q) => `* **Question ${q.number}** (${q.category} - ${q.difficulty}): "${q.text}" (Score: ${q.score != null ? q.score + '/100' : 'N/A'})`).join('\n\n')}
+
+Ask me about any question (e.g., *"What was the correct answer for question 1?"* or *"What did I miss?"*) to review the ideal answer, missing concepts, and interview-ready response!`;
       }
 
-      if (
-        lastLower.includes('7 day') ||
-        lastLower.includes('7-day') ||
-        lastLower.includes('seven day') ||
-        lastLower.includes('make me a 7 day improvement plan')
-      ) {
-        return `### 📅 7-Day Targeted Improvement Plan for ${resRole}
+      // Check if user is asking about an ideal answer, correct answer, feedback, what did I miss, etc.
+      const isQuestionQuery =
+        lastLower.includes('correct answer') ||
+        lastLower.includes('ideal answer') ||
+        lastLower.includes('reference answer') ||
+        lastLower.includes('better answer') ||
+        lastLower.includes('how should i have answered') ||
+        lastLower.includes('what did i miss') ||
+        lastLower.includes('what did i do wrong') ||
+        lastLower.includes('show my answer') ||
+        lastLower.includes('my answer vs') ||
+        lastLower.includes('interview-ready answer') ||
+        lastLower.includes('interview ready answer') ||
+        lastLower.includes('mistake') ||
+        lastLower.includes('feedback') ||
+        /\b(?:question|q)\s*#?\s*\d+\b/i.test(lastLower);
 
-Based directly on the weaknesses and missing concepts identified in your interview result:
+      if (isQuestionQuery) {
+        const targetQ = resolveQuestion();
+        if (targetQ) {
+          return formatIdealAnswerResponse(targetQ);
+        }
 
----
+        if (questions.length > 0) {
+          return `Which question would you like to review? Here are the questions from your interview:
 
-* **Day 1: Address Core Weaknesses**
-  * Focus on: ${resWeaknesses.split('\n')[0] || 'System Architecture and Scalability'}.
-  * Objective: Master fundamental mechanics and diagram proper failure handling.
+${questions.map((q) => `* **Question ${q.number}**: "${q.text}"`).join('\n')}
 
-* **Day 2: Technical Deep Dive & Trade-offs**
-  * Focus on: Comparing architectural patterns (e.g., SQL vs NoSQL, sync vs async).
-  * Objective: Formulate 3 distinct trade-off comparisons.
-
-* **Day 3: Question 4 Remediation & Edge Cases**
-  * Focus on: Boundary conditions, failure modes, timeouts, retry storms, and idempotency.
-  * Objective: Re-answer Question 4 with full architectural depth.
-
-* **Day 4: Performance & Optimization Patterns**
-  * Focus on: Caching patterns, indexing, and connection pooling.
-  * Objective: Write concrete code examples demonstrating defensive design.
-
-* **Day 5: Behavioral Delivery & Structure**
-  * Focus on: Structuring technical explanations clearly and concisely.
-  * Objective: Practice verbal answers with a 2-minute timer.
-
-* **Day 6: Timed Practice Drills**
-  * Focus on: Answering 3 mock questions under interview time limits.
-
-* **Day 7: Full Mock Simulation**
-  * Return to InterviewX to take another targeted mock interview to measure your improvement!`;
-      }
-
-      if (lastLower.includes('technical score') || (lastLower.includes('technical') && lastLower.includes('improve'))) {
-        return `### 📈 How to Improve Your Technical Score (${resTechScore})
-
-To boost your technical score into the 90%+ range, focus on these concrete adjustments:
-
----
-
-1. **Clarify Constraints Upfront:** Before answering, spend 30 seconds clarifying inputs, throughput scale, and error expectations.
-2. **Explicitly Address Missing Concepts:**
-   * ${resWeaknesses}
-3. **Discuss Operational Reliability:** Always mention observability (metrics/logs), failure recovery, and testability in your solutions.`;
-      }
-
-      if (lastLower.includes('feedback') || lastLower.includes('evaluator')) {
-        return `### 📝 Synthesized Evaluator Feedback
-
-Here is the holistic feedback from your evaluation:
-
----
-
-* **Overall Evaluation:** You demonstrated solid competence for the **${resRole}** position with an overall score of **${resOverallScore}**.
-* **Key Strengths:**
-${resStrengths}
-* **Core Action Items:**
-${resRecommendations}
-
-Would you like to drill into a specific question's answer or review a study plan?`;
-      }
-
-      // Check if user is asking about a specific question (e.g. Question 1, Question 2, Question 3)
-      const qNumMatch = lastLower.match(/\b(?:question\s*(\d+)|q\s*(\d+))\b/i);
-      if (qNumMatch) {
-        const qNum = parseInt(qNumMatch[1] || qNumMatch[2], 10);
-        return `### 🔍 Analysis of Question ${qNum}
-
-Looking at your recorded response for **Question ${qNum}**:
-
-* **What Went Well:** Your answer demonstrated a solid foundational grasp of the topic.
-* **What Could Be Improved:** To turn an average answer into an exceptional, interview-ready response, explicitly mention architectural trade-offs, edge-case behavior, and how you would verify correctness in production.
-* **Model Answer Strategy:** Structure your response into 3 parts:
-  1. High-level definition and core problem it solves.
-  2. Concrete architectural implementation with code or schema.
-  3. Trade-offs, scalability constraints, and alternative approaches.
-
-Would you like a sample interview-ready answer for this question?`;
+Please specify which question you would like the ideal answer for (e.g., *"What was the correct answer for question 1?"* or *"How should I have answered Question 2?"*).`;
+        }
       }
 
       // Default Results AI response grounded in result context
@@ -714,7 +856,7 @@ ${resStrengths}
 * **Recorded Weak Areas:**
 ${resWeaknesses}
 
-You can ask me to break down why you received this score, how to improve your answers for specific questions, or generate a tailored study plan to boost your performance!`;
+You can ask me to break down why you received this score, how to improve your answers for specific questions (e.g. *"What was the correct answer for question 1?"*), or generate a tailored study plan to boost your performance!`;
     }
 
     // ── Extract Candidate & Resume Context ──────────────────────────────────
@@ -3259,11 +3401,47 @@ ${(resultContext.recommendations || []).map((r) => `- ${r}`).join('\n') || 'None
 Questions Breakdown:
 ${questionsBlock || 'No question details recorded'}
 
-BEHAVIORAL DIRECTIVES:
-- Ground your answers strictly in the interview result data above.
-- Answer questions like "Why was my technical score low?", "Which questions did I perform poorly on?", "Explain my mistake in question 4", "What concepts should I study?", "Create a 7-day improvement plan based on this result".
-- Do NOT conduct another interview or automatically ask interview questions.
-- Maintain a constructive, empowering, and analytical tone.`;
+CRITICAL DIRECTIVES:
+1. Ground your answers strictly in the interview result data above. NEVER invent or substitute questions that were not asked in this interview.
+2. QUESTION IDENTIFICATION & IDEAL/REFERENCE ANSWERS:
+   - When the candidate asks about a question (e.g. "What was the correct answer for question 1?", "How should I have answered Q3?", "the MongoDB question", "Give me the ideal answer", "Show my answer vs the ideal answer", "What did I miss?", "Give me an interview-ready answer"):
+   - Accurately identify which question they mean from the Questions Breakdown above.
+   - If the candidate does not specify which question and it cannot be inferred from previous messages, ask which question they want to review and list the available questions from this interview.
+   - Provide your review formatted with the following distinct sections:
+     ### Question:
+     [Actual interview question text from this interview]
+
+     ### Your Answer:
+     [Actual candidate's submitted answer from this interview, or "(No answer recorded)"]
+
+     ### Ideal / Reference Answer:
+     [The technically rigorous, complete reference answer. For open-ended questions, do not claim there is only one wording; present the ideal reference answer.]
+
+     ### What You Did Well:
+     [Specific strengths demonstrated in candidate's answer or recorded in the evaluation]
+
+     ### What Was Missing:
+     [Specific missing concepts or gaps identified in the evaluation]
+
+     ### Why:
+     [Clear technical explanation of the underlying concepts, engineering trade-offs, and rationale]
+
+     ### Interview-Ready Answer:
+     "[A concise, structured verbal answer the candidate could realistically speak in 60-90 seconds]"
+
+     ### Interview Tip:
+     [Specific, actionable advice for handling this type of question in real interviews]
+
+3. QUESTION CATEGORY GUIDELINES:
+   - For CODING questions: Include problem interpretation, expected approach, clean code solution, time & space complexity, edge cases, and comparison with candidate's implementation.
+   - For TECHNICAL questions: Explain core concepts, terminology, depth expected, and trade-offs.
+   - For BEHAVIORAL questions: Do not claim there is a single factual answer. Focus on what the interviewer is evaluating, recommend the STAR framework (Situation, Task, Action, Result), and provide an example strong response.
+
+4. GENERAL & SCORE QUERIES:
+   - When answering "Why did I get this score?" or score breakdowns, explicitly cite the exact numbers: Overall Score (${resultContext.overallScore != null ? resultContext.overallScore + '%' : 'N/A'}), Technical Score (${resultContext.technicalScore != null ? resultContext.technicalScore + '%' : 'N/A'}), and Communication Score (${resultContext.communicationScore != null ? resultContext.communicationScore + '%' : 'N/A'}).
+   - When answering "Explain my weak areas" or general missing feedback, cite the exact recorded weak areas: ${(resultContext.weaknesses || []).join(', ') || 'N/A'}.
+   - Do NOT conduct another interview or automatically ask interview questions.
+   - Maintain a constructive, empowering, and analytical coaching tone.`;
 
     const formattedMessages = [
       { role: 'system', content: systemPrompt },
@@ -3275,6 +3453,7 @@ BEHAVIORAL DIRECTIVES:
       messages: formattedMessages,
       responseFormatJson: false,
       temperature: 0.6,
+      resultContext,
     });
 
     const reply = typeof result === 'object' && result !== null ? result.content || '' : String(result);

@@ -8,7 +8,10 @@ export default function FloatingCoachButton({
   hasUnread = false,
   label = 'Dashboard AI',
   tooltip = 'Open Dashboard AI',
+  id,
 }) {
+  const buttonId = id || (label.toLowerCase().includes('result') ? 'btn-floating-results-ai' : 'btn-floating-dashboard-ai')
+
   return (
     <div className="floating-coach-container">
       <button
@@ -17,7 +20,7 @@ export default function FloatingCoachButton({
         onClick={onClick}
         aria-label={isOpen ? 'Close Assistant' : tooltip}
         title={tooltip}
-        id="btn-floating-dashboard-ai"
+        id={buttonId}
       >
         <span className="coach-btn-glow" />
         <div className="coach-btn-icon-wrap">

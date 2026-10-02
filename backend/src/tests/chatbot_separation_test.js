@@ -302,6 +302,69 @@ async function runChatbotSeparationTests() {
       `Content snippet: ${resAssistantMsg2?.content?.slice(0, 150)}`
     );
 
+    // ── 5.D IDEAL / REFERENCE ANSWER FOR QUESTION 1 ─────────────────────────
+    console.log('\n--- 5.D Asking Results AI: "What was the correct answer for question 1?" ---');
+    const postResMsg3 = await client.post(
+      `/api/chat/results/${interviewA._id}/sessions/${resSession.id}/messages`,
+      { content: 'What was the correct answer for question 1?' },
+      { headers: userAHeaders }
+    );
+    assertTest('Post Question 1 query status 200', postResMsg3.status === 200, `Status: ${postResMsg3.status}`);
+    const resAssistantMsg3 = postResMsg3.data?.assistantMessage?.content || '';
+
+    assertTest(
+      'Results AI uses actual Question 1 from the interview',
+      resAssistantMsg3.includes('MongoDB handle indexing') || resAssistantMsg3.includes('MongoDB'),
+      `Content snippet: ${resAssistantMsg3.slice(0, 200)}`
+    );
+    assertTest(
+      'Results AI shows candidate actual submitted answer',
+      resAssistantMsg3.includes('B-trees') || resAssistantMsg3.includes('write amplification'),
+      `Content snippet: ${resAssistantMsg3.slice(0, 200)}`
+    );
+    assertTest(
+      'Results AI provides Ideal / Reference Answer',
+      resAssistantMsg3.includes('Ideal') || resAssistantMsg3.includes('Reference Answer'),
+      `Content snippet: ${resAssistantMsg3.slice(0, 200)}`
+    );
+    assertTest(
+      'Results AI provides structured breakdown (What You Did Well / What Was Missing / Why)',
+      resAssistantMsg3.includes('What You Did Well') || resAssistantMsg3.includes('What Was Missing') || resAssistantMsg3.includes('Why'),
+      `Content snippet: ${resAssistantMsg3.slice(0, 200)}`
+    );
+
+    // ── 5.E ASKING "WHAT DID I MISS?" ────────────────────────────────────────
+    console.log('\n--- 5.E Asking Results AI: "What did I miss?" ---');
+    const postResMsg4 = await client.post(
+      `/api/chat/results/${interviewA._id}/sessions/${resSession.id}/messages`,
+      { content: 'What did I miss?' },
+      { headers: userAHeaders }
+    );
+    assertTest('Post "What did I miss?" status 200', postResMsg4.status === 200, `Status: ${postResMsg4.status}`);
+    const resAssistantMsg4 = postResMsg4.data?.assistantMessage?.content || '';
+
+    assertTest(
+      'Results AI identifies actual missing concepts from evaluation (WiredTiger / cache / pressure)',
+      resAssistantMsg4.includes('WiredTiger') || resAssistantMsg4.includes('cache') || resAssistantMsg4.includes('eviction') || resAssistantMsg4.includes('pressure') || resAssistantMsg4.includes('Background indexing'),
+      `Content snippet: ${resAssistantMsg4.slice(0, 200)}`
+    );
+
+    // ── 5.F ASKING "GIVE ME AN INTERVIEW-READY ANSWER" ───────────────────────
+    console.log('\n--- 5.F Asking Results AI: "Give me an interview-ready answer." ---');
+    const postResMsg5 = await client.post(
+      `/api/chat/results/${interviewA._id}/sessions/${resSession.id}/messages`,
+      { content: 'Give me an interview-ready answer.' },
+      { headers: userAHeaders }
+    );
+    assertTest('Post "Give me an interview-ready answer" status 200', postResMsg5.status === 200, `Status: ${postResMsg5.status}`);
+    const resAssistantMsg5 = postResMsg5.data?.assistantMessage?.content || '';
+
+    assertTest(
+      'Results AI provides concise interview-ready answer',
+      resAssistantMsg5.includes('Interview-Ready') || resAssistantMsg5.includes('MongoDB') || resAssistantMsg5.includes('WiredTiger') || resAssistantMsg5.includes('write amplification'),
+      `Content snippet: ${resAssistantMsg5.slice(0, 200)}`
+    );
+
     // ── 6. ZERO SHARED HISTORY VERIFICATION (CRITICAL REQUIREMENT 1) ────────
     console.log('\n--- 6. Testing Complete Isolation & Zero Shared History ---');
 
@@ -336,7 +399,7 @@ async function runChatbotSeparationTests() {
     );
 
     // 3. Result A sessions must NEVER appear in Result B
-    // Create a second interview for User A: interviewA2
+    // Create a second interview for User A: interviewA2 with completely distinct questions
     const interviewA2 = await Interview.create({
       clerkUserId: userA,
       resumeId: dummyResumeId,
@@ -344,8 +407,31 @@ async function runChatbotSeparationTests() {
       targetRole: 'Data Engineering Lead',
       difficulty: 'hard',
       status: 'completed',
-      finalEvaluation: { overallScore: 85 },
+      finalEvaluation: { overallScore: 85, technicalScore: 88, communicationScore: 82 },
       completedAt: new Date(),
+    });
+
+    const questionA2_1 = await Question.create({
+      interviewId: interviewA2._id,
+      clerkUserId: userA,
+      text: 'How does Apache Spark handle shuffle partitions and data skew?',
+      type: 'technical',
+      category: 'technical',
+      difficulty: 'hard',
+      order: 1,
+    });
+
+    await Response.create({
+      interviewId: interviewA2._id,
+      questionId: questionA2_1._id,
+      clerkUserId: userA,
+      answerText: 'Spark distributes data across executors using hash partitioning during wide transformations.',
+      textEvaluation: {
+        textScore: 78,
+        strengths: ['Identified hash partitioning across executors'],
+        missingConcepts: ['Salting keys for skew mitigation', 'Adaptive Query Execution (AQE) skew join optimization'],
+        feedback: 'Good fundamental understanding of shuffle operations.',
+      },
     });
 
     const res2SessionsCheck = await client.get(`/api/chat/results/${interviewA2._id}/sessions`, {
@@ -353,8 +439,31 @@ async function runChatbotSeparationTests() {
     });
     const res2List = res2SessionsCheck.data?.sessions || [];
     assertTest(
-      'Interview A2 session list is empty (isolated from Interview A)',
+      'Interview A2 session list is empty initially (isolated from Interview A)',
       res2List.length === 0
+    );
+
+    // 4. Create session on Interview A2 and verify Results AI cannot access Interview A data
+    console.log('\n--- 6.B Testing Question Isolation Between Two Results for Same User ---');
+    const res2Create = await client.post(`/api/chat/results/${interviewA2._id}/sessions`, {}, { headers: userAHeaders });
+    const res2SessionId = res2Create.data?.session?.id;
+
+    const res2AskQ1 = await client.post(
+      `/api/chat/results/${interviewA2._id}/sessions/${res2SessionId}/messages`,
+      { content: 'What was the correct answer for question 1?' },
+      { headers: userAHeaders }
+    );
+    const res2Q1Content = res2AskQ1.data?.assistantMessage?.content || '';
+
+    assertTest(
+      'Interview A2 Results AI references its own question (Apache Spark / shuffle)',
+      res2Q1Content.includes('Spark') || res2Q1Content.includes('shuffle') || res2Q1Content.includes('skew'),
+      `Content snippet: ${res2Q1Content.slice(0, 150)}`
+    );
+    assertTest(
+      'Interview A2 Results AI NEVER references Interview A data (MongoDB)',
+      !res2Q1Content.toLowerCase().includes('mongodb'),
+      `Content unexpectedly contained MongoDB: ${res2Q1Content.slice(0, 150)}`
     );
 
     // ── 7. HISTORY RETRIEVAL & PERSISTENCE ───────────────────────────────────

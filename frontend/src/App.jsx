@@ -6,7 +6,6 @@ import { lazy, Suspense } from 'react'
 import Navbar from './components/Navbar'
 import ResultsErrorBoundary from './components/ResultsErrorBoundary'
 
-const AICoachDrawer = lazy(() => import('./components/AICoachDrawer'))
 const LandingPage = lazy(() => import('./pages/LandingPage'))
 const SignInPage = lazy(() => import('./pages/SignInPage'))
 const SignUpPage = lazy(() => import('./pages/SignUpPage'))
@@ -133,9 +132,6 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </Suspense>
-        <Suspense fallback={null}>
-          <AICoachDrawer />
         </Suspense>
       </div>
     </BrowserRouter>
