@@ -56,7 +56,8 @@ class GeminiProvider {
     });
 
     const candidates = response.data?.candidates;
-    const text = candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const parts = candidates?.[0]?.content?.parts || [];
+    const text = parts.map((p) => p.text || '').join('');
 
     return {
       content: text,

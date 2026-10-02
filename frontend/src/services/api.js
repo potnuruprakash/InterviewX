@@ -138,32 +138,65 @@ export const getCoachState = () =>
 export const resetCoach = () =>
   authApi.post('/api/coach/reset')
 
+// ─── Dashboard Chatbot Helpers ──────────────────────────────────────────────
+export const getDashboardChatSessions = () =>
+  authApi.get('/api/chat/dashboard/sessions')
+
+export const createDashboardChatSession = () =>
+  authApi.post('/api/chat/dashboard/sessions')
+
+export const getDashboardChatSession = (sessionId) =>
+  authApi.get(`/api/chat/dashboard/sessions/${sessionId}`)
+
+export const deleteDashboardChatSession = (sessionId) =>
+  authApi.delete(`/api/chat/dashboard/sessions/${sessionId}`)
+
+export const sendDashboardChatMessage = (sessionId, payload) =>
+  authApi.post(`/api/chat/dashboard/sessions/${sessionId}/messages`, payload)
+
+export const regenerateDashboardChatResponse = (sessionId) =>
+  authApi.post(`/api/chat/dashboard/sessions/${sessionId}/regenerate`)
+
+// ─── Results Chatbot Helpers (Scoped to Interview Result) ───────────────────
+export const getResultChatSessions = (resultId) =>
+  authApi.get(`/api/chat/results/${resultId}/sessions`)
+
+export const createResultChatSession = (resultId) =>
+  authApi.post(`/api/chat/results/${resultId}/sessions`)
+
+export const getResultChatSession = (resultId, sessionId) =>
+  authApi.get(`/api/chat/results/${resultId}/sessions/${sessionId}`)
+
+export const deleteResultChatSession = (resultId, sessionId) =>
+  authApi.delete(`/api/chat/results/${resultId}/sessions/${sessionId}`)
+
+export const sendResultChatMessage = (resultId, sessionId, payload) =>
+  authApi.post(`/api/chat/results/${resultId}/sessions/${sessionId}/messages`, payload)
+
+export const regenerateResultChatResponse = (resultId, sessionId) =>
+  authApi.post(`/api/chat/results/${resultId}/sessions/${sessionId}/regenerate`)
+
+const useClerkAuth = hasClerkKey
+  ? useAuth
+  : () => ({ isLoaded: true, isSignedIn: false, userId: null, getToken: null })
+
 /**
  * Hook providing access to the singleton authApi, auth state, and helper methods.
  * Ensures the token getter is synchronized without re-instantiating Axios or looping.
  */
 export const useAuthApi = () => {
-  let isLoaded = true
-  let isSignedIn = false
-  let userId = null
-  let getToken = null
+  const clerkAuth = useClerkAuth()
 
-  if (hasClerkKey) {
-    try {
-      const clerkAuth = useAuth()
-      isLoaded = clerkAuth.isLoaded
-      isSignedIn = clerkAuth.isSignedIn
-      userId = clerkAuth.userId
-      if (userId) {
-        currentUserId = userId
-      }
-      getToken = clerkAuth.getToken
-      if (getToken) {
-        currentTokenGetter = getToken
-      }
-    } catch (e) {
-      // Not wrapped in ClerkProvider
-    }
+  const isLoaded = clerkAuth?.isLoaded ?? true
+  const isSignedIn = clerkAuth?.isSignedIn ?? false
+  const userId = clerkAuth?.userId ?? null
+  const getToken = clerkAuth?.getToken ?? null
+
+  if (userId) {
+    currentUserId = userId
+  }
+  if (getToken) {
+    currentTokenGetter = getToken
   }
 
   return {
@@ -185,6 +218,18 @@ export const useAuthApi = () => {
     sendCoachMessage,
     getCoachState,
     resetCoach,
+    getDashboardChatSessions,
+    createDashboardChatSession,
+    getDashboardChatSession,
+    deleteDashboardChatSession,
+    sendDashboardChatMessage,
+    regenerateDashboardChatResponse,
+    getResultChatSessions,
+    createResultChatSession,
+    getResultChatSession,
+    deleteResultChatSession,
+    sendResultChatMessage,
+    regenerateResultChatResponse,
   }
 }
 

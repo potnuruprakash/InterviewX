@@ -24,6 +24,13 @@
 const http = require('http');
 const axios = require('axios');
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {
+  // Ignore
+}
 
 process.env.NODE_ENV = 'test';
 process.env.TEST_AUTH_ENABLED = 'true';

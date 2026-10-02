@@ -12,6 +12,8 @@ import './ResultsPage.css'
 // Lazy load heavy modal to keep initial bundle and render lean
 const TrainMeModal = lazy(() => import('../components/TrainMeModal'))
 const PracticeModal = lazy(() => import('../components/PracticeModal'))
+const ResultsChatbot = lazy(() => import('../components/chat/ResultsChatbot'))
+import FloatingCoachButton from '../components/coach/FloatingCoachButton'
 
 // Session-level memory cache for instantaneous back-navigation & zero-delay re-renders
 const resultsCache = new Map()
@@ -412,6 +414,7 @@ export default function ResultsPage() {
   const [practiceSkill, setPracticeSkill] = useState('')
   const [practiceTopics, setPracticeTopics] = useState([])
   const [reInterviewLoading, setReInterviewLoading] = useState(false)
+  const [coachOpen, setCoachOpen] = useState(false)
 
   const activeFetchIdRef = useRef(null)
 
@@ -2096,6 +2099,21 @@ export default function ResultsPage() {
             />
           </Suspense>
         )}
+
+        {/* Results AI Floating Button & Chatbot */}
+        <FloatingCoachButton
+          isOpen={coachOpen}
+          onClick={() => setCoachOpen((prev) => !prev)}
+          label="Results AI"
+          tooltip="Open Results AI"
+        />
+        <Suspense fallback={null}>
+          <ResultsChatbot
+            isOpen={coachOpen}
+            onClose={() => setCoachOpen(false)}
+            resultId={id}
+          />
+        </Suspense>
 
       </div>
     </div>
