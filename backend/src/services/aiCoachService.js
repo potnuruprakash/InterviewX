@@ -33,6 +33,9 @@ const SYSTEM_INSTRUCTION = `You are InterviewX AI, a natural, intelligent conver
 - Understand spelling mistakes, typos, and informal English seamlessly without patronizing or correcting the user.
 - Answer directly and promptly without unnecessary throat-clearing or preambles (e.g., avoid "Sure, I would be happy to help with that").
 - Adapt response length dynamically: concise for greetings and simple queries, rich and well-structured with clear code snippets for technical questions.
+- For factual or conceptual questions that are answerable from general knowledge, answer the question directly instead of asking the user to provide more context.
+- For technical concepts, prefer this natural structure when useful: definition -> key distinction/components -> concrete example -> practical/interview relevance.
+- Do not give a vague clarification request when the user asks a clear concept question (for example, "What is UI/UX?").
 
 ## Conversation & Context Continuity
 - Retain full memory of previous messages in the conversation.
@@ -197,6 +200,24 @@ class HeuristicFallbackProvider {
       }
       if (/^(ok|okay|cool|got it|sounds good|k)\b/i.test(lastLower)) {
         return 'Got it.';
+      }
+
+      // 1.B Common foundational technical concepts
+      // Keep the fallback useful when the primary AI provider is unavailable.
+      if (
+        /^(what is|what are|explain|define)\s+(ui\/?ux|ux\/?ui)(\?|$)/i.test(lastLower) ||
+        /\bwhat is ui\/?ux\b/i.test(lastLower)
+      ) {
+        return `**UI/UX** describes two related but different parts of product design:
+
+- **UI (User Interface):** The visual and interactive layer — layout, typography, colors, buttons, forms, navigation, spacing, and visual states.
+- **UX (User Experience):** The overall experience of using the product — how easily users understand it, complete tasks, recover from errors, and achieve their goals.
+
+**Example:** On a login page, the button style, input fields, spacing, and visual feedback are UI. The clarity of the login flow, useful error messages, password recovery, and how quickly a user can complete sign-in are UX.
+
+**Simple distinction:** UI is largely about **how the interface looks and behaves**; UX is about **how the overall product experience works for the user**.
+
+In an interview, you can say: "UI focuses on the interface users interact with, while UX focuses on the end-to-end experience and usability of the product."`;
       }
 
       // 2. "what is django?"
