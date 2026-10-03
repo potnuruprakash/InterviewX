@@ -3407,8 +3407,13 @@ Question ${idx + 1} (${q.category || 'General'} - ${q.difficulty || 'Intermediat
 Candidate's Answer: "${q.userAnswer || 'No answer recorded'}"
 Score: ${q.score != null ? q.score + '/100' : 'N/A'}
 Strengths: ${(q.strengths || []).join(', ') || 'None noted'}
+Expected Concepts / Reference Points: ${(q.expectedConcepts || []).join(', ') || 'Not recorded'}
 Missing Concepts / Improvement Areas: ${(q.missingConcepts || []).join(', ') || 'None noted'}
-Feedback: "${q.feedback || 'N/A'}"`
+Weaknesses: ${(q.weaknesses || []).join(', ') || 'None noted'}
+Improvement Suggestion: "${q.improvementSuggestion || 'N/A'}"
+Feedback: "${q.feedback || 'N/A'}"
+Observable Audio Signals: ${q.audioEvaluation ? JSON.stringify(q.audioEvaluation) : 'Not recorded'}
+Observable Video Signals: ${q.videoEvaluation ? JSON.stringify(q.videoEvaluation) : 'Not recorded'}`
       )
       .join('\n');
 
@@ -3434,6 +3439,12 @@ ${(resultContext.weaknesses || []).map((w) => `- ${w}`).join('\n') || 'None reco
 
 Recommendations:
 ${(resultContext.recommendations || []).map((r) => `- ${r}`).join('\n') || 'None recorded'}
+
+Observable Communication Signals:
+${resultContext.audioSummary?.length ? resultContext.audioSummary.map((a, i) => `- Response ${i + 1}: ${JSON.stringify(a)}`).join('\n') : 'No audio evidence recorded'}
+
+Observable Camera/Posture Signals:
+${resultContext.videoSummary?.length ? resultContext.videoSummary.map((v, i) => `- Response ${i + 1}: ${JSON.stringify(v)}`).join('\n') : 'No video evidence recorded'}
 
 Questions Breakdown:
 ${questionsBlock || 'No question details recorded'}
@@ -3474,7 +3485,20 @@ CRITICAL DIRECTIVES:
    - For TECHNICAL questions: Explain core concepts, terminology, depth expected, and trade-offs.
    - For BEHAVIORAL questions: Do not claim there is a single factual answer. Focus on what the interviewer is evaluating, recommend the STAR framework (Situation, Task, Action, Result), and provide an example strong response.
 
-4. GENERAL & SCORE QUERIES:
+4. IMPROVEMENT / AREA-TO-IMPLEMENT GUIDELINES:
+   - When the user asks what they should improve, what they should implement, where they are weak, or similar, turn recorded weaknesses, missing concepts, expected concepts, and recommendations into a concrete improvement roadmap.
+   - For each area, explain: what is missing -> why it matters -> what to learn/build -> a small practice task -> how to verify improvement.
+   - Prioritize gaps directly evidenced by this interview. Do not invent gaps from generic assumptions.
+   - If the user asks for an implementation plan, give actionable engineering tasks rather than vague advice.
+
+5. AUDIO / VIDEO GUIDELINES:
+   - Discuss only observable signals actually recorded in the interview.
+   - Audio may cover speaking pace, pauses, filler words, volume consistency, and speech continuity.
+   - Video may cover face visibility, camera/screen alignment, posture stability, shoulder tilt, framing, and other recorded observable metrics.
+   - Never infer honesty, confidence, personality, intelligence, competence, attention, or hiring fitness from camera/audio signals.
+   - If no modality data was recorded, say that it is unavailable instead of guessing.
+
+6. GENERAL & SCORE QUERIES:
    - When answering "Why did I get this score?" or score breakdowns, explicitly cite the exact numbers: Overall Score (${resultContext.overallScore != null ? resultContext.overallScore + '%' : 'N/A'}), Technical Score (${resultContext.technicalScore != null ? resultContext.technicalScore + '%' : 'N/A'}), and Communication Score (${resultContext.communicationScore != null ? resultContext.communicationScore + '%' : 'N/A'}).
    - When answering "Explain my weak areas" or general missing feedback, cite the exact recorded weak areas: ${(resultContext.weaknesses || []).join(', ') || 'N/A'}.
    - Do NOT conduct another interview or automatically ask interview questions.
