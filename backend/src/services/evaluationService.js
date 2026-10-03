@@ -462,6 +462,7 @@ const evaluateVideo = async (videoFilePath) => {
       modelStatus: rawResult.modelStatus || 'processed',
     };
   } catch (err) {
+    console.error('[EvaluationService] evaluateVideo error:', err?.message || err);
     return {
       framesProcessed: 0,
       modelStatus: 'unavailable',
@@ -471,6 +472,7 @@ const evaluateVideo = async (videoFilePath) => {
       faceVisibilityRatio: null,
       personDetectionRatio: null,
       feedback: 'Video analysis unavailable for this response.',
+      error: err?.message || 'Video analysis failed',
     };
   }
 };

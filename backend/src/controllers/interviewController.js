@@ -1027,6 +1027,18 @@ const submitVideoResponse = async (req, res) => {
 
     await response.save();
 
+    console.log('[Interview] Video response persisted:', {
+      interviewId: interview._id,
+      responseId: response._id,
+      framesProcessed: response.videoEvaluation.framesProcessed,
+      personDetectionRatio: response.videoEvaluation.personDetectionRatio,
+      faceVisibilityRatio: response.videoEvaluation.faceVisibilityRatio,
+      gazeAttentionRatio: response.videoEvaluation.gazeAttentionRatio,
+      postureScore: response.videoEvaluation.postureScore,
+      cameraEngagement: response.videoEvaluation.cameraEngagement,
+      modelStatus: response.videoEvaluation.modelStatus,
+    });
+
     if (interview.status === 'completed') {
       await computeAndPersistFinalEvaluation(interview, clerkUserId);
     }
@@ -1237,16 +1249,20 @@ const getResults = async (req, res) => {
     const totalCount = allQuestions.length || interview.totalQuestions;
 
     // Fast read-oriented path:
-    // If finalEvaluation is already stored and ready, reuse it directly without expensive re-calculation
+    // If finalEvaluation is already stored and ready, check if response modalities match
     let finalEval = interview.finalEvaluation;
+    const hasVideoInResponses = responses.some(
+      (r) => r.videoEvaluation?.framesProcessed && r.videoEvaluation.framesProcessed > 0
+    );
     const isReady =
       finalEval &&
       finalEval.status === 'ready' &&
       finalEval.overallScore !== null &&
-      finalEval.overallScore !== undefined;
+      finalEval.overallScore !== undefined &&
+      (!hasVideoInResponses || finalEval.videoStatus === 'available');
 
     if (!isReady) {
-      // Missing or pending evaluation: compute and persist directly
+      // Missing or pending evaluation or modality out of sync: compute and persist directly
       finalEval = await computeAndPersistFinalEvaluation(interview, req.clerkUserId);
     }
 

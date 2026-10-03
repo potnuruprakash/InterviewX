@@ -41,7 +41,7 @@ class VideoAnalysisPipeline:
             },
             "model_status": {
                 "yolo": self.yolo_detector.status,
-                "face_gaze": "loaded" if self.face_analyzer._mesh is not None else "fallback",
+                "face_gaze": self.face_analyzer.status,
                 "pose": self.pose_analyzer.status,
                 "expression": self.expression_classifier.status,
             },
@@ -50,8 +50,8 @@ class VideoAnalysisPipeline:
                 "framing_quality": True,
                 "multi_person_detection": True,
                 "face_visibility": True,
-                "gaze_alignment": self.face_analyzer._mesh is not None,
-                "head_orientation": self.face_analyzer._mesh is not None,
+                "gaze_alignment": self.face_analyzer.is_available,
+                "head_orientation": self.face_analyzer.is_available,
                 "pose_alignment": self.pose_analyzer.is_available,
                 "posture_stability": self.pose_analyzer.is_available,
                 "psychological_or_personality_inferences": False,
@@ -90,12 +90,15 @@ class VideoAnalysisPipeline:
                 smile_detected=face_result.smile_expressive_detected,
             )
 
+            is_person = detection.person_detected or face_result.face_detected or pose_result.pose_detected
+            person_cnt = max(detection.person_count, 1 if (face_result.face_detected or pose_result.pose_detected) else 0)
+
             tracker.record_frame(
                 FrameTimelineEvent(
                     timestamp_sec=frame_sample.timestamp_sec,
                     frame_index=frame_sample.frame_index,
-                    person_detected=detection.person_detected,
-                    person_count=detection.person_count,
+                    person_detected=is_person,
+                    person_count=person_cnt,
                     face_detected=face_result.face_detected,
                     good_framing=detection.good_framing,
                     camera_orientation=face_result.camera_orientation,
@@ -118,6 +121,14 @@ class VideoAnalysisPipeline:
             is_custom_model=self.expression_classifier.is_verified,
         )
 
+        quality = (
+            "good"
+            if (metrics["good_framing"] >= 0.60 or (metrics["face_visibility"] >= 0.70 and metrics["person_visibility"] >= 0.70))
+            else "fair"
+            if (metrics["good_framing"] >= 0.30 or metrics["face_visibility"] >= 0.40)
+            else "poor"
+        )
+
         return {
             "success": True,
             "modelStatus": "analyzed",
@@ -131,7 +142,7 @@ class VideoAnalysisPipeline:
             "postureScore": metrics["posture_score"],
             "shoulderTiltDegrees": metrics["average_shoulder_tilt_degrees"],
             "cameraEngagement": metrics["camera_engagement"],
-            "videoQualityIndicator": "good" if metrics["good_framing"] >= 0.70 else "fair" if metrics["good_framing"] >= 0.40 else "poor",
+            "videoQualityIndicator": quality,
             "processingConfidence": metrics["expression_classification_confidence"],
             "modelName": self.yolo_detector.model_path,
             "note": "Observable presence, framing, gaze alignment, head orientation, and pose statistics only.",
