@@ -679,8 +679,35 @@ const postResultMessage = async (req, res) => {
         userAnswer: resp?.answerText || resp?.code || null,
         score: resp?.textEvaluation?.textScore ?? resp?.multimodalEvaluation?.overallScore ?? null,
         strengths: resp?.textEvaluation?.strengths || [],
+        weaknesses: resp?.textEvaluation?.weaknesses || [],
         missingConcepts: resp?.textEvaluation?.missingConcepts || [],
+        improvementSuggestion: resp?.textEvaluation?.improvementSuggestion || null,
+        expectedConcepts: q.expectedConcepts || q.expectedKeyPoints || [],
         feedback: resp?.textEvaluation?.feedback || null,
+        audioEvaluation: {
+          speakingPace: resp?.audioEvaluation?.speakingPace ?? null,
+          speechRate: resp?.audioEvaluation?.speechRate ?? null,
+          pauseDuration: resp?.audioEvaluation?.pauseDuration ?? null,
+          pauseFrequency: resp?.audioEvaluation?.pauseFrequency ?? null,
+          fillerWordsCount: resp?.audioEvaluation?.fillerWordsCount ?? 0,
+          fillerWords: resp?.audioEvaluation?.fillerWords || [],
+          volumeConsistency: resp?.audioEvaluation?.volumeConsistency || null,
+          speechContinuity: resp?.audioEvaluation?.speechContinuity || null,
+          feedback: resp?.audioEvaluation?.feedback || null,
+          audioFeaturesAvailable: resp?.audioEvaluation?.audioFeaturesAvailable ?? false,
+          modelStatus: resp?.audioEvaluation?.modelStatus || null,
+        },
+        videoEvaluation: {
+          faceVisibilityRatio: resp?.videoEvaluation?.faceVisibilityRatio ?? null,
+          gazeAttentionRatio: resp?.videoEvaluation?.gazeAttentionRatio ?? null,
+          postureStability: resp?.videoEvaluation?.postureStability || null,
+          postureStabilityIndex: resp?.videoEvaluation?.postureStabilityIndex ?? null,
+          shoulderTiltDegrees: resp?.videoEvaluation?.shoulderTiltDegrees ?? null,
+          cameraEngagement: resp?.videoEvaluation?.cameraEngagement || null,
+          videoQualityIndicator: resp?.videoEvaluation?.videoQualityIndicator || null,
+          feedback: resp?.videoEvaluation?.feedback || null,
+          modelStatus: resp?.videoEvaluation?.modelStatus || null,
+        },
       };
     });
 
@@ -698,6 +725,10 @@ const postResultMessage = async (req, res) => {
       weaknesses: interview.finalEvaluation?.weakAreas || [],
       recommendations: interview.finalEvaluation?.recommendations || [],
       questions: questionBreakdown,
+      // Aggregate only observable audio/video signals so Results AI can explain
+      // communication and camera findings without inventing psychological traits.
+      audioSummary: questionBreakdown.map((q) => q.audioEvaluation).filter(Boolean),
+      videoSummary: questionBreakdown.map((q) => q.videoEvaluation).filter(Boolean),
     };
 
     // Generate grounded Results AI response
@@ -951,6 +982,10 @@ const postResultRegenerate = async (req, res) => {
       weaknesses: interview.finalEvaluation?.weakAreas || [],
       recommendations: interview.finalEvaluation?.recommendations || [],
       questions: questionBreakdown,
+      // Aggregate only observable audio/video signals so Results AI can explain
+      // communication and camera findings without inventing psychological traits.
+      audioSummary: questionBreakdown.map((q) => q.audioEvaluation).filter(Boolean),
+      videoSummary: questionBreakdown.map((q) => q.videoEvaluation).filter(Boolean),
     };
 
     const aiResult = await aiCoachService.generateResultsAssistantResponse({
