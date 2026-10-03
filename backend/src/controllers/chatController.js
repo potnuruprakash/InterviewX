@@ -676,6 +676,8 @@ const postResultMessage = async (req, res) => {
         text: q.text,
         category: q.category,
         difficulty: q.difficulty,
+        targetSkill: q.targetSkill || q.skill || null,
+        source: q.source || null,
         userAnswer: resp?.answerText || resp?.code || null,
         score: resp?.textEvaluation?.textScore ?? resp?.multimodalEvaluation?.overallScore ?? null,
         strengths: resp?.textEvaluation?.strengths || [],
