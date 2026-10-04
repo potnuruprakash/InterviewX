@@ -256,7 +256,9 @@ const evaluateResponse = async (questionText, answerText, difficulty = 'medium',
     console.warn('[Evaluation] Gemini text evaluation failed, trying SBERT:', err.message);
   }
 
-  if (!modelResult) {
+  // Do not fall back to SBERT on the production Gemini path: loading
+  // Torch/SBERT beside the video models exceeds the 512 MB Render limit.
+  if (!modelResult && (process.env.LLM_PROVIDER || '').toLowerCase() !== 'gemini') {
     try {
       modelResult = await aiService.evaluateText(questionText, answerText, expectedConcepts);
     } catch (err) {
