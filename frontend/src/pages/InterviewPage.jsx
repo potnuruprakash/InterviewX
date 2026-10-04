@@ -98,7 +98,19 @@ export default function InterviewPage() {
     const initInterview = async () => {
       setLoading(true)
       try {
-        const res = await authApi.post(`/api/interviews/${id}/start`)
+        let res
+        try {
+          // Render free services can take about a minute to wake after idle.
+          // Give the start request enough time to survive a cold start.
+          res = await authApi.post(`/api/interviews/${id}/start`, {}, { timeout: 120000 })
+        } catch (firstErr) {
+          const retryable = /timeout|network error|ECONNABORTED/i.test(firstErr?.message || '')
+          if (!retryable) throw firstErr
+
+          console.warn('[InterviewLifecycle] Start request timed out; retrying once after Render cold start.', firstErr.message)
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+          res = await authApi.post(`/api/interviews/${id}/start`, {}, { timeout: 120000 })
+        }
         const data = res.data
         setInterview(data.interview)
         setCurrentQuestion(data.currentQuestion)
