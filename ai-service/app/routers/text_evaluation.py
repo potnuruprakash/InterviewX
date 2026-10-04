@@ -41,6 +41,21 @@ async def text_evaluate(request: TextEvaluationRequest):
         )
 
     try:
+        # Lazy-load SBERT on demand instead of consuming startup memory.
+        if sbert_service.get_model_status() == "not_loaded":
+            sbert_service.load_model()
+
+        if sbert_service.get_model_status() != "loaded":
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "MODEL_UNAVAILABLE",
+                    "message": "SBERT model is not available yet. Please retry.",
+                    "modelStatus": sbert_service.get_model_status(),
+                },
+            )
+
         result = sbert_service.evaluate_text(
             question=request.question,
             answer=request.answer,
