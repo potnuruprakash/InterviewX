@@ -43,7 +43,12 @@ async def _load_models_background():
     except Exception as exc:
         logger.error(f"[Startup] YOLO load error: {exc}")
 
-    logger.info("[Startup] All AI models initialised. Service fully operational.")
+    logger.info(
+        "[Startup] Video pipeline initialized. YOLO=%s Face=%s Pose=%s",
+        video_service.get_yolo_status(),
+        video_service.get_video_model_status().get("face"),
+        video_service.get_video_model_status().get("pose"),
+    )
 
 
 @asynccontextmanager
