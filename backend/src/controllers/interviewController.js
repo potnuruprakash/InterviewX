@@ -1108,6 +1108,15 @@ const computeAndPersistFinalEvaluation = async (interview, clerkUserId) => {
     }
   }
 
+  // The browser can declare a media modality before its upload reaches the
+  // backend. Treat an expected-but-not-yet-persisted modality as processing.
+  if (interview.modalityAvailability?.audio && audioStatus === 'unavailable') {
+    audioStatus = 'processing';
+  }
+  if (interview.modalityAvailability?.video && videoStatus === 'unavailable') {
+    videoStatus = 'processing';
+  }
+
   if (hasPendingAudio) audioStatus = 'processing';
   if (hasPendingVideo) videoStatus = 'processing';
 
