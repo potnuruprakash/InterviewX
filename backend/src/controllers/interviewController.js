@@ -407,7 +407,7 @@ const submitResponse = async (req, res) => {
     const errors = validateSubmitResponse(req.body);
     if (errors.length > 0) return sendError(res, 400, 'VALIDATION_ERROR', errors.join(' '));
 
-    const { questionId, answerText, code, language, responseType = 'text' } = req.body;
+    const { questionId, answerText, code, language, responseType = 'text', audioExpected = false, videoExpected = false } = req.body;
     const clerkUserId = req.clerkUserId;
 
     const interview = await Interview.findOne({ _id: req.params.id, clerkUserId });
@@ -415,6 +415,13 @@ const submitResponse = async (req, res) => {
     if (interview.status === 'completed') {
       return sendError(res, 400, 'INTERVIEW_COMPLETED', 'This interview is already completed.');
     }
+
+    // Record which media modalities are expected for this response before
+    // final evaluation runs. Media inference is uploaded asynchronously by the
+    // browser, so a completed interview can expose a pending final evaluation
+    // until those uploads finish.
+    if (audioExpected) interview.modalityAvailability.audio = true;
+    if (videoExpected) interview.modalityAvailability.video = true;
 
     const question = await Question.findOne({ _id: questionId, interviewId: interview._id });
     if (!question) return sendError(res, 404, 'QUESTION_NOT_FOUND', 'Question not found in this interview.');
