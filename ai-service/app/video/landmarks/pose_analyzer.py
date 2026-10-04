@@ -44,7 +44,18 @@ class PoseAnalyzer:
 
             model_path = get_model_file_path("pose_landmarker_lite.task", POSE_LANDMARKER_URL)
             if os.path.exists(model_path) and os.path.getsize(model_path) > 0:
-                base_opts = mp_python.BaseOptions(model_asset_path=model_path)
+                with open(model_path, "rb") as model_file:
+                    model_buffer = model_file.read()
+                if not model_buffer:
+                    raise RuntimeError("PoseLandmarker task model is empty.")
+
+                # Render runs CPU-only. Supplying the model as bytes avoids
+                # native runtime/path handling differences and makes the
+                # delegate explicit.
+                base_opts = mp_python.BaseOptions(
+                    model_asset_buffer=model_buffer,
+                    delegate=mp_python.BaseOptions.Delegate.CPU,
+                )
                 options = vision.PoseLandmarkerOptions(
                     base_options=base_opts,
                     running_mode=vision.RunningMode.IMAGE,
@@ -59,7 +70,7 @@ class PoseAnalyzer:
                 self._mp = mp
                 logger.info("[PoseAnalyzer] MediaPipe Tasks PoseLandmarker initialized.")
         except Exception as exc:
-            logger.debug("[PoseAnalyzer] Tasks PoseLandmarker unavailable: %s", exc)
+            logger.exception("[PoseAnalyzer] Tasks PoseLandmarker initialization failed: %s", exc)
 
         # 2. Fallback to legacy mp.solutions.pose
         if self._mode == "unavailable":
@@ -79,7 +90,7 @@ class PoseAnalyzer:
                     self._mp = mp
                     logger.info("[PoseAnalyzer] MediaPipe Pose (solutions) initialized.")
             except Exception as exc:
-                logger.debug("[PoseAnalyzer] Legacy mp.solutions Pose unavailable: %s", exc)
+                logger.exception("[PoseAnalyzer] Legacy mp.solutions Pose initialization failed: %s", exc)
 
         if self._mode == "unavailable":
             self.status = "unavailable"
