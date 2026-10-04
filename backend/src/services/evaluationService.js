@@ -15,6 +15,7 @@
 
 const aiService = require('./aiService');
 const { calculateWeightedScore } = require('./multimodalFusionService');
+const { getProvider } = require('./ai/providers/providerFactory');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PHASE 1 FALLBACK (development placeholder)
@@ -221,130 +222,116 @@ const buildFiveDimensionEvaluation = (questionText, answerText, baseScore, expec
  */
 const evaluateResponse = async (questionText, answerText, difficulty = 'medium', expectedConcepts = []) => {
   const wordCount = answerText ? answerText.trim().split(/\s+/).length : 0;
+  const obviousNonSubstantive = detectNonSubstantiveAnswer(answerText, null, null, expectedConcepts);
 
-  // Try SBERT evaluation
-  let sbertResult = null;
-  try {
-    sbertResult = await aiService.evaluateText(questionText, answerText, expectedConcepts);
-  } catch (err) {
-    console.warn('[Evaluation] SBERT call failed, using fallback:', err.message);
+  if (obviousNonSubstantive.isNonSubstantive) {
+    const fiveDim = {
+      correctness: 0, completeness: 0, technicalDepth: 0, reasoning: 0, relevance: 0,
+      overallScore: 0, strengths: [],
+      weaknesses: ['Response did not contain enough relevant technical content to evaluate.'],
+      recommendedNextDifficulty: 'easy',
+    };
+    return {
+      textEvaluation: {
+        ...fiveDim, semanticScore: 0, conceptCoverage: 0, textScore: 0,
+        feedback: 'The response did not address the question with enough substantive technical content.',
+        missingConcepts: expectedConcepts.slice(0, 5),
+        improvementSuggestion: 'Provide a technical explanation that addresses: ' + expectedConcepts.slice(0, 5).join(', ') + '.',
+        confidence: 0, evaluationStatus: 'non_substantive', modelStatus: 'not_evaluated',
+      },
+      evaluation: {
+        score: 0, status: 'non_substantive', phase: 4, isDevelopmentEvaluation: false,
+        feedback: 'The response did not address the question with enough substantive technical content.',
+        wordCount,
+      },
+    };
   }
 
-  const sbertAvailable = sbertResult && sbertResult.modelStatus !== 'ai_service_unavailable'
-    && sbertResult.modelStatus !== 'not_implemented'
-    && sbertResult.textScore !== null
-    && sbertResult.textScore !== undefined;
+  let modelResult = null;
+  try {
+    if ((process.env.LLM_PROVIDER || '').toLowerCase() === 'gemini') {
+      modelResult = await evaluateTextWithGemini(questionText, answerText, expectedConcepts);
+    }
+  } catch (err) {
+    console.warn('[Evaluation] Gemini text evaluation failed, trying SBERT:', err.message);
+  }
 
-  let textEvaluation;
-  let legacyEval;
+  if (!modelResult) {
+    try {
+      modelResult = await aiService.evaluateText(questionText, answerText, expectedConcepts);
+    } catch (err) {
+      console.warn('[Evaluation] SBERT call failed, using fallback:', err.message);
+    }
+  }
 
-  if (sbertAvailable) {
+  const modelAvailable = modelResult &&
+    modelResult.textScore !== null &&
+    modelResult.textScore !== undefined &&
+    modelResult.modelStatus !== 'ai_service_unavailable' &&
+    modelResult.modelStatus !== 'not_implemented';
+
+  if (modelAvailable) {
     const nonSubstantive = detectNonSubstantiveAnswer(
-      answerText,
-      sbertResult.semanticScore,
-      sbertResult.conceptCoverage,
-      expectedConcepts
+      answerText, modelResult.semanticScore, modelResult.conceptCoverage, expectedConcepts
     );
 
     const fiveDim = nonSubstantive.isNonSubstantive
       ? {
-          correctness: 0,
-          completeness: 0,
-          technicalDepth: 0,
-          reasoning: 0,
-          relevance: 0,
-          overallScore: 0,
-          strengths: [],
+          correctness: 0, completeness: 0, technicalDepth: 0, reasoning: 0, relevance: 0,
+          overallScore: 0, strengths: [],
           weaknesses: ['Response did not contain enough relevant technical content to evaluate.'],
           recommendedNextDifficulty: 'easy',
         }
       : buildFiveDimensionEvaluation(
-          questionText,
-          answerText,
-          sbertResult.textScore,
-          expectedConcepts,
-          sbertResult
+          questionText, answerText, modelResult.textScore, expectedConcepts, modelResult
         );
 
-    textEvaluation = {
-      ...fiveDim,
-      semanticScore: sbertResult.semanticScore,
-      conceptCoverage: sbertResult.conceptCoverage,
-      textScore: fiveDim.overallScore,
-      feedback: nonSubstantive.isNonSubstantive
-        ? 'The response did not address the question with enough substantive technical content.'
-        : sbertResult.feedback,
-      strengths: [...new Set([...fiveDim.strengths, ...(nonSubstantive.isNonSubstantive ? [] : (sbertResult.strengths || []))])],
-      weaknesses: fiveDim.weaknesses,
-      missingConcepts: sbertResult.missingConcepts || expectedConcepts.slice(0, 5),
-      improvementSuggestion: nonSubstantive.isNonSubstantive
-        ? 'Provide a technical explanation that addresses: ' + expectedConcepts.slice(0, 5).join(', ') + '.'
-        : (sbertResult.improvementSuggestion || null),
-      confidence: sbertResult.confidence,
-      evaluationStatus: nonSubstantive.isNonSubstantive ? 'non_substantive' : 'evaluated',
-      modelStatus: 'sbert_evaluated',
-    };
-
-    legacyEval = {
-      score: fiveDim.overallScore,
-      status: 'sbert_evaluation',
-      phase: 4,
-      isDevelopmentEvaluation: false,
-      feedback: sbertResult.feedback,
-      wordCount,
-    };
-  } else {
-    // Development fallback
-    const devEval = developmentEvaluate(questionText, answerText, difficulty);
-    const nonSubstantive = detectNonSubstantiveAnswer(answerText, null, null, expectedConcepts);
-
-    const fiveDim = nonSubstantive.isNonSubstantive
-      ? {
-          correctness: 0,
-          completeness: 0,
-          technicalDepth: 0,
-          reasoning: 0,
-          relevance: 0,
-          overallScore: 0,
-          strengths: [],
-          weaknesses: ['Response did not contain enough relevant technical content to evaluate.'],
-          recommendedNextDifficulty: 'easy',
-        }
-      : buildFiveDimensionEvaluation(
-          questionText,
-          answerText,
-          devEval.score,
-          expectedConcepts,
-          null
-        );
-
-    textEvaluation = {
-      ...fiveDim,
-      semanticScore: null,
-      conceptCoverage: null,
-      textScore: fiveDim.overallScore,
-      feedback: nonSubstantive.isNonSubstantive
-        ? 'The response did not address the question with enough substantive technical content.'
-        : devEval.feedback,
-      missingConcepts: expectedConcepts.length > 0 ? expectedConcepts.slice(0, 5) : [],
-      improvementSuggestion: nonSubstantive.isNonSubstantive
-        ? 'Provide a technical explanation that addresses: ' + expectedConcepts.slice(0, 5).join(', ') + '.'
-        : (fiveDim.weaknesses.length > 0 ? 'Focus on: ' + fiveDim.weaknesses.join(', ') : null),
-      confidence: null,
-      evaluationStatus: nonSubstantive.isNonSubstantive ? 'non_substantive' : 'evaluated',
-      modelStatus: sbertResult?.modelStatus || 'ai_service_unavailable',
-    };
-
-    legacyEval = {
-      ...devEval,
-      score: fiveDim.overallScore,
-      notice: sbertResult?.modelStatus === 'ai_service_unavailable'
-        ? '⚠️ SBERT AI service is unavailable. Using development placeholder.'
-        : devEval.notice,
+    const isGemini = modelResult.modelStatus === 'gemini_evaluated';
+    return {
+      textEvaluation: {
+        ...fiveDim,
+        semanticScore: modelResult.semanticScore,
+        conceptCoverage: modelResult.conceptCoverage,
+        textScore: fiveDim.overallScore,
+        feedback: nonSubstantive.isNonSubstantive
+          ? 'The response did not address the question with enough substantive technical content.'
+          : modelResult.feedback,
+        strengths: [...new Set([...fiveDim.strengths, ...(nonSubstantive.isNonSubstantive ? [] : (modelResult.strengths || []))])],
+        weaknesses: fiveDim.weaknesses,
+        missingConcepts: modelResult.missingConcepts || expectedConcepts.slice(0, 5),
+        improvementSuggestion: nonSubstantive.isNonSubstantive
+          ? 'Provide a technical explanation that addresses: ' + expectedConcepts.slice(0, 5).join(', ') + '.'
+          : (modelResult.improvementSuggestion || null),
+        confidence: modelResult.confidence,
+        evaluationStatus: nonSubstantive.isNonSubstantive ? 'non_substantive' : 'evaluated',
+        modelStatus: isGemini ? 'gemini_evaluated' : 'sbert_evaluated',
+      },
+      evaluation: {
+        score: fiveDim.overallScore,
+        status: isGemini ? 'gemini_evaluation' : 'sbert_evaluation',
+        phase: 4,
+        isDevelopmentEvaluation: false,
+        feedback: modelResult.feedback,
+        wordCount,
+      },
     };
   }
 
-  return { textEvaluation, evaluation: legacyEval };
+  const devEval = developmentEvaluate(questionText, answerText, difficulty);
+  const fiveDim = buildFiveDimensionEvaluation(questionText, answerText, devEval.score, expectedConcepts, null);
+  return {
+    textEvaluation: {
+      ...fiveDim, semanticScore: null, conceptCoverage: null,
+      textScore: fiveDim.overallScore, feedback: devEval.feedback,
+      missingConcepts: expectedConcepts.slice(0, 5),
+      improvementSuggestion: fiveDim.weaknesses.length > 0 ? 'Focus on: ' + fiveDim.weaknesses.join(', ') : null,
+      confidence: null, evaluationStatus: 'evaluated', modelStatus: 'ai_service_unavailable',
+    },
+    evaluation: {
+      ...devEval, score: fiveDim.overallScore,
+      notice: 'AI text evaluation unavailable. Using development fallback.',
+    },
+  };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
