@@ -91,6 +91,26 @@ def get_yolo_status() -> str:
     return _pl_mod._pipeline_instance.yolo_detector.status
 
 
+def get_video_model_status() -> dict:
+    """Return per-model video readiness without triggering initialization."""
+    import app.video.inference.pipeline as _pl_mod
+    if _pl_mod._pipeline_instance is None:
+        return {
+            "pipeline": "loading" if _pipeline_loading else "not_loaded",
+            "yolo": get_yolo_status(),
+            "face": "not_loaded",
+            "pose": "not_loaded",
+        }
+
+    pipeline = _pl_mod._pipeline_instance
+    return {
+        "pipeline": "ready",
+        "yolo": pipeline.yolo_detector.status,
+        "face": pipeline.face_analyzer.status,
+        "pose": pipeline.pose_analyzer.status,
+    }
+
+
 def get_model_audit_report() -> dict:
     pipeline = get_video_pipeline()
     return pipeline.get_audit_report()
