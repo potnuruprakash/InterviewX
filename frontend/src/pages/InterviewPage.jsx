@@ -360,6 +360,8 @@ export default function InterviewPage() {
         responseType: 'text',
         code: null,
         language: null,
+        audioExpected: Boolean(currentAudio && currentAudio.size > 0),
+        videoExpected: Boolean(currentVideo && currentVideo.size > 0),
       }
 
       // Step 1: Submit text response to create MongoDB Response record
