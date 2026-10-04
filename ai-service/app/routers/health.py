@@ -19,6 +19,7 @@ async def health():
             "phase_7_fusion": "active",
             "cnn_lstm": "not_trained",
         },
+        "video_models": video_service.get_video_model_status(),
         "models": {
             "sbert_model": sbert_service.get_model_name(),
             "yolo_model": os.getenv("YOLO_MODEL_PATH", "yolov8n.pt"),
