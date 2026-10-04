@@ -66,6 +66,40 @@ class GeminiProvider {
       provider: 'gemini',
     };
   }
+
+  async generateStructuredCompletion({ prompt, systemPrompt = null, schema, maxTokens = 800, temperature = 0.1 }) {
+    if (!this.isAvailable || !this.apiKey) {
+      throw new Error('GEMINI_NOT_CONFIGURED: Valid GEMINI_API_KEY is not configured in backend/.env');
+    }
+
+    const modelName = this.model;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.apiKey}`;
+    const fullPrompt = systemPrompt ? `${systemPrompt}\\n\\n${prompt}` : prompt;
+
+    const response = await axios.post(url, {
+      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+      generationConfig: {
+        temperature,
+        maxOutputTokens: maxTokens,
+        responseMimeType: 'application/json',
+        responseSchema: schema,
+      },
+    }, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 20000,
+    });
+
+    const parts = response.data?.candidates?.[0]?.content?.parts || [];
+    const text = parts.map((p) => p.text || '').join('').trim();
+    if (!text) throw new Error('Gemini returned an empty structured response.');
+
+    return {
+      content: text,
+      model: modelName,
+      usage: response.data?.usageMetadata || null,
+      provider: 'gemini',
+    };
+  }
 }
 
 module.exports = GeminiProvider;
