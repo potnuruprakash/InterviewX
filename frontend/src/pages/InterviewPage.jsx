@@ -368,13 +368,23 @@ export default function InterviewPage() {
       const responseId = res.data.response?.id
       const questionId = currentQuestion.id
 
-      // Step 2 & 3 & 4: Upload and analyze media before advancing so final results include video metrics
-      const mediaResults = await submitMedia(responseId, questionId, currentAudio, currentVideo)
+      // Media analysis is intentionally non-blocking. Video/Audio processing can take
+      // several seconds on the Render AI service; the next interview question should
+      // not wait for model inference. ResultsPage already supports pending evaluation.
+      const mediaPromise = submitMedia(responseId, questionId, currentAudio, currentVideo)
+        .then((mediaResults) => {
+          if (currentVideo && mediaResults.video?.error) {
+            setMediaNotice('Video analysis could not be completed. Your technical evaluation is still available.')
+          }
+          return mediaResults
+        })
+        .catch((mediaError) => {
+          console.warn('[Interview] Background media processing notice:', mediaError?.message || mediaError)
+          return null
+        })
 
-      // If video was recorded but failed, display non-destructive notice without blocking
-      if (currentVideo && mediaResults.video?.error) {
-        setMediaNotice('Video analysis could not be completed. Your technical evaluation is still available.')
-      }
+      // Keep the promise alive for the upload request without blocking question progression.
+      void mediaPromise
 
       setLastEval(res.data.response)
       setAnswer('')
