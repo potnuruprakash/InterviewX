@@ -3,6 +3,11 @@ uvicorn[standard]
 python-dotenv
 pydantic
 
+# CPU-only PyTorch. Render AI service runs without a CUDA GPU.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.7.1+cpu
+torchvision==0.22.1+cpu
+
 # Phase 4 — SBERT Text Analysis (pretrained)
 sentence-transformers
 
