@@ -11,8 +11,12 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SAMPLE_FPS = int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "2"))
+DEFAULT_SAMPLE_FPS = int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "1"))
 MAX_FRAMES_TO_ANALYZE = int(os.getenv("VIDEO_MAX_FRAMES", "120"))
+# Downscale decoded frames before expensive YOLO/MediaPipe processing.
+# This protects CPU time on small Render instances when a browser supplies
+# a higher-resolution recording despite the requested camera constraints.
+MAX_FRAME_DIMENSION = int(os.getenv("VIDEO_MAX_DIMENSION", "640"))
 
 
 @dataclass
@@ -65,6 +69,15 @@ def extract_sampled_frames(
 
             if current_frame_idx % frame_interval == 0:
                 h, w = frame.shape[:2]
+                max_dim = max(h, w)
+                if MAX_FRAME_DIMENSION > 0 and max_dim > MAX_FRAME_DIMENSION:
+                    scale = MAX_FRAME_DIMENSION / float(max_dim)
+                    frame = cv2.resize(
+                        frame,
+                        (max(1, int(w * scale)), max(1, int(h * scale))),
+                        interpolation=cv2.INTER_AREA,
+                    )
+                    h, w = frame.shape[:2]
                 timestamp = round(current_frame_idx / video_fps, 2)
                 sampled_frames.append(
                     FrameSample(
@@ -88,6 +101,6 @@ def extract_sampled_frames(
 
     logger.info(
         f"[FrameSampler] Sampled {len(sampled_frames)} frames from {video_path} "
-        f"(video_fps={video_fps:.1f}, interval={frame_interval})"
+        f"(video_fps={video_fps:.1f}, interval={frame_interval}, max_dim={MAX_FRAME_DIMENSION})"
     )
     return sampled_frames
