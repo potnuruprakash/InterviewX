@@ -1,6 +1,6 @@
 """
 Frame Sampling & Video Preprocessing Module
-Extracts frames at a controlled sample rate (2-5 FPS) with exact timestamp tracking.
+Extracts frames at a controlled sample rate with exact timestamp tracking.
 """
 
 import os
@@ -38,7 +38,7 @@ def extract_sampled_frames(
     
     Args:
         video_path: Path to the local video file.
-        fps: Target sampling rate (frames per second, 2-5 recommended).
+        fps: Target sampling rate in frames per second. The production video service defaults to 1 FPS.
         max_frames: Hard ceiling on sampled frames to guard server memory.
         
     Returns:
