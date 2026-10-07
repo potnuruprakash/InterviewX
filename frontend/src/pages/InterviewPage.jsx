@@ -98,7 +98,19 @@ export default function InterviewPage() {
     const initInterview = async () => {
       setLoading(true)
       try {
-        const res = await authApi.post(`/api/interviews/${id}/start`)
+        let res
+        try {
+          // Render free services can take about a minute to wake after idle.
+          // Give the start request enough time to survive a cold start.
+          res = await authApi.post(`/api/interviews/${id}/start`, {}, { timeout: 120000 })
+        } catch (firstErr) {
+          const retryable = /timeout|network error|ECONNABORTED/i.test(firstErr?.message || '')
+          if (!retryable) throw firstErr
+
+          console.warn('[InterviewLifecycle] Start request timed out; retrying once after Render cold start.', firstErr.message)
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+          res = await authApi.post(`/api/interviews/${id}/start`, {}, { timeout: 120000 })
+        }
         const data = res.data
         setInterview(data.interview)
         setCurrentQuestion(data.currentQuestion)
@@ -348,6 +360,8 @@ export default function InterviewPage() {
         responseType: 'text',
         code: null,
         language: null,
+        audioExpected: Boolean(currentAudio && currentAudio.size > 0),
+        videoExpected: Boolean(currentVideo && currentVideo.size > 0),
       }
 
       // Step 1: Submit text response to create MongoDB Response record
@@ -356,13 +370,23 @@ export default function InterviewPage() {
       const responseId = res.data.response?.id
       const questionId = currentQuestion.id
 
-      // Step 2 & 3 & 4: Upload and analyze media before advancing so final results include video metrics
-      const mediaResults = await submitMedia(responseId, questionId, currentAudio, currentVideo)
+      // Media analysis is intentionally non-blocking. Video/Audio processing can take
+      // several seconds on the Render AI service; the next interview question should
+      // not wait for model inference. ResultsPage already supports pending evaluation.
+      const mediaPromise = submitMedia(responseId, questionId, currentAudio, currentVideo)
+        .then((mediaResults) => {
+          if (currentVideo && mediaResults.video?.error) {
+            setMediaNotice('Video analysis could not be completed. Your technical evaluation is still available.')
+          }
+          return mediaResults
+        })
+        .catch((mediaError) => {
+          console.warn('[Interview] Background media processing notice:', mediaError?.message || mediaError)
+          return null
+        })
 
-      // If video was recorded but failed, display non-destructive notice without blocking
-      if (currentVideo && mediaResults.video?.error) {
-        setMediaNotice('Video analysis could not be completed. Your technical evaluation is still available.')
-      }
+      // Keep the promise alive for the upload request without blocking question progression.
+      void mediaPromise
 
       setLastEval(res.data.response)
       setAnswer('')

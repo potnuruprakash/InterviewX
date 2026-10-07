@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 # Environment-variable overrides (set VIDEO_FRAME_SAMPLE_FPS=2 to restore old behavior)
 DEFAULT_SAMPLE_FPS = int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "1"))
 MAX_FRAMES_TO_ANALYZE = int(os.getenv("VIDEO_MAX_FRAMES", "60"))
-# Max dimension to resize frames to before inference (reduces pixels processed by YOLO)
-MAX_FRAME_DIM = int(os.getenv("VIDEO_MAX_FRAME_DIM", "640"))
+# Downscale decoded frames before expensive YOLO/MediaPipe processing.
+MAX_FRAME_DIMENSION = int(os.getenv("VIDEO_MAX_DIMENSION", os.getenv("VIDEO_MAX_FRAME_DIM", "640")))
 
 
 @dataclass
@@ -72,16 +72,15 @@ def extract_sampled_frames(
 
             if current_frame_idx % frame_interval == 0:
                 h, w = frame.shape[:2]
-
-                # Resize large frames to MAX_FRAME_DIM on the longest side
-                # This significantly reduces YOLO/MediaPipe processing time
-                if max(h, w) > MAX_FRAME_DIM:
-                    scale = MAX_FRAME_DIM / max(h, w)
-                    new_w = int(w * scale)
-                    new_h = int(h * scale)
-                    frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
-                    h, w = new_h, new_w
-
+                max_dim = max(h, w)
+                if MAX_FRAME_DIMENSION > 0 and max_dim > MAX_FRAME_DIMENSION:
+                    scale = MAX_FRAME_DIMENSION / float(max_dim)
+                    frame = cv2.resize(
+                        frame,
+                        (max(1, int(w * scale)), max(1, int(h * scale))),
+                        interpolation=cv2.INTER_AREA,
+                    )
+                    h, w = frame.shape[:2]
                 timestamp = round(current_frame_idx / video_fps, 2)
                 sampled_frames.append(
                     FrameSample(
@@ -105,6 +104,6 @@ def extract_sampled_frames(
 
     logger.info(
         f"[FrameSampler] Sampled {len(sampled_frames)} frames from {video_path} "
-        f"(video_fps={video_fps:.1f}, interval={frame_interval}, max_dim={MAX_FRAME_DIM})"
+        f"(video_fps={video_fps:.1f}, interval={frame_interval}, max_dim={MAX_FRAME_DIMENSION})"
     )
     return sampled_frames

@@ -7,7 +7,8 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000
+    PORT=8000 \
+    MEDIAPIPE_DISABLE_GPU=1
 
 WORKDIR /app
 
@@ -16,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsndfile1 \
     libgl1 \
+    libegl1 \
+    libgles2 \
     libglib2.0-0 \
     libgomp1 \
     build-essential \

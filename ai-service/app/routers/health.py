@@ -25,7 +25,14 @@ async def health():
     return {
         "status": "ok",
         "service": "interviewx-ai",
-        "version": "3.0.0",
+        "phases": {
+            "phase_4_sbert": sbert_service.get_model_status(),
+            "phase_5_audio": "librosa_feature_extraction",
+            "phase_6_video": video_service.get_yolo_status(),
+            "phase_7_fusion": "active",
+            "cnn_lstm": "not_trained",
+        },
+        "video_models": video_service.get_video_model_status() if hasattr(video_service, "get_video_model_status") else {},
         "models": {
             "sbert": sbert_status,
             "yolo": yolo_status,

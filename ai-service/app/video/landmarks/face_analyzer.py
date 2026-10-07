@@ -47,7 +47,18 @@ class FaceAnalyzer:
 
             model_path = get_model_file_path("face_landmarker.task", FACE_LANDMARKER_URL)
             if os.path.exists(model_path) and os.path.getsize(model_path) > 0:
-                base_opts = mp_python.BaseOptions(model_asset_path=model_path)
+                with open(model_path, "rb") as model_file:
+                    model_buffer = model_file.read()
+                if not model_buffer:
+                    raise RuntimeError("FaceLandmarker task model is empty.")
+
+                # Render runs CPU-only. Supplying the model as bytes avoids
+                # native runtime/path handling differences and makes the
+                # delegate explicit.
+                base_opts = mp_python.BaseOptions(
+                    model_asset_buffer=model_buffer,
+                    delegate=mp_python.BaseOptions.Delegate.CPU,
+                )
                 options = vision.FaceLandmarkerOptions(
                     base_options=base_opts,
                     running_mode=vision.RunningMode.IMAGE,
@@ -55,7 +66,6 @@ class FaceAnalyzer:
                     min_face_detection_confidence=0.45,
                     min_face_presence_confidence=0.45,
                     min_tracking_confidence=0.45,
-                    output_face_blendshapes=True,
                 )
                 self._task_landmarker = vision.FaceLandmarker.create_from_options(options)
                 self._mode = "tasks_vision"
@@ -63,7 +73,7 @@ class FaceAnalyzer:
                 self._mp = mp
                 logger.info("[FaceAnalyzer] MediaPipe Tasks FaceLandmarker (Iris/Mesh) initialized.")
         except Exception as exc:
-            logger.debug("[FaceAnalyzer] Modern Tasks FaceLandmarker not available: %s", exc)
+            logger.exception("[FaceAnalyzer] Modern Tasks FaceLandmarker initialization failed: %s", exc)
 
         # 2. Fallback to legacy mp.solutions.face_mesh if modern tasks didn't load
         if self._mode == "unavailable":
@@ -82,7 +92,7 @@ class FaceAnalyzer:
                     self._mp = mp
                     logger.info("[FaceAnalyzer] MediaPipe Face Mesh/Iris (solutions) initialized.")
             except Exception as exc:
-                logger.debug("[FaceAnalyzer] Legacy mp.solutions FaceMesh unavailable: %s", exc)
+                logger.exception("[FaceAnalyzer] Legacy mp.solutions FaceMesh initialization failed: %s", exc)
 
         # 3. Haar Cascade fallback
         try:

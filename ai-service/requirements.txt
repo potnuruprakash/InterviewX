@@ -3,6 +3,11 @@ uvicorn[standard]
 python-dotenv
 pydantic
 
+# CPU-only PyTorch. Render AI service runs without a CUDA GPU.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.7.1+cpu
+torchvision==0.22.1+cpu
+
 # Phase 4 — SBERT Text Analysis (pretrained)
 sentence-transformers
 
@@ -13,9 +18,9 @@ scikit-learn
 
 # Phase 6 — Video Analysis
 ultralytics
-opencv-python
+opencv-contrib-python==5.0.0.93
 # MediaPipe Face/Pose landmarks for observable gaze/head/pose signals
-mediapipe
+mediapipe==1.0.1
 
 # Phase 7 — Fusion
 python-multipart
