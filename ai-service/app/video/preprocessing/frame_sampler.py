@@ -1,6 +1,10 @@
 """
 Frame Sampling & Video Preprocessing Module
-Extracts frames at a controlled sample rate (2-5 FPS) with exact timestamp tracking.
+Extracts frames at a controlled sample rate (1-2 FPS) with exact timestamp tracking.
+
+Phase 3 optimization: Default lowered to 1 FPS and max frames capped at 60.
+Interview clips are 1-3 minutes; 60 frames at 1 FPS covers the full clip.
+This halves inference time (YOLOv8 + MediaPipe) vs. the previous 2 FPS default.
 """
 
 import os
@@ -11,8 +15,11 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SAMPLE_FPS = int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "2"))
-MAX_FRAMES_TO_ANALYZE = int(os.getenv("VIDEO_MAX_FRAMES", "120"))
+# Environment-variable overrides (set VIDEO_FRAME_SAMPLE_FPS=2 to restore old behavior)
+DEFAULT_SAMPLE_FPS = int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "1"))
+MAX_FRAMES_TO_ANALYZE = int(os.getenv("VIDEO_MAX_FRAMES", "60"))
+# Max dimension to resize frames to before inference (reduces pixels processed by YOLO)
+MAX_FRAME_DIM = int(os.getenv("VIDEO_MAX_FRAME_DIM", "640"))
 
 
 @dataclass
@@ -31,12 +38,12 @@ def extract_sampled_frames(
 ) -> List[FrameSample]:
     """
     Decodes video and extracts frames at the specified sample rate.
-    
+
     Args:
         video_path: Path to the local video file.
-        fps: Target sampling rate (frames per second, 2-5 recommended).
+        fps: Target sampling rate (frames per second, 1-2 recommended).
         max_frames: Hard ceiling on sampled frames to guard server memory.
-        
+
     Returns:
         List of FrameSample dataclasses with timestamps and resolution metadata.
     """
@@ -65,6 +72,16 @@ def extract_sampled_frames(
 
             if current_frame_idx % frame_interval == 0:
                 h, w = frame.shape[:2]
+
+                # Resize large frames to MAX_FRAME_DIM on the longest side
+                # This significantly reduces YOLO/MediaPipe processing time
+                if max(h, w) > MAX_FRAME_DIM:
+                    scale = MAX_FRAME_DIM / max(h, w)
+                    new_w = int(w * scale)
+                    new_h = int(h * scale)
+                    frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                    h, w = new_h, new_w
+
                 timestamp = round(current_frame_idx / video_fps, 2)
                 sampled_frames.append(
                     FrameSample(
@@ -88,6 +105,6 @@ def extract_sampled_frames(
 
     logger.info(
         f"[FrameSampler] Sampled {len(sampled_frames)} frames from {video_path} "
-        f"(video_fps={video_fps:.1f}, interval={frame_interval})"
+        f"(video_fps={video_fps:.1f}, interval={frame_interval}, max_dim={MAX_FRAME_DIM})"
     )
     return sampled_frames

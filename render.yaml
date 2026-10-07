@@ -1,0 +1,42 @@
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # InterviewX Express Backend
+  # ─────────────────────────────────────────────────────────────────────────────
+  - type: web
+    name: interviewx-backend
+    env: node
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: AI_SERVICE_TIMEOUT
+        value: 60000
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # InterviewX AI Service (Python FastAPI with PyTorch CPU / YOLOv8 / SBERT)
+  # Runs with single Uvicorn worker to stay strictly within 512MB RAM free tier
+  # ─────────────────────────────────────────────────────────────────────────────
+  - type: web
+    name: interviewx-ai-service
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: Dockerfile
+    dockerContext: ai-service
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: VIDEO_FRAME_SAMPLE_FPS
+        value: 1
+      - key: VIDEO_MAX_FRAMES
+        value: 60
+      - key: VIDEO_MAX_FRAME_DIM
+        value: 640

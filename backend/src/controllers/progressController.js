@@ -12,7 +12,8 @@ const getUserProgress = async (req, res) => {
       Progress.find({ clerkUserId: req.clerkUserId })
         .sort({ completedAt: -1 })
         .limit(50)
-        .populate('interviewId', 'targetRole interviewType difficulty'),
+        .populate('interviewId', 'targetRole interviewType difficulty')
+        .lean(),
       Interview.countDocuments({ clerkUserId: req.clerkUserId }),
     ]);
 
@@ -49,7 +50,7 @@ const getUserProgress = async (req, res) => {
         strongAreas: p.strongAreas,
         improvementAreas: p.improvementAreas,
         skillGaps: p.skillGaps,
-        skillScores: p.skillScores ? Object.fromEntries(p.skillScores) : {},
+        skillScores: p.skillScores ? (p.skillScores instanceof Map ? Object.fromEntries(p.skillScores) : p.skillScores) : {},
         completedAt: p.completedAt,
       })),
       summary: {

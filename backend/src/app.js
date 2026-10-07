@@ -158,13 +158,19 @@ let aiServiceStatus = 'checking';
 // Health check — no auth required
 app.get('/health', (req, res) => {
   const isDbConnected = mongoose.connection.readyState === 1;
+  let queueStats = { video: { queued: 0, active: 0 }, audio: { queued: 0, active: 0 } };
+  try {
+    const { getQueueStats } = require('./services/asyncJobService');
+    queueStats = getQueueStats();
+  } catch (_) { /* service not yet initialized */ }
+
   res.json({
     success: true,
-    service: 'Adaptive AI Interviewer Backend',
-    phase: 2,
+    service: 'InterviewX Backend',
     status: isDbConnected ? 'ok' : 'degraded',
     database: isDbConnected ? 'connected' : 'disconnected',
     aiService: aiServiceStatus,
+    jobQueue: queueStats,
     timestamp: new Date().toISOString(),
   });
 });

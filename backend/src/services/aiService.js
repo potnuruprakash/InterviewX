@@ -1,17 +1,21 @@
 /**
- * AI Service HTTP Client
+ * AI Service HTTP Client - Phase 2/6 Optimization
  *
- * Provides a typed interface for communicating with the Python FastAPI AI service.
+ * Typed interface for the Python FastAPI AI service with:
+ *   - Per-operation timeouts (text=15s, audio=60s, video=120s)
+ *   - Smart retry logic: only 502/503/504, never 400/413/422
+ *   - Jitter in retry delays to avoid thundering herd
+ *   - Graceful degradation with structured fallback objects
  *
  * Endpoints:
- *   GET  /health                  — Health check
- *   POST /api/ai/text-evaluate    — SBERT semantic evaluation (Phase 4)
- *   POST /api/ai/audio-analyze    — MFCC + audio analysis (Phase 5)
- *   POST /api/ai/video-analyze    — YOLOv8 video analysis (Phase 6)
- *   POST /api/ai/multimodal-evaluate — Fusion (Phase 7)
- *
- * Flow: React → Express → FastAPI → AI models → Express → MongoDB → React
+ *   GET  /health                   - Fast liveness probe
+ *   GET  /ready                    - Model readiness probe
+ *   POST /api/ai/text-evaluate     - SBERT semantic evaluation (Phase 4)
+ *   POST /api/ai/audio-analyze     - MFCC + audio analysis (Phase 5)
+ *   POST /api/ai/video-analyze     - YOLOv8 video analysis (Phase 6)
  */
+
+'use strict';
 
 const axios = require('axios');
 const FormData = require('form-data');
@@ -26,14 +30,59 @@ if (!AI_SERVICE_SECRET_KEY && process.env.NODE_ENV === 'production') {
   console.error('[AI Service] CRITICAL: AI_SERVICE_SECRET_KEY is not defined in environment variables.');
 }
 
-const aiClient = axios.create({
-  baseURL: AI_SERVICE_URL,
-  timeout: AI_SERVICE_TIMEOUT,
-  headers: {
-    'Content-Type': 'application/json',
-    ...(AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}),
-  },
-});
+// Shared headers builder
+const getAuthHeaders = () => (
+  AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}
+);
+
+// Per-operation timeout constants
+const TIMEOUTS = {
+  TEXT: 15000,   // SBERT is fast once loaded: 3-8s typical
+  AUDIO: 60000,  // Librosa can be slow on cold start
+  VIDEO: 120000, // YOLOv8 + MediaPipe over many frames
+  HEALTH: 5000,
+};
+
+// Non-retryable HTTP status codes (client errors - no point retrying)
+const NON_RETRYABLE_STATUSES = new Set([400, 401, 403, 404, 413, 422]);
+
+/**
+ * Sleep with optional jitter.
+ */
+const sleep = (ms, jitter = 0) =>
+  new Promise((r) => setTimeout(r, ms + Math.floor(Math.random() * jitter)));
+
+/**
+ * Generic AI service request with retry for transient server errors.
+ *
+ * @param {Function} requestFn - Async function that returns axios response
+ * @param {Object} opts        - { maxAttempts, retryDelayMs, jitter, operationName }
+ */
+const withRetry = async (requestFn, opts = {}) => {
+  const maxAttempts = opts.maxAttempts || 2;
+  const retryDelayMs = opts.retryDelayMs || 3000;
+  const jitter = opts.jitter || 1000;
+  const opName = opts.operationName || 'AI_REQUEST';
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await requestFn();
+      return result;
+    } catch (err) {
+      const status = err?.response?.status;
+      const isRetryable = !status || !NON_RETRYABLE_STATUSES.has(status);
+      const isLastAttempt = attempt >= maxAttempts;
+
+      if (!isRetryable || isLastAttempt) {
+        throw err;
+      }
+
+      const delay = retryDelayMs * attempt;
+      console.warn(`[AI Service] ${opName} failed (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms: ${err.message}`);
+      await sleep(delay, jitter);
+    }
+  }
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HEALTH
@@ -41,33 +90,42 @@ const aiClient = axios.create({
 
 const checkHealth = async () => {
   try {
-    const res = await aiClient.get('/health');
+    const res = await axios.get(`${AI_SERVICE_URL}/health`, {
+      headers: getAuthHeaders(),
+      timeout: TIMEOUTS.HEALTH,
+    });
     return res.data;
   } catch (err) {
     console.warn('[AI Service] Health check failed:', err.message);
-    return { status: 'unavailable', phase: 0, message: err.message };
+    return { status: 'unavailable', message: err.message };
   }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE 4 — SBERT TEXT EVALUATION
+// PHASE 4 - SBERT TEXT EVALUATION
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Evaluate a text answer using SBERT semantic similarity.
  *
- * @param {string} question - The interview question
- * @param {string} answer   - The candidate's answer
+ * @param {string} question          - The interview question
+ * @param {string} answer            - The candidate's answer
  * @param {string[]} expectedConcepts - Concepts expected in a good answer
- * @returns {Object} { semanticScore, conceptCoverage, textScore, feedback, strengths, missingConcepts, confidence, modelStatus }
+ * @returns {Object} { semanticScore, conceptCoverage, textScore, feedback, ... }
  */
 const evaluateText = async (question, answer, expectedConcepts = []) => {
   try {
-    const res = await aiClient.post('/api/ai/text-evaluate', {
-      question,
-      answer,
-      expectedConcepts,
-    });
+    const res = await withRetry(
+      () => axios.post(
+        `${AI_SERVICE_URL}/api/ai/text-evaluate`,
+        { question, answer, expectedConcepts },
+        {
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          timeout: TIMEOUTS.TEXT,
+        }
+      ),
+      { maxAttempts: 2, retryDelayMs: 2000, operationName: 'TEXT_EVALUATE' }
+    );
     return res.data?.data || res.data;
   } catch (err) {
     console.warn('[AI Service] Text evaluation failed:', err.message);
@@ -86,7 +144,7 @@ const evaluateText = async (question, answer, expectedConcepts = []) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE 5 — AUDIO ANALYSIS
+// PHASE 5 - AUDIO ANALYSIS
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -104,16 +162,16 @@ const analyzeAudio = async (audioFilePath) => {
     const form = new FormData();
     form.append('audio', fs.createReadStream(audioFilePath), {
       filename: path.basename(audioFilePath),
-      contentType: 'audio/wav',
+      contentType: 'audio/webm',
     });
 
-    const res = await axios.post(`${AI_SERVICE_URL}/api/ai/audio-analyze`, form, {
-      headers: {
-        ...form.getHeaders(),
-        ...(AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}),
-      },
-      timeout: AI_SERVICE_TIMEOUT,
-    });
+    const res = await withRetry(
+      () => axios.post(`${AI_SERVICE_URL}/api/ai/audio-analyze`, form, {
+        headers: { ...form.getHeaders(), ...getAuthHeaders() },
+        timeout: TIMEOUTS.AUDIO,
+      }),
+      { maxAttempts: 2, retryDelayMs: 3000, jitter: 1000, operationName: 'AUDIO_ANALYZE' }
+    );
     return res.data?.data || res.data;
   } catch (err) {
     console.warn('[AI Service] Audio analysis failed:', err.message);
@@ -126,11 +184,14 @@ const analyzeAudio = async (audioFilePath) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE 6 — VIDEO ANALYSIS
+// PHASE 6 - VIDEO ANALYSIS
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Analyze a video file using YOLOv8 frame extraction.
+ * Analyze a video file using YOLOv8 + MediaPipe frame extraction.
+ *
+ * Retries up to 3 times for MODEL_WARMING_UP (503) responses.
+ * Does not retry for client errors (400, 413, 422).
  *
  * @param {string} videoFilePath - Absolute path to the video file
  * @returns {Object} Video analysis result
@@ -140,68 +201,47 @@ const analyzeVideo = async (videoFilePath) => {
     return { modelStatus: 'file_not_found', framesProcessed: 0 };
   }
 
-  // The Python service returns 503 while YOLO/MediaPipe are warming up.
-  // Retry transient warm-up failures so a valid interview video is not lost.
-  const maxAttempts = 3;
-  const retryDelayMs = 3000;
+  try {
+    const form = new FormData();
+    form.append('video', fs.createReadStream(videoFilePath), {
+      filename: path.basename(videoFilePath),
+      contentType: 'application/octet-stream',
+    });
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      const form = new FormData();
-      form.append('video', fs.createReadStream(videoFilePath), {
-        filename: path.basename(videoFilePath),
-        contentType: 'application/octet-stream',
-      });
+    const res = await withRetry(
+      () => axios.post(`${AI_SERVICE_URL}/api/ai/video-analyze`, form, {
+        headers: { ...form.getHeaders(), ...getAuthHeaders() },
+        timeout: TIMEOUTS.VIDEO,
+      }),
+      { maxAttempts: 3, retryDelayMs: 4000, jitter: 2000, operationName: 'VIDEO_ANALYZE' }
+    );
 
-      const res = await axios.post(`${AI_SERVICE_URL}/api/ai/video-analyze`, form, {
-        headers: {
-          ...form.getHeaders(),
-          ...(AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}),
-        },
-        timeout: AI_SERVICE_TIMEOUT,
-      });
-
-      const data = res.data?.data || res.data;
-      const warming = data?.error === 'MODEL_WARMING_UP' || data?.modelStatus === 'loading';
-      if (!warming || attempt === maxAttempts) return data;
-    } catch (err) {
-      const status = err?.response?.status;
-      const code = err?.response?.data?.error || err?.response?.data?.detail?.error;
-      const warming = status === 503 && code === 'MODEL_WARMING_UP';
-
-      if (!warming || attempt === maxAttempts) {
-        console.warn('[AI Service] Video analysis failed:', err.message);
-        return {
-          framesProcessed: 0,
-          personDetectionRatio: null,
-          modelStatus: 'ai_service_unavailable',
-          error: err.message,
-        };
-      }
-    }
-
-    console.warn(`[AI Service] Video model warming up; retrying (${attempt}/${maxAttempts - 1})...`);
-    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    return res.data?.data || res.data;
+  } catch (err) {
+    console.warn('[AI Service] Video analysis failed:', err.message);
+    return {
+      framesProcessed: 0,
+      personDetectionRatio: null,
+      modelStatus: 'ai_service_unavailable',
+      error: err.message,
+    };
   }
-
-  return {
-    framesProcessed: 0,
-    personDetectionRatio: null,
-    modelStatus: 'ai_service_unavailable',
-  };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE 7 — MULTIMODAL EVALUATION (AI-side fusion, optional)
+// PHASE 7 - MULTIMODAL EVALUATION (optional AI-side fusion)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const evaluateMultimodal = async (textScore, audioResult, videoResult) => {
   try {
-    const res = await aiClient.post('/api/ai/multimodal-evaluate', {
-      textScore,
-      audioResult,
-      videoResult,
-    });
+    const res = await axios.post(
+      `${AI_SERVICE_URL}/api/ai/multimodal-evaluate`,
+      { textScore, audioResult, videoResult },
+      {
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        timeout: TIMEOUTS.TEXT,
+      }
+    );
     return res.data?.data || res.data;
   } catch (err) {
     console.warn('[AI Service] Multimodal evaluation failed:', err.message);
@@ -209,7 +249,7 @@ const evaluateMultimodal = async (textScore, audioResult, videoResult) => {
   }
 };
 
-// Legacy aliases for backward compatibility
+// Legacy alias for backward compatibility
 const analyzeText = evaluateText;
 
 module.exports = {

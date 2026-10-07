@@ -39,6 +39,14 @@ const {
 const { generateRoadmap, calculateJobReadiness } = require('../services/roadmapService');
 const { generateTrainingSession } = require('../services/trainingService');
 const { deleteFile } = require('../middleware/upload');
+const { enqueueVideoJob, enqueueAudioJob } = require('../services/asyncJobService');
+
+// Structured logger for timing instrumentation (never logs secrets)
+const _log = (op, data) => {
+  try {
+    console.log(JSON.stringify({ ts: new Date().toISOString(), op, ...(data || {}) }));
+  } catch (_) { /* ignore */ }
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -220,7 +228,8 @@ const getUserInterviews = async (req, res) => {
     const interviews = await Interview.find({ clerkUserId: req.clerkUserId })
       .select('-interviewState -finalEvaluation')
       .sort({ createdAt: -1 })
-      .limit(20);
+      .limit(20)
+      .lean();
     return sendSuccess(res, { interviews });
   } catch (error) {
     return sendError(res, 500, 'INTERVIEW_FETCH_FAILED', 'Could not retrieve interviews.', error.message);
@@ -233,7 +242,7 @@ const getUserInterviews = async (req, res) => {
 
 const getInterview = async (req, res) => {
   try {
-    const interview = await Interview.findOne({ _id: req.params.id, clerkUserId: req.clerkUserId });
+    const interview = await Interview.findOne({ _id: req.params.id, clerkUserId: req.clerkUserId }).lean();
     if (!interview) return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
     return sendSuccess(res, { interview });
   } catch (error) {
@@ -903,64 +912,62 @@ const skipQuestion = async (req, res) => {
 
 const submitAudioResponse = async (req, res) => {
   const audioPath = req.file?.path;
+  const reqStart = Date.now();
   try {
     const { questionId, responseId } = req.body;
     const clerkUserId = req.clerkUserId;
 
     if (!req.file) return sendError(res, 400, 'NO_AUDIO', 'No audio file provided.');
 
-    const interview = await Interview.findOne({ _id: req.params.id, clerkUserId });
+    // Parallel: find interview + find response
+    const [interview, responseByResId, responseByQId] = await Promise.all([
+      Interview.findOne({ _id: req.params.id, clerkUserId }).select('_id status modalityAvailability'),
+      responseId ? Response.findOne({ _id: responseId, interviewId: req.params.id, clerkUserId }).select('_id') : null,
+      !responseId && questionId ? Response.findOne({ questionId, interviewId: req.params.id, clerkUserId }).select('_id') : null,
+    ]);
+
     if (!interview) {
       deleteFile(audioPath);
       return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
     }
 
-    // Update modality availability
-    interview.modalityAvailability.audio = true;
-    await interview.save();
-
-    // Find or create response
-    let response = responseId
-      ? await Response.findOne({ _id: responseId, interviewId: interview._id, clerkUserId })
-      : await Response.findOne({ questionId, interviewId: interview._id, clerkUserId });
-
+    const response = responseByResId || responseByQId;
     if (!response) {
       deleteFile(audioPath);
       return sendError(res, 404, 'RESPONSE_NOT_FOUND', 'Submit text answer first before attaching audio.');
     }
 
-    // ── Phase 5: Audio analysis ─────────────────────────────────────────────
-    const audioResult = await evaluateAudio(audioPath);
+    // Update modality flag and mark audio as queued — single atomic update
+    await Promise.all([
+      Interview.updateOne({ _id: interview._id }, { $set: { 'modalityAvailability.audio': true } }),
+      Response.updateOne({ _id: response._id }, { $set: {
+        audioFilePath: audioPath,
+        audioFileSize: req.file.size,
+        'audioEvaluation.modelStatus': 'queued',
+      }}),
+    ]);
 
-    // Update response
-    response.audioFilePath = audioPath;
-    response.audioFileSize = req.file.size;
-    response.audioEvaluation = {
-      speakingDuration: audioResult.speakingDuration || null,
-      pauseDuration: audioResult.pauseDuration || null,
-      speechRate: audioResult.speechRate || null,
-      mfccSummary: audioResult.mfccSummary || null,
-      energyCharacteristics: audioResult.energyCharacteristics || null,
-      pitchStatistics: audioResult.pitchStatistics || null,
-      audioFeaturesAvailable: audioResult.audioFeaturesAvailable || false,
-      modelStatus: audioResult.modelStatus || 'processed',
-    };
+    // Enqueue async analysis — returns immediately
+    const jobId = enqueueAudioJob({
+      responseId: response._id.toString(),
+      interviewId: interview._id.toString(),
+      audioPath,
+      clerkUserId,
+    });
 
-    // Rebuild multimodal evaluation with audio
-    if (audioResult.audioFeaturesAvailable) {
-      response.multimodalEvaluation = buildEvaluation(response.textEvaluation, audioResult, null);
-    }
-
-    await response.save();
-
-    if (interview.status === 'completed') {
-      await computeAndPersistFinalEvaluation(interview, clerkUserId);
-    }
+    _log('AUDIO_SUBMISSION.ACCEPTED', {
+      interviewId: interview._id,
+      responseId: response._id,
+      jobId,
+      fileSize: req.file.size,
+      durationMs: Date.now() - reqStart,
+    });
 
     return sendSuccess(res, {
-      message: 'Audio submitted and analyzed.',
-      audioEvaluation: response.audioEvaluation,
-      multimodalEvaluation: response.multimodalEvaluation,
+      message: 'Audio received. Analysis in progress.',
+      jobId,
+      processingStatus: 'queued',
+      audioEvaluation: { modelStatus: 'queued', audioFeaturesAvailable: false },
     });
   } catch (error) {
     deleteFile(audioPath);
@@ -974,86 +981,72 @@ const submitAudioResponse = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const submitVideoResponse = async (req, res) => {
-  // Video files are processing-only artifacts. The raw recording must never be
-  // retained after this request, regardless of analysis/DB success or failure.
+  // Video files are processed asynchronously via the job queue.
+  // The raw file is retained until the async job completes, then deleted.
   const videoPath = req.file?.path;
+  const reqStart = Date.now();
   try {
     const { questionId, responseId } = req.body;
     const clerkUserId = req.clerkUserId;
 
     if (!req.file) return sendError(res, 400, 'NO_VIDEO', 'No video file provided.');
 
-    const interview = await Interview.findOne({ _id: req.params.id, clerkUserId });
+    // Parallel lookup
+    const [interview, responseByResId, responseByQId] = await Promise.all([
+      Interview.findOne({ _id: req.params.id, clerkUserId }).select('_id status modalityAvailability'),
+      responseId ? Response.findOne({ _id: responseId, interviewId: req.params.id, clerkUserId }).select('_id') : null,
+      !responseId && questionId ? Response.findOne({ questionId, interviewId: req.params.id, clerkUserId }).select('_id') : null,
+    ]);
+
     if (!interview) {
+      deleteFile(videoPath);
       return sendError(res, 404, 'INTERVIEW_NOT_FOUND', 'Interview not found.');
     }
 
-    interview.modalityAvailability.video = true;
-    await interview.save();
-
-    let response = responseId
-      ? await Response.findOne({ _id: responseId, interviewId: interview._id, clerkUserId })
-      : await Response.findOne({ questionId, interviewId: interview._id, clerkUserId });
-
+    const response = responseByResId || responseByQId;
     if (!response) {
+      deleteFile(videoPath);
       return sendError(res, 404, 'RESPONSE_NOT_FOUND', 'Submit text answer first before attaching video.');
     }
 
-    // ── Phase 6: Video analysis ─────────────────────────────────────────────
-    const videoResult = await evaluateVideo(videoPath);
+    // Mark as queued and update modality flag atomically before returning
+    await Promise.all([
+      Interview.updateOne({ _id: interview._id }, { $set: { 'modalityAvailability.video': true } }),
+      Response.updateOne({ _id: response._id }, { $set: {
+        videoFilePath: null,  // never persist the local path
+        videoFileSize: req.file.size,
+        'videoEvaluation.modelStatus': 'queued',
+      }}),
+    ]);
 
-    // Do not persist the local path: the raw video is deleted in finally{}.
-    response.videoFilePath = null;
-    response.videoFileSize = req.file.size;
-    response.videoEvaluation = {
-      framesProcessed: videoResult.framesProcessed ?? 0,
-      personDetectionRatio: videoResult.personDetectionRatio ?? null,
-      faceVisibilityRatio: videoResult.faceVisibilityRatio ?? null,
-      gazeAttentionRatio: videoResult.gazeAttentionRatio ?? null,
-      postureStability: videoResult.postureStability || null,
-      postureStabilityIndex: videoResult.postureStabilityIndex ?? null,
-      postureScore: videoResult.postureScore ?? null,
-      shoulderTiltDegrees: videoResult.shoulderTiltDegrees ?? null,
-      cameraEngagement: videoResult.cameraEngagement || null,
-      observableMetrics: videoResult.metrics || videoResult.observableMetrics || null,
-      videoQualityIndicator: videoResult.videoQualityIndicator || null,
-      modelStatus: videoResult.modelStatus || 'processed',
-      processingConfidence: videoResult.processingConfidence ?? null,
-      visibleMovement: videoResult.metrics?.movement_stability_index != null
-        ? (videoResult.metrics.movement_stability_index >= 80 ? 'stable' : 'visible_movement')
-        : null,
-      feedback: videoResult.feedback || videoResult.metrics?.observable_observations?.join(' ') || null,
-    };
+    // Enqueue async video analysis — returns immediately (< 1s)
+    // File deletion is handled inside the job handler after analysis completes
+    const jobId = enqueueVideoJob({
+      responseId: response._id.toString(),
+      interviewId: interview._id.toString(),
+      videoPath,
+      clerkUserId,
+    });
 
-    await response.save();
-
-    console.log('[Interview] Video response persisted:', {
+    _log('VIDEO_SUBMISSION.ACCEPTED', {
       interviewId: interview._id,
       responseId: response._id,
-      framesProcessed: response.videoEvaluation.framesProcessed,
-      personDetectionRatio: response.videoEvaluation.personDetectionRatio,
-      faceVisibilityRatio: response.videoEvaluation.faceVisibilityRatio,
-      gazeAttentionRatio: response.videoEvaluation.gazeAttentionRatio,
-      postureScore: response.videoEvaluation.postureScore,
-      cameraEngagement: response.videoEvaluation.cameraEngagement,
-      modelStatus: response.videoEvaluation.modelStatus,
+      jobId,
+      fileSize: req.file.size,
+      durationMs: Date.now() - reqStart,
     });
-
-    if (interview.status === 'completed') {
-      await computeAndPersistFinalEvaluation(interview, clerkUserId);
-    }
 
     return sendSuccess(res, {
-      message: 'Video submitted and analyzed.',
-      videoEvaluation: response.videoEvaluation,
+      message: 'Video received. Analysis in progress.',
+      jobId,
+      processingStatus: 'queued',
+      videoEvaluation: { modelStatus: 'queued', framesProcessed: 0 },
     });
   } catch (error) {
+    // Only delete file if we couldn't even enqueue the job
+    deleteFile(videoPath);
     console.error('[Interview] Video submit error:', error);
     return sendError(res, 500, 'VIDEO_SUBMIT_FAILED', 'Could not process video.', error.message);
-  } finally {
-    // Always remove the raw recording after processing. This also runs for
-    // validation failures, AI failures, DB failures, and early returns.
-    deleteFile(videoPath);
   }
 };
 
@@ -1081,10 +1074,10 @@ const computeAndPersistFinalEvaluation = async (interview, clerkUserId) => {
   let hasPendingVideo = false;
 
   for (const r of responses) {
-    if (r.audioEvaluation?.modelStatus === 'processing' || r.audioEvaluation?.modelStatus === 'pending') {
+    if (r.audioEvaluation?.modelStatus === 'processing' || r.audioEvaluation?.modelStatus === 'pending' || r.audioEvaluation?.modelStatus === 'queued') {
       hasPendingAudio = true;
     }
-    if (r.videoEvaluation?.modelStatus === 'processing' || r.videoEvaluation?.modelStatus === 'pending') {
+    if (r.videoEvaluation?.modelStatus === 'processing' || r.videoEvaluation?.modelStatus === 'pending' || r.videoEvaluation?.modelStatus === 'queued') {
       hasPendingVideo = true;
     }
     if (

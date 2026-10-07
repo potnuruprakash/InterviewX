@@ -115,5 +115,6 @@ const questionSchema = new mongoose.Schema(
 );
 
 questionSchema.index({ interviewId: 1, order: 1 });
+questionSchema.index({ interviewId: 1, status: 1 });
 
 module.exports = mongoose.model('Question', questionSchema);

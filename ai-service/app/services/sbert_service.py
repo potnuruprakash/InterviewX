@@ -16,7 +16,9 @@ References:
 
 import os
 import logging
+import hashlib
 from typing import List, Optional
+from functools import lru_cache
 
 import numpy as np
 
@@ -29,6 +31,7 @@ SEMANTIC_SCORE_SCALE = 115.0        # Scales practical sentence cosine similarit
 CONCEPT_MATCH_THRESHOLD = 0.35      # Cosine similarity threshold for concept matching
 HIGH_ALIGNMENT_THRESHOLD = 70.0     # Alignment threshold for direct answer relevance
 MODERATE_ALIGNMENT_THRESHOLD = 45.0 # Partial alignment threshold
+EMBEDDING_CACHE_SIZE = 256          # LRU cache size for question/concept embeddings
 
 # MODEL LOADING (singleton — loaded once, concurrency-safe)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -81,6 +84,43 @@ def is_loading() -> bool:
 
 def get_model_name() -> str:
     return _model_name
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EMBEDDING CACHE (for question/concept embeddings that repeat across sessions)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Simple LRU dict-based cache keyed on text hash; max EMBEDDING_CACHE_SIZE entries
+_embedding_cache = {}
+_embedding_cache_order = []  # track insertion order for LRU eviction
+
+
+def _get_cached_embedding(text: str) -> Optional[np.ndarray]:
+    key = hashlib.md5(text.encode('utf-8', errors='replace')).hexdigest()
+    return _embedding_cache.get(key)
+
+
+def _cache_embedding(text: str, embedding: np.ndarray) -> None:
+    global _embedding_cache, _embedding_cache_order
+    key = hashlib.md5(text.encode('utf-8', errors='replace')).hexdigest()
+    if key in _embedding_cache:
+        return  # already cached
+    if len(_embedding_cache_order) >= EMBEDDING_CACHE_SIZE:
+        # Evict oldest
+        oldest = _embedding_cache_order.pop(0)
+        _embedding_cache.pop(oldest, None)
+    _embedding_cache[key] = embedding
+    _embedding_cache_order.append(key)
+
+
+def _encode_with_cache(text: str) -> np.ndarray:
+    """Encode text with LRU cache. Falls back to direct encode on cache miss."""
+    cached = _get_cached_embedding(text)
+    if cached is not None:
+        return cached
+    emb = _model.encode(text, convert_to_numpy=True)
+    _cache_embedding(text, emb)
+    return emb
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -141,9 +181,15 @@ def evaluate_text(
         }
 
     try:
-        # Encode question and answer
-        q_emb = _model.encode(question, convert_to_numpy=True)
-        a_emb = _model.encode(answer, convert_to_numpy=True)
+        # Optimization: batch-encode question + answer in ONE forward pass
+        # This cuts SBERT inference time roughly in half vs. two separate calls
+        texts_to_encode = [question, answer]
+        if expected_concepts:
+            texts_to_encode.extend(expected_concepts)
+
+        embeddings = _model.encode(texts_to_encode, convert_to_numpy=True, batch_size=32)
+        q_emb = embeddings[0]
+        a_emb = embeddings[1]
 
         # Semantic score: how relevant is the answer to the question
         raw_sim = cosine_similarity(q_emb, a_emb)
@@ -155,9 +201,17 @@ def evaluate_text(
         concept_score = 0.0
 
         if expected_concepts:
-            concept_embs = _model.encode(expected_concepts, convert_to_numpy=True)
+            # Embeddings 2..N are concept embeddings (from the batch above)
+            concept_embs = embeddings[2:]
+            # Normalize answer embedding once for batch dot products
+            a_norm = np.linalg.norm(a_emb)
+            a_normalized = a_emb / a_norm if a_norm > 0 else a_emb
             for i, concept in enumerate(expected_concepts):
-                sim = cosine_similarity(a_emb, concept_embs[i])
+                c_emb = concept_embs[i]
+                c_norm = np.linalg.norm(c_emb)
+                if c_norm == 0:
+                    continue
+                sim = float(np.dot(a_normalized, c_emb) / c_norm)
                 if sim >= CONCEPT_MATCH_THRESHOLD:
                     covered_concepts.append(concept)
                 else:

@@ -84,4 +84,6 @@ const trainingSessionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+trainingSessionSchema.index({ clerkUserId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('TrainingSession', trainingSessionSchema);

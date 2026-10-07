@@ -85,4 +85,7 @@ const progressSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+progressSchema.index({ clerkUserId: 1, completedAt: -1 });
+progressSchema.index({ interviewId: 1, clerkUserId: 1 });
+
 module.exports = mongoose.model('Progress', progressSchema);
