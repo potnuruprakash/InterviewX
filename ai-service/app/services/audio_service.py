@@ -81,16 +81,27 @@ def extract_features(audio_path: str) -> dict:
         import librosa
         import numpy as np
 
-        # Try to load directly first
-        try:
-            y, sr = librosa.load(audio_path, sr=16000, mono=True)
-        except Exception:
-            # Try converting to WAV
+        # Browser recordings are commonly WebM/Opus. Convert compressed container
+        # formats to mono 16 kHz WAV first so librosa does not spend time in its
+        # slower audioread fallback path.
+        extension = os.path.splitext(audio_path)[1].lower()
+        compressed_browser_formats = {".webm", ".ogg", ".mp4", ".mp3", ".m4a"}
+        if extension in compressed_browser_formats:
             wav_path = convert_to_wav(audio_path)
             if wav_path:
+                converted = True
+
+        try:
+            y, sr = librosa.load(wav_path or audio_path, sr=16000, mono=True)
+        except Exception as load_error:
+            # Last-resort conversion for WAV or other inputs librosa could not read.
+            if not wav_path:
+                wav_path = convert_to_wav(audio_path)
+            if wav_path and not converted:
                 y, sr = librosa.load(wav_path, sr=16000, mono=True)
                 converted = True
             else:
+                logger.warning("[Audio] Unable to decode input (%s): %s", extension, load_error)
                 return _unavailable_result("Could not load audio file. Format may be unsupported.")
 
         if len(y) == 0:
