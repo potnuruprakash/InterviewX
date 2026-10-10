@@ -220,6 +220,83 @@ const buildFiveDimensionEvaluation = (questionText, answerText, baseScore, expec
  * @param {string[]} expectedConcepts
  * @returns {Object} textEvaluation + legacy evaluation fields
  */
+/**
+ * Evaluate a technical answer with the configured Gemini provider.
+ * Returns the same score shape as the SBERT service (scores on a 0-100 scale).
+ */
+const evaluateTextWithGemini = async (questionText, answerText, expectedConcepts = []) => {
+  const provider = getProvider('gemini');
+  if (!provider || !provider.isAvailable || typeof provider.generateStructuredCompletion !== 'function') {
+    throw new Error('Gemini provider is unavailable; check GEMINI_API_KEY and provider configuration.');
+  }
+
+  const concepts = Array.isArray(expectedConcepts)
+    ? expectedConcepts.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 20)
+    : [];
+
+  const schema = {
+    type: 'OBJECT',
+    properties: {
+      semanticScore: { type: 'NUMBER' },
+      conceptCoverage: { type: 'NUMBER' },
+      textScore: { type: 'NUMBER' },
+      feedback: { type: 'STRING' },
+      strengths: { type: 'ARRAY', items: { type: 'STRING' } },
+      missingConcepts: { type: 'ARRAY', items: { type: 'STRING' } },
+      improvementSuggestion: { type: 'STRING' },
+      confidence: { type: 'NUMBER' }
+    },
+    required: ['semanticScore', 'conceptCoverage', 'textScore', 'feedback', 'strengths', 'missingConcepts', 'improvementSuggestion', 'confidence']
+  };
+
+  const result = await provider.generateStructuredCompletion({
+    systemPrompt: 'You are a rigorous technical interview evaluator. Score only the candidate answer against the question and expected concepts. Do not reward answer length alone. Never invent experience or claims. Return valid JSON matching the schema. All three scores must be numbers from 0 to 100; confidence must be from 0 to 1.',
+    prompt: JSON.stringify({
+      question: String(questionText || ''),
+      candidateAnswer: String(answerText || ''),
+      expectedConcepts: concepts,
+      scoringGuidance: {
+        semanticScore: 'How directly and correctly the answer addresses the question, 0-100.',
+        conceptCoverage: 'How many expected concepts are substantively covered, 0-100. If no expected concepts are provided, assess relevant technical coverage.',
+        textScore: 'Overall technical answer quality combining relevance, correctness, and concept coverage, 0-100.',
+        strengths: 'Specific strengths supported by the answer, at most 4.',
+        missingConcepts: 'Expected concepts not adequately covered, at most 8.',
+        improvementSuggestion: 'One actionable suggestion grounded in the answer.'
+      }
+    }),
+    schema,
+    maxTokens: 700,
+    temperature: 0.1
+  });
+
+  let parsed;
+  try {
+    parsed = JSON.parse(String(result.content || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim());
+  } catch (_) {
+    throw new Error('Gemini returned invalid JSON for technical answer evaluation.');
+  }
+
+  const score = (value, fallback = 0) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, Math.min(100, number)) : fallback;
+  };
+  const list = (value) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean).slice(0, 8) : [];
+
+  return {
+    semanticScore: score(parsed.semanticScore),
+    conceptCoverage: score(parsed.conceptCoverage),
+    textScore: score(parsed.textScore),
+    feedback: String(parsed.feedback || 'Answer evaluated by Gemini.'),
+    strengths: list(parsed.strengths),
+    missingConcepts: list(parsed.missingConcepts),
+    improvementSuggestion: String(parsed.improvementSuggestion || ''),
+    confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0)),
+    modelStatus: 'gemini_evaluated',
+    provider: 'gemini',
+    model: result.model || null
+  };
+};
+
 const evaluateResponse = async (questionText, answerText, difficulty = 'medium', expectedConcepts = []) => {
   const wordCount = answerText ? answerText.trim().split(/\s+/).length : 0;
   const obviousNonSubstantive = detectNonSubstantiveAnswer(answerText, null, null, expectedConcepts);
@@ -248,12 +325,14 @@ const evaluateResponse = async (questionText, answerText, difficulty = 'medium',
   }
 
   let modelResult = null;
-  try {
-    if ((process.env.LLM_PROVIDER || '').toLowerCase() === 'gemini') {
+  if ((process.env.LLM_PROVIDER || '').toLowerCase() === 'gemini') {
+    try {
       modelResult = await evaluateTextWithGemini(questionText, answerText, expectedConcepts);
+    } catch (err) {
+      // Keep the production Gemini path isolated from SBERT to avoid loading
+      // Torch into the constrained backend/AI runtime.
+      console.error('[Evaluation] Gemini text evaluation failed:', err.message);
     }
-  } catch (err) {
-    console.warn('[Evaluation] Gemini text evaluation failed, trying SBERT:', err.message);
   }
 
   // Do not fall back to SBERT on the production Gemini path: loading
