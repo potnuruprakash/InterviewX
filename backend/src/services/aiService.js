@@ -170,7 +170,9 @@ const analyzeAudio = async (audioFilePath) => {
         headers: { ...form.getHeaders(), ...getAuthHeaders() },
         timeout: TIMEOUTS.AUDIO,
       }),
-      { maxAttempts: 2, retryDelayMs: 3000, jitter: 1000, operationName: 'AUDIO_ANALYZE' }
+      // Do not replay CPU-heavy media jobs after a timeout/network reset: the
+      // original inference may still be running on the AI service.
+      { maxAttempts: 1, retryDelayMs: 3000, jitter: 1000, operationName: 'AUDIO_ANALYZE' }
     );
     return res.data?.data || res.data;
   } catch (err) {
@@ -213,7 +215,9 @@ const analyzeVideo = async (videoFilePath) => {
         headers: { ...form.getHeaders(), ...getAuthHeaders() },
         timeout: TIMEOUTS.VIDEO,
       }),
-      { maxAttempts: 3, retryDelayMs: 4000, jitter: 2000, operationName: 'VIDEO_ANALYZE' }
+      // Avoid duplicate inference on timeout/socket reset. MODEL_WARMING_UP can
+      // be retried by the queue later rather than immediately repeating the upload.
+      { maxAttempts: 1, retryDelayMs: 4000, jitter: 2000, operationName: 'VIDEO_ANALYZE' }
     );
 
     return res.data?.data || res.data;
