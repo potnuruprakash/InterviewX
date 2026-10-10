@@ -594,35 +594,50 @@ export default function ResultsPage() {
       }
     }
 
-    // Polling function when finalEvaluation.status === 'pending'
+    // Poll while the final evaluation OR media analysis is pending.
+    // Media jobs can outlive final-score calculation, so use a bounded time window
+    // rather than stopping after only a few polls. Each response carries no-store
+    // headers while pending; keep that fresh result out of the immutable cache.
     const pollUntilReady = (pollAttempt = 0) => {
-      if (pollAttempt >= 4 || !isMounted || activeFetchIdRef.current !== id) {
-        if (isMounted) setIsFinalizing(false)
-        return
-      }
+      if (!isMounted || activeFetchIdRef.current !== id) return
 
-      const pollDelay = Math.min(1000 * Math.pow(2, pollAttempt), 4000)
+      const pollDelay = Math.min(1500 * Math.pow(1.5, pollAttempt), 8000)
       pollTimer = setTimeout(async () => {
         if (!isMounted || activeFetchIdRef.current !== id) return
         try {
           const data = await fetchResultsWithRetry(0)
           if (!isMounted || activeFetchIdRef.current !== id || !data) return
 
-          if (data.finalEvaluation?.status === 'ready') {
+          const finalStatus = data.finalEvaluation?.status
+          const audioStatus = data.finalEvaluation?.audioStatus
+          const videoStatus = data.finalEvaluation?.videoStatus
+          const mediaPending = audioStatus === 'processing' || videoStatus === 'processing'
+          const finalPending = finalStatus === 'pending'
+
+          setResults(data)
+          setIsFinalizing(finalPending || mediaPending)
+
+          if (!finalPending && !mediaPending) {
             resultsCache.set(id, data)
-            setResults(data)
-            setIsFinalizing(false)
             console.log('[ResultsLifecycle] results_ready', {
               interviewId: id,
-              status: data.finalEvaluation.status,
-              overallScore: data.finalEvaluation.overallScore,
+              status: finalStatus,
+              audioStatus,
+              videoStatus,
+              overallScore: data.finalEvaluation?.overallScore,
             })
           } else {
-            // Still pending: schedule next poll
+            // Keep refreshing media status even when the overall text score is ready.
             pollUntilReady(pollAttempt + 1)
           }
-        } catch {
-          if (isMounted) setIsFinalizing(false)
+        } catch (err) {
+          console.warn('[ResultsLifecycle] media_status_poll_failed', {
+            interviewId: id,
+            error: err?.message || String(err),
+          })
+          // Retry while page remains active; transient AI/database/network issues
+          // should not silently leave stale "Processing..." labels forever.
+          pollUntilReady(pollAttempt + 1)
         }
       }, pollDelay)
     }
