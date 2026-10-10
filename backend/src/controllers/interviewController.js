@@ -471,6 +471,8 @@ const submitResponse = async (req, res) => {
         status: 'submitted',
         textEvaluation,
         multimodalEvaluation: multimodalEval,
+        audioEvaluation: audioExpected ? { modelStatus: 'queued', audioFeaturesAvailable: false } : undefined,
+        videoEvaluation: videoExpected ? { modelStatus: 'queued', framesProcessed: 0 } : undefined,
         evaluation, // legacy
         submittedAt: new Date(),
       });
@@ -1080,7 +1082,8 @@ const computeAndPersistFinalEvaluation = async (interview, clerkUserId) => {
   const TERMINAL_FAILURE_STATES = new Set([
     'analysis_failed', 'unavailable', 'ai_service_unavailable',
     'file_not_found', 'frame_extraction_failed', 'no_video_submitted',
-    'no_audio_submitted', 'not_processed',
+    'no_audio_submitted', 'not_processed', 'timed_out', 'empty_file',
+    'file_too_large',
   ]);
   let audioStatus = 'unavailable';
   let videoStatus = 'unavailable';

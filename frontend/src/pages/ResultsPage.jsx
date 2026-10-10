@@ -533,7 +533,22 @@ export default function ResultsPage() {
       setResults(cachedResults)
       setLoading(false)
       setError(null)
-      if (cachedResults.finalEvaluation?.status === 'pending') {
+      const PENDING_MEDIA = ['processing', 'queued', 'pending']
+      const isMediaPending = (item) => {
+        if (!item?.finalEvaluation) return false
+        const fe = item.finalEvaluation
+        if (fe.status === 'pending') return true
+        if (PENDING_MEDIA.includes(fe.audioStatus) || PENDING_MEDIA.includes(fe.videoStatus)) return true
+        if (Array.isArray(item.questionBreakdown)) {
+          return item.questionBreakdown.some(
+            q => PENDING_MEDIA.includes(q?.videoEvaluation?.modelStatus) ||
+                 PENDING_MEDIA.includes(q?.audioEvaluation?.modelStatus)
+          )
+        }
+        return false
+      }
+
+      if (isMediaPending(cachedResults)) {
         setIsFinalizing(true)
       } else {
         setIsFinalizing(false)
@@ -611,22 +626,26 @@ export default function ResultsPage() {
           const data = await fetchResultsWithRetry(0)
           if (!isMounted || activeFetchIdRef.current !== id || !data) return
 
-          const finalStatus = data.finalEvaluation?.status
-          const audioStatus = data.finalEvaluation?.audioStatus
-          const videoStatus = data.finalEvaluation?.videoStatus
-          const mediaPending = audioStatus === 'processing' || videoStatus === 'processing'
-          const finalPending = finalStatus === 'pending'
+          const PENDING_MEDIA = ['processing', 'queued', 'pending']
+          const stillPending =
+            data.finalEvaluation?.status === 'pending' ||
+            PENDING_MEDIA.includes(data.finalEvaluation?.audioStatus) ||
+            PENDING_MEDIA.includes(data.finalEvaluation?.videoStatus) ||
+            (Array.isArray(data.questionBreakdown) && data.questionBreakdown.some(
+              q => PENDING_MEDIA.includes(q?.videoEvaluation?.modelStatus) ||
+                   PENDING_MEDIA.includes(q?.audioEvaluation?.modelStatus)
+            ))
 
           setResults(data)
-          setIsFinalizing(finalPending || mediaPending)
+          setIsFinalizing(stillPending)
 
-          if (!finalPending && !mediaPending) {
+          if (!stillPending) {
             resultsCache.set(id, data)
             console.log('[ResultsLifecycle] results_ready', {
               interviewId: id,
-              status: finalStatus,
-              audioStatus,
-              videoStatus,
+              status: data.finalEvaluation?.status,
+              audioStatus: data.finalEvaluation?.audioStatus,
+              videoStatus: data.finalEvaluation?.videoStatus,
               overallScore: data.finalEvaluation?.overallScore,
             })
           } else {
@@ -644,7 +663,18 @@ export default function ResultsPage() {
 
     // 1. Fetch Primary Results
     const loadPrimary = async () => {
-      if (cachedResults && cachedResults.finalEvaluation?.status === 'ready') {
+      const PENDING_MEDIA = ['processing', 'queued', 'pending']
+      const isCachedPending = cachedResults && (
+        cachedResults.finalEvaluation?.status === 'pending' ||
+        PENDING_MEDIA.includes(cachedResults.finalEvaluation?.audioStatus) ||
+        PENDING_MEDIA.includes(cachedResults.finalEvaluation?.videoStatus) ||
+        (Array.isArray(cachedResults.questionBreakdown) && cachedResults.questionBreakdown.some(
+          q => PENDING_MEDIA.includes(q?.videoEvaluation?.modelStatus) ||
+               PENDING_MEDIA.includes(q?.audioEvaluation?.modelStatus)
+        ))
+      )
+
+      if (cachedResults && cachedResults.finalEvaluation?.status === 'ready' && !isCachedPending) {
         console.log('[ResultsLifecycle] results_ready (cached)', {
           interviewId: id,
           status: cachedResults.finalEvaluation?.status,
@@ -657,17 +687,21 @@ export default function ResultsPage() {
         const data = await fetchResultsWithRetry(0)
         if (!isMounted || activeFetchIdRef.current !== id || !data) return
 
-        const finalPending = data.finalEvaluation?.status === 'pending'
-        const mediaPending =
-          data.finalEvaluation?.audioStatus === 'processing' ||
-          data.finalEvaluation?.videoStatus === 'processing'
+        const stillPending =
+          data.finalEvaluation?.status === 'pending' ||
+          PENDING_MEDIA.includes(data.finalEvaluation?.audioStatus) ||
+          PENDING_MEDIA.includes(data.finalEvaluation?.videoStatus) ||
+          (Array.isArray(data.questionBreakdown) && data.questionBreakdown.some(
+            q => PENDING_MEDIA.includes(q?.videoEvaluation?.modelStatus) ||
+                 PENDING_MEDIA.includes(q?.audioEvaluation?.modelStatus)
+          ))
 
         setResults(data)
         setLoading(false)
         setError(null)
-        setIsFinalizing(finalPending || mediaPending)
+        setIsFinalizing(stillPending)
 
-        if (finalPending || mediaPending) {
+        if (stillPending) {
           pollUntilReady(0)
         } else {
           resultsCache.set(id, data)
@@ -950,17 +984,31 @@ export default function ResultsPage() {
       ? Math.round((validPersonRatios.reduce((acc, v) => acc + v, 0) / validPersonRatios.length) * 100)
       : null
 
-    return {
-      avgPace,
-      totalFillers,
-      avgDuration,
-      avgPersonDetected,
-      audioCount: audioQuestions.length,
-      videoCount: videoQuestions.length,
-      audioStatus: fe?.audioStatus || (audioQuestions.length > 0 ? 'available' : 'unavailable'),
-      videoStatus: fe?.videoStatus || (videoQuestions.length > 0 ? 'available' : 'unavailable'),
-    }
-  }, [hasCommData, questionBreakdown, fe])
+      const PENDING_MEDIA = ['processing', 'queued', 'pending']
+      const isAudioProcessing =
+        PENDING_MEDIA.includes(fe?.audioStatus) ||
+        questionBreakdown.some(
+          q => PENDING_MEDIA.includes(q?.audioEvaluation?.modelStatus)
+        )
+      const isVideoProcessing =
+        PENDING_MEDIA.includes(fe?.videoStatus) ||
+        questionBreakdown.some(
+          q => PENDING_MEDIA.includes(q?.videoEvaluation?.modelStatus)
+        )
+
+      return {
+        avgPace,
+        totalFillers,
+        avgDuration,
+        avgPersonDetected,
+        audioCount: audioQuestions.length,
+        videoCount: videoQuestions.length,
+        isAudioProcessing,
+        isVideoProcessing,
+        audioStatus: isAudioProcessing ? 'processing' : (fe?.audioStatus || (audioQuestions.length > 0 ? 'available' : 'unavailable')),
+        videoStatus: isVideoProcessing ? 'processing' : (fe?.videoStatus || (videoQuestions.length > 0 ? 'available' : 'unavailable')),
+      }
+    }, [hasCommData, questionBreakdown, fe])
 
   // Dedicated Video Analysis Summary strictly from real backend metrics
   const videoSummary = useMemo(() => {
@@ -969,10 +1017,11 @@ export default function ResultsPage() {
       q => typeof q?.videoEvaluation?.framesProcessed === 'number' && q.videoEvaluation.framesProcessed > 0
     )
 
+    const PENDING_MEDIA = ['processing', 'queued', 'pending']
     const isProcessing =
-      fe?.videoStatus === 'processing' ||
+      PENDING_MEDIA.includes(fe?.videoStatus) ||
       questionBreakdown.some(
-        q => q?.videoEvaluation?.modelStatus === 'processing' || q?.videoEvaluation?.modelStatus === 'pending'
+        q => PENDING_MEDIA.includes(q?.videoEvaluation?.modelStatus)
       )
 
     if (videoQuestions.length === 0) {

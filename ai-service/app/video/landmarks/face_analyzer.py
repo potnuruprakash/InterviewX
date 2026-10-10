@@ -80,8 +80,12 @@ class FaceAnalyzer:
             try:
                 import mediapipe as mp
                 if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_mesh"):
+                    # static_image_mode=True: each call is treated as an independent
+                    # image — no tracking state machine overhead between frames.
+                    # This is correct for per-frame batch processing and substantially
+                    # faster than False (tracking mode) for non-video-stream use.
                     self._mesh = mp.solutions.face_mesh.FaceMesh(
-                        static_image_mode=False,
+                        static_image_mode=True,
                         max_num_faces=1,
                         refine_landmarks=True,
                         min_detection_confidence=0.5,
@@ -153,7 +157,9 @@ class FaceAnalyzer:
             gaze_method="fallback_face_detection",
         )
 
-    def analyze_head_region(self, frame_bgr, head_bbox=None, person_bbox=None):
+    def analyze_head_region(self, frame_bgr, head_bbox=None, person_bbox=None, _precomputed_rgb=None):
+        """Analyze face region. Accepts optional pre-converted RGB array to avoid
+        redundant cvtColor calls when called from the shared pipeline loop."""
         if frame_bgr is None or frame_bgr.size == 0:
             return FaceOrientationResult(False, None, "unknown", 0.0, False, False, ["No valid video frame."])
 
@@ -170,7 +176,7 @@ class FaceAnalyzer:
         # ── Mode A: Modern Tasks Vision FaceLandmarker ───────────────────────
         if self._mode == "tasks_vision" and self._task_landmarker is not None:
             try:
-                rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+                rgb = _precomputed_rgb if _precomputed_rgb is not None else cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
                 mp_img = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=rgb)
                 result = self._task_landmarker.detect(mp_img)
 
@@ -186,7 +192,7 @@ class FaceAnalyzer:
         # ── Mode B: Legacy solutions FaceMesh ────────────────────────────────
         if self._mode == "solutions" and self._mesh is not None:
             try:
-                rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+                rgb = _precomputed_rgb if _precomputed_rgb is not None else cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
                 result = self._mesh.process(rgb)
                 face = result.multi_face_landmarks[0] if result.multi_face_landmarks else None
                 if face is None:

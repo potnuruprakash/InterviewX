@@ -41,11 +41,10 @@ const getAuthHeaders = () => (
   AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}
 );
 
-// Configurable per-operation timeouts (in milliseconds)
 const TIMEOUTS = {
   TEXT: parseInt(process.env.AI_SERVICE_TEXT_TIMEOUT || process.env.AI_SERVICE_TIMEOUT || '15000', 10),
-  AUDIO: parseInt(process.env.AI_SERVICE_AUDIO_TIMEOUT || process.env.AI_SERVICE_TIMEOUT || '60000', 10),
-  VIDEO: parseInt(process.env.VIDEO_AI_SERVICE_TIMEOUT || process.env.AI_SERVICE_TIMEOUT || '120000', 10),
+  AUDIO: parseInt(process.env.AI_SERVICE_AUDIO_TIMEOUT || process.env.AI_SERVICE_TIMEOUT || '100000', 10),
+  VIDEO: parseInt(process.env.VIDEO_AI_SERVICE_TIMEOUT || process.env.AI_SERVICE_TIMEOUT || '260000', 10),
   HEALTH: parseInt(process.env.AI_SERVICE_HEALTH_TIMEOUT || '5000', 10),
 };
 
@@ -284,10 +283,14 @@ const analyzeAudio = async (audioFilePath) => {
     return res.data?.data || res.data;
   } catch (err) {
     console.warn('[AI Service] Audio analysis failed on Core service:', sanitizeErrorMessage(err.message));
+    const responseData = err.response?.data;
+    const modelStatus = responseData?.modelStatus || (
+      err.code === 'ECONNABORTED' || err.message?.includes('timeout') ? 'timed_out' : 'ai_service_unavailable'
+    );
     return {
       audioFeaturesAvailable: false,
-      modelStatus: 'ai_service_unavailable',
-      error: sanitizeErrorMessage(err.message),
+      modelStatus,
+      error: sanitizeErrorMessage(responseData?.message || err.message),
     };
   }
 };
@@ -326,11 +329,15 @@ const analyzeVideo = async (videoFilePath) => {
     return res.data?.data || res.data;
   } catch (err) {
     console.warn('[AI Service] Video analysis failed on Video service:', sanitizeErrorMessage(err.message));
+    const responseData = err.response?.data;
+    const modelStatus = responseData?.modelStatus || (
+      err.code === 'ECONNABORTED' || err.message?.includes('timeout') ? 'timed_out' : 'ai_service_unavailable'
+    );
     return {
       framesProcessed: 0,
       personDetectionRatio: null,
-      modelStatus: 'ai_service_unavailable',
-      error: sanitizeErrorMessage(err.message),
+      modelStatus,
+      error: sanitizeErrorMessage(responseData?.message || err.message),
     };
   }
 };

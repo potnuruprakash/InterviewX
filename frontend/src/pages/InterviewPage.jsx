@@ -410,6 +410,8 @@ export default function InterviewPage() {
         console.log('[InterviewLifecycle] completion_request_start', { interviewId: id, reason })
         const compStart = performance.now()
         try {
+          // Ensure media upload for the final response completes before marking interview complete
+          await mediaPromise
           await authApi.post(`/api/interviews/${id}/complete`, {
             completionReason: reason,
           })

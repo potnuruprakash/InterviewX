@@ -12,6 +12,8 @@ import logging
 import time
 from typing import Dict, Any, Optional
 
+import cv2
+
 from app.video.preprocessing.frame_sampler import extract_sampled_frames, DEFAULT_SAMPLE_FPS
 from app.video.detector.yolo_detector import get_yolo_detector
 from app.video.landmarks.face_analyzer import get_face_analyzer
@@ -90,9 +92,16 @@ class VideoAnalysisPipeline:
         face_seconds = 0.0
         pose_seconds = 0.0
         expression_seconds = 0.0
+        rgb_convert_seconds = 0.0
         inference_started = time.monotonic()
 
         for frame_sample in frames:
+            # Convert BGR→RGB once per frame; share the result across all models.
+            # This eliminates duplicate cvtColor calls in face_analyzer and pose_analyzer.
+            rgb_start = time.monotonic()
+            frame_rgb = cv2.cvtColor(frame_sample.image, cv2.COLOR_BGR2RGB)
+            rgb_convert_seconds += time.monotonic() - rgb_start
+
             stage_started = time.monotonic()
             detection = self.yolo_detector.detect_frame(frame_sample.image)
             yolo_seconds += time.monotonic() - stage_started
@@ -102,11 +111,15 @@ class VideoAnalysisPipeline:
                 frame_sample.image,
                 head_bbox=detection.head_bbox,
                 person_bbox=detection.pixel_bbox,
+                _precomputed_rgb=frame_rgb,
             )
             face_seconds += time.monotonic() - stage_started
 
             stage_started = time.monotonic()
-            pose_result = self.pose_analyzer.analyze(frame_sample.image)
+            pose_result = self.pose_analyzer.analyze(
+                frame_sample.image,
+                _precomputed_rgb=frame_rgb,
+            )
             pose_seconds += time.monotonic() - stage_started
 
             stage_started = time.monotonic()
@@ -150,10 +163,11 @@ class VideoAnalysisPipeline:
 
         logger.info(
             "[VideoPipeline] Completed frames=%d extraction_seconds=%.2f inference_seconds=%.2f "
-            "yolo_seconds=%.2f face_seconds=%.2f pose_seconds=%.2f expression_seconds=%.2f",
+            "rgb_convert_seconds=%.2f yolo_seconds=%.2f face_seconds=%.2f pose_seconds=%.2f expression_seconds=%.2f",
             len(frames),
             extraction_seconds,
             time.monotonic() - inference_started,
+            rgb_convert_seconds,
             yolo_seconds,
             face_seconds,
             pose_seconds,

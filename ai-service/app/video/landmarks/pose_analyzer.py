@@ -77,11 +77,15 @@ class PoseAnalyzer:
             try:
                 import mediapipe as mp
                 if hasattr(mp, "solutions") and hasattr(mp.solutions, "pose"):
+                    # static_image_mode=True: each call is treated as an independent
+                    # image — no tracking overhead. smooth_landmarks requires tracking
+                    # mode so it is disabled here. model_complexity=0 is the fastest
+                    # model variant; for shoulder/hip posture estimation it is sufficient.
                     self._pose = mp.solutions.pose.Pose(
-                        static_image_mode=False,
-                        model_complexity=1,
+                        static_image_mode=True,
+                        model_complexity=0,
                         enable_segmentation=False,
-                        smooth_landmarks=True,
+                        smooth_landmarks=False,
                         min_detection_confidence=0.5,
                         min_tracking_confidence=0.5,
                     )
@@ -100,12 +104,14 @@ class PoseAnalyzer:
     def is_available(self) -> bool:
         return self._task_landmarker is not None or self._pose is not None
 
-    def analyze(self, frame_bgr) -> PoseResult:
+    def analyze(self, frame_bgr, _precomputed_rgb=None) -> PoseResult:
+        """Analyze pose for a single frame. Accepts optional pre-converted RGB array
+        to avoid redundant cvtColor calls when called from the shared pipeline loop."""
         if not self.is_available or frame_bgr is None or frame_bgr.size == 0:
             return PoseResult(False, None, None, None, None, ["Pose model unavailable."])
 
         try:
-            rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            rgb = _precomputed_rgb if _precomputed_rgb is not None else cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
             # ── Mode A: Modern Tasks Vision ──────────────────────────────────
             if self._mode == "tasks_vision" and self._task_landmarker is not None:

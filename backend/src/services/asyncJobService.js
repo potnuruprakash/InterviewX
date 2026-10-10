@@ -204,6 +204,12 @@ function _ensureHandlers() {
           { _id: responseId },
           { $set: { 'videoEvaluation.modelStatus': 'analysis_failed' } }
         );
+        const interview = await Interview.findOne({ _id: interviewId, clerkUserId: clerkUserId }).lean();
+        if (interview && interview.status === 'completed') {
+          const { computeAndPersistFinalEvaluation } = require('../controllers/interviewController');
+          await computeAndPersistFinalEvaluation(interview, clerkUserId);
+          log('info', 'VIDEO_ANALYSIS.FINAL_EVAL_UPDATED_AFTER_ERROR', { requestId: reqId, interviewId: interviewId });
+        }
       } catch (_e) { /* best-effort */ }
       throw err;
     } finally {
@@ -272,6 +278,12 @@ function _ensureHandlers() {
           { _id: responseId },
           { $set: { 'audioEvaluation.modelStatus': 'analysis_failed' } }
         );
+        const interview = await Interview.findOne({ _id: interviewId, clerkUserId: clerkUserId }).lean();
+        if (interview && interview.status === 'completed') {
+          const { computeAndPersistFinalEvaluation } = require('../controllers/interviewController');
+          await computeAndPersistFinalEvaluation(interview, clerkUserId);
+          log('info', 'AUDIO_ANALYSIS.FINAL_EVAL_UPDATED_AFTER_ERROR', { requestId: reqId, interviewId: interviewId });
+        }
       } catch (_e) { /* best-effort */ }
       throw err;
     } finally {
