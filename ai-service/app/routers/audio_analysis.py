@@ -3,6 +3,7 @@ import os
 import tempfile
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.services import audio_service
+from app.services.inference_scheduler import run_media_inference
 
 router = APIRouter(prefix="/api/ai", tags=["Audio Analysis"])
 
@@ -57,7 +58,7 @@ async def audio_analyze(audio: UploadFile = File(...)):
                     detail={"success": False, "error": "EMPTY_AUDIO", "message": "Audio file is empty."},
                 )
 
-        result = audio_service.extract_features(tmp_path)
+        result = await run_media_inference("audio", audio_service.extract_features, tmp_path)
         if not result.get("audioFeaturesAvailable", True):
             raise HTTPException(
                 status_code=400,
