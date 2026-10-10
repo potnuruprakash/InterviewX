@@ -17,6 +17,38 @@
 
 const { EventEmitter } = require('events');
 
+const FAILURE_STATUSES = new Set([
+  'ai_service_unavailable', 'timed_out', 'unavailable', 'file_not_found',
+  'analysis_failed', 'failed', 'error', 'no_audio_submitted', 'no_video_submitted',
+]);
+
+function assertAudioAnalysisSucceeded(result) {
+  if (!result || typeof result !== 'object') {
+    throw new Error('Audio analysis returned an empty or invalid result');
+  }
+  const status = String(result.modelStatus || '').toLowerCase();
+  if (FAILURE_STATUSES.has(status)) {
+    throw new Error('Audio analysis failed: ' + status);
+  }
+  if (result.audioFeaturesAvailable !== true) {
+    throw new Error('Audio analysis returned no usable audio features');
+  }
+}
+
+function assertVideoAnalysisSucceeded(result) {
+  if (!result || typeof result !== 'object') {
+    throw new Error('Video analysis returned an empty or invalid result');
+  }
+  const status = String(result.modelStatus || '').toLowerCase();
+  if (FAILURE_STATUSES.has(status)) {
+    throw new Error('Video analysis failed: ' + status);
+  }
+  const framesProcessed = Number(result.framesProcessed);
+  if (!Number.isFinite(framesProcessed) || framesProcessed < 1) {
+    throw new Error('Video analysis processed zero frames');
+  }
+}
+
 // Structured logger - never logs secrets/tokens/answers
 const log = (level, operation, data) => {
   const entry = { ts: new Date().toISOString(), level, op: operation, ...(data || {}) };
@@ -143,16 +175,17 @@ function _ensureHandlers() {
       if (!exists) {
         log('error', 'VIDEO_ANALYSIS.RESPONSE_NOT_FOUND', { requestId: reqId, responseId: responseId });
         deleteFile(videoPath);
-        return;
+        throw new Error('Video analysis response not found or not owned by user');
       }
 
       // Mark as processing
       await Response.updateOne(
         { _id: responseId },
-        { $set: { 'videoEvaluation.modelStatus': 'processing' } }
+        { $set: { 'videoEvaluation.modelStatus': 'processing', 'videoEvaluation.analysisError': null } }
       );
 
       const videoResult = await evaluateVideo(videoPath);
+      assertVideoAnalysisSucceeded(videoResult);
       const durationMs = Date.now() - start;
 
       const videoEval = {
@@ -235,10 +268,11 @@ function _ensureHandlers() {
     try {
       await Response.updateOne(
         { _id: responseId },
-        { $set: { 'audioEvaluation.modelStatus': 'processing' } }
+        { $set: { 'audioEvaluation.modelStatus': 'processing', 'audioEvaluation.analysisError': null } }
       );
 
       const audioResult = await evaluateAudio(audioPath);
+      assertAudioAnalysisSucceeded(audioResult);
       const durationMs = Date.now() - start;
 
       const audioEval = {
@@ -340,4 +374,8 @@ module.exports = {
   enqueueVideoJob,
   enqueueAudioJob,
   getQueueStats,
+  // Exported for focused regression tests; these guards prevent fallback objects
+  // from being recorded as successful background jobs.
+  _assertAudioAnalysisSucceeded: assertAudioAnalysisSucceeded,
+  _assertVideoAnalysisSucceeded: assertVideoAnalysisSucceeded,
 };
