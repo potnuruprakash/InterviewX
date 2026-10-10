@@ -1,86 +1,28 @@
+# This Blueprint intentionally creates ONLY the Video AI service.
+# Keep the existing backend and Core AI services; do not duplicate them.
+# During Blueprint setup, provide the SAME AI_SERVICE_SECRET_KEY value
+# already configured on the existing backend and Core AI service.
 services:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Service 1: InterviewX Express Backend
-  # Routes API traffic, handles auth, database persistence, and directs AI
-  # workloads to the dedicated Core and Video microservices.
-  # ─────────────────────────────────────────────────────────────────────────────
-  - type: web
-    name: interviewx-backend
-    env: node
-    plan: free
-    region: oregon
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 5000
-      - key: AI_SERVICE_URL
-        value: http://interviewx-ai-core:8000
-      - key: VIDEO_AI_SERVICE_URL
-        value: http://interviewx-ai-video:8000
-      - key: AI_SERVICE_SECRET_KEY
-        generateValue: true
-      - key: AI_SERVICE_TIMEOUT
-        value: 60000
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Service 2: InterviewX Core AI Service
-  # SBERT semantic text evaluation & Librosa audio feature extraction.
-  # Video models (YOLO / MediaPipe) are NOT loaded in this service.
-  # ─────────────────────────────────────────────────────────────────────────────
-  - type: web
-    name: interviewx-ai-core
-    env: docker
-    plan: free
-    region: oregon
-    dockerfilePath: Dockerfile
-    dockerContext: ai-service
-    healthCheckPath: /health
-    envVars:
-      - key: PORT
-        value: 8000
-      - key: AI_SERVICE_MODE
-        value: core
-      - key: AI_SERVICE_SECRET_KEY
-        fromService:
-          type: web
-          name: interviewx-backend
-          envVarKey: AI_SERVICE_SECRET_KEY
-      - key: SBERT_MODEL_NAME
-        value: all-MiniLM-L6-v2
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Service 3: InterviewX Video AI Service
-  # YOLOv8 person detection, MediaPipe face/gaze/pose analysis, frame sampling.
-  # SBERT and audio models are NOT loaded in this service.
-  # ─────────────────────────────────────────────────────────────────────────────
   - type: web
     name: interviewx-ai-video
     env: docker
     plan: free
     region: oregon
-    dockerfilePath: Dockerfile
     dockerContext: ai-service
+    dockerfilePath: ai-service/Dockerfile
     healthCheckPath: /health
     envVars:
       - key: PORT
-        value: 8000
+        value: "8000"
       - key: AI_SERVICE_MODE
         value: video
       - key: AI_SERVICE_SECRET_KEY
-        fromService:
-          type: web
-          name: interviewx-backend
-          envVarKey: AI_SERVICE_SECRET_KEY
+        sync: false
       - key: VIDEO_FRAME_SAMPLE_FPS
-        value: 1
+        value: "1"
       - key: VIDEO_MAX_FRAMES
-        value: 60
+        value: "8"
       - key: VIDEO_MAX_FRAME_DIM
-        value: 640
+        value: "384"
       - key: MAX_CONCURRENT_INFERENCES
-        value: 1
+        value: "1"
