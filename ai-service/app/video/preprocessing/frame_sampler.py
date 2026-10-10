@@ -1,25 +1,30 @@
 """
 Frame Sampling & Video Preprocessing Module
-Extracts frames at a controlled sample rate (1-2 FPS) with exact timestamp tracking.
+Extracts frames at a controlled sample rate with exact timestamp tracking.
 
 Low-memory defaults for CPU-only hosting: sample at 1 FPS, analyze at most 8 frames,
-and resize each frame to at most 384px before YOLO/MediaPipe inference. These defaults
-prioritize completing analysis on small instances; set environment variables to increase them.
+and resize each frame to at most 384px before YOLO/MediaPipe inference. These are
+intentional hard caps for small instances; increasing the environment variables alone
+will not raise these limits. Change the constants below deliberately and load-test
+memory/latency before raising them.
 """
 
 import os
 import cv2
 import logging
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 
-# Environment-variable overrides (set VIDEO_FRAME_SAMPLE_FPS=2 to restore old behavior)
-DEFAULT_SAMPLE_FPS = int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "1"))
+# Sampling frequency can be configured, while inference work remains hard-capped.
+DEFAULT_SAMPLE_FPS = max(1, min(2, int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "1"))))
 MAX_FRAMES_TO_ANALYZE = min(8, max(1, int(os.getenv("VIDEO_MAX_FRAMES", "8"))))
 # Downscale decoded frames before expensive YOLO/MediaPipe processing.
-MAX_FRAME_DIMENSION = min(384, max(160, int(os.getenv("VIDEO_MAX_DIMENSION", os.getenv("VIDEO_MAX_FRAME_DIM", "384")))))
+MAX_FRAME_DIMENSION = min(
+    384,
+    max(160, int(os.getenv("VIDEO_MAX_DIMENSION", os.getenv("VIDEO_MAX_FRAME_DIM", "384")))),
+)
 
 
 @dataclass
@@ -37,12 +42,12 @@ def extract_sampled_frames(
     max_frames: int = MAX_FRAMES_TO_ANALYZE
 ) -> List[FrameSample]:
     """
-    Decodes video and extracts frames at the specified sample rate.
+    Decode a video and extract frames at a controlled sample rate.
 
     Args:
         video_path: Path to the local video file.
-        fps: Target sampling rate (frames per second, 1-2 recommended).
-        max_frames: Hard ceiling on sampled frames to guard server memory.
+        fps: Target sampling rate (1-2 frames per second).
+        max_frames: Requested maximum; the service hard-caps this at 8 frames.
 
     Returns:
         List of FrameSample dataclasses with timestamps and resolution metadata.
@@ -60,7 +65,9 @@ def extract_sampled_frames(
     if not video_fps or video_fps <= 0 or video_fps > 120:
         video_fps = 30.0  # Safe standard fallback
 
-    frame_interval = max(1, int(round(video_fps / max(1, fps))))
+    effective_fps = max(1, min(2, int(fps)))
+    effective_max_frames = min(MAX_FRAMES_TO_ANALYZE, max(1, int(max_frames)))
+    frame_interval = max(1, int(round(video_fps / effective_fps)))
     sampled_frames: List[FrameSample] = []
     current_frame_idx = 0
 
@@ -91,8 +98,10 @@ def extract_sampled_frames(
                         height=h,
                     )
                 )
-                if len(sampled_frames) >= max_frames:
-                    logger.info(f"[FrameSampler] Reached maximum sample ceiling ({max_frames} frames).")
+                if len(sampled_frames) >= effective_max_frames:
+                    logger.info(
+                        f"[FrameSampler] Reached maximum sample ceiling ({effective_max_frames} frames)."
+                    )
                     break
 
             current_frame_idx += 1
