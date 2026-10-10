@@ -657,20 +657,25 @@ export default function ResultsPage() {
         const data = await fetchResultsWithRetry(0)
         if (!isMounted || activeFetchIdRef.current !== id || !data) return
 
-        if (data.finalEvaluation?.status === 'pending') {
-          setIsFinalizing(true)
-          setResults(data)
-          setLoading(false)
+        const finalPending = data.finalEvaluation?.status === 'pending'
+        const mediaPending =
+          data.finalEvaluation?.audioStatus === 'processing' ||
+          data.finalEvaluation?.videoStatus === 'processing'
+
+        setResults(data)
+        setLoading(false)
+        setError(null)
+        setIsFinalizing(finalPending || mediaPending)
+
+        if (finalPending || mediaPending) {
           pollUntilReady(0)
         } else {
           resultsCache.set(id, data)
-          setResults(data)
-          setIsFinalizing(false)
-          setError(null)
-          setLoading(false)
           console.log('[ResultsLifecycle] results_ready', {
             interviewId: id,
             status: data.finalEvaluation?.status,
+            audioStatus: data.finalEvaluation?.audioStatus,
+            videoStatus: data.finalEvaluation?.videoStatus,
             overallScore: data.finalEvaluation?.overallScore,
           })
         }
