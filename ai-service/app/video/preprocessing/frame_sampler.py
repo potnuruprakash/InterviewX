@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 # Environment-variable overrides (set VIDEO_FRAME_SAMPLE_FPS=2 to restore old behavior)
 DEFAULT_SAMPLE_FPS = int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "1"))
-MAX_FRAMES_TO_ANALYZE = max(1, int(os.getenv("VIDEO_MAX_FRAMES", "8")))
+MAX_FRAMES_TO_ANALYZE = min(8, max(1, int(os.getenv("VIDEO_MAX_FRAMES", "8"))))
 # Downscale decoded frames before expensive YOLO/MediaPipe processing.
-MAX_FRAME_DIMENSION = max(160, int(os.getenv("VIDEO_MAX_DIMENSION", os.getenv("VIDEO_MAX_FRAME_DIM", "384"))))
+MAX_FRAME_DIMENSION = min(384, max(160, int(os.getenv("VIDEO_MAX_DIMENSION", os.getenv("VIDEO_MAX_FRAME_DIM", "384")))))
 
 
 @dataclass
