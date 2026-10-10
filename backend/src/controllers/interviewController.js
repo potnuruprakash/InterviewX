@@ -1074,44 +1074,65 @@ const computeAndPersistFinalEvaluation = async (interview, clerkUserId) => {
       : null,
   ]);
 
-  // Determine modality statuses across responses without fabricated metrics
+  // Only genuinely pending jobs are "processing". A completed failure must
+  // become visible as unavailable rather than keeping the whole report pending.
+  const PENDING_MEDIA_STATES = new Set(['queued', 'pending', 'processing']);
+  const TERMINAL_FAILURE_STATES = new Set([
+    'analysis_failed', 'unavailable', 'ai_service_unavailable',
+    'file_not_found', 'frame_extraction_failed', 'no_video_submitted',
+    'no_audio_submitted', 'not_processed',
+  ]);
   let audioStatus = 'unavailable';
   let videoStatus = 'unavailable';
   let hasPendingAudio = false;
   let hasPendingVideo = false;
+  let sawAudioResponse = false;
+  let sawVideoResponse = false;
 
   for (const r of responses) {
-    if (r.audioEvaluation?.modelStatus === 'processing' || r.audioEvaluation?.modelStatus === 'pending' || r.audioEvaluation?.modelStatus === 'queued') {
-      hasPendingAudio = true;
+    const audioModelStatus = r.audioEvaluation?.modelStatus;
+    const videoModelStatus = r.videoEvaluation?.modelStatus;
+
+    if (r.audioFileSize > 0 || (audioModelStatus && audioModelStatus !== 'not_processed')) {
+      sawAudioResponse = true;
     }
-    if (r.videoEvaluation?.modelStatus === 'processing' || r.videoEvaluation?.modelStatus === 'pending' || r.videoEvaluation?.modelStatus === 'queued') {
-      hasPendingVideo = true;
+    if (r.videoFileSize > 0 || (videoModelStatus && videoModelStatus !== 'not_processed')) {
+      sawVideoResponse = true;
     }
+
+    if (PENDING_MEDIA_STATES.has(audioModelStatus)) hasPendingAudio = true;
+    if (PENDING_MEDIA_STATES.has(videoModelStatus)) hasPendingVideo = true;
+
     if (
       r.audioEvaluation?.audioFeaturesAvailable ||
-      (r.audioEvaluation?.speakingDuration !== null && r.audioEvaluation?.speakingDuration !== undefined && r.audioEvaluation?.speakingDuration > 0)
+      (typeof r.audioEvaluation?.speakingDuration === 'number' && r.audioEvaluation.speakingDuration > 0)
     ) {
       audioStatus = 'available';
+    } else if (TERMINAL_FAILURE_STATES.has(audioModelStatus)) {
+      sawAudioResponse = true;
     }
+
     if (
-      (r.videoEvaluation?.framesProcessed && r.videoEvaluation.framesProcessed > 0) ||
+      (typeof r.videoEvaluation?.framesProcessed === 'number' && r.videoEvaluation.framesProcessed > 0) ||
       (r.videoEvaluation?.personDetectionRatio !== null && r.videoEvaluation?.personDetectionRatio !== undefined)
     ) {
       videoStatus = 'available';
+    } else if (TERMINAL_FAILURE_STATES.has(videoModelStatus)) {
+      sawVideoResponse = true;
     }
   }
 
-  // The browser can declare a media modality before its upload reaches the
-  // backend. Treat an expected-but-not-yet-persisted modality as processing.
-  if (interview.modalityAvailability?.audio && audioStatus === 'unavailable') {
+  // An expected modality may remain processing only while its upload/job has
+  // not reached a terminal state. Do not turn known failures back into pending.
+  if (interview.modalityAvailability?.audio && audioStatus === 'unavailable' && !sawAudioResponse) {
     audioStatus = 'processing';
   }
-  if (interview.modalityAvailability?.video && videoStatus === 'unavailable') {
+  if (interview.modalityAvailability?.video && videoStatus === 'unavailable' && !sawVideoResponse) {
     videoStatus = 'processing';
   }
 
-  if (hasPendingAudio) audioStatus = 'processing';
-  if (hasPendingVideo) videoStatus = 'processing';
+  if (hasPendingAudio && audioStatus !== 'available') audioStatus = 'processing';
+  if (hasPendingVideo && videoStatus !== 'available') videoStatus = 'processing';
 
   // Filter scored responses for aggregation
   const scoredResponses = responses.filter(
