@@ -2,9 +2,9 @@
 Frame Sampling & Video Preprocessing Module
 Extracts frames at a controlled sample rate (1-2 FPS) with exact timestamp tracking.
 
-Phase 3 optimization: Default lowered to 1 FPS and max frames capped at 60.
-Interview clips are 1-3 minutes; 60 frames at 1 FPS covers the full clip.
-This halves inference time (YOLOv8 + MediaPipe) vs. the previous 2 FPS default.
+Low-memory defaults for CPU-only hosting: sample at 1 FPS, analyze at most 8 frames,
+and resize each frame to at most 384px before YOLO/MediaPipe inference. These defaults
+prioritize completing analysis on small instances; set environment variables to increase them.
 """
 
 import os
@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 # Environment-variable overrides (set VIDEO_FRAME_SAMPLE_FPS=2 to restore old behavior)
 DEFAULT_SAMPLE_FPS = int(os.getenv("VIDEO_FRAME_SAMPLE_FPS", "1"))
-MAX_FRAMES_TO_ANALYZE = int(os.getenv("VIDEO_MAX_FRAMES", "60"))
+MAX_FRAMES_TO_ANALYZE = max(1, int(os.getenv("VIDEO_MAX_FRAMES", "8")))
 # Downscale decoded frames before expensive YOLO/MediaPipe processing.
-MAX_FRAME_DIMENSION = int(os.getenv("VIDEO_MAX_DIMENSION", os.getenv("VIDEO_MAX_FRAME_DIM", "640")))
+MAX_FRAME_DIMENSION = max(160, int(os.getenv("VIDEO_MAX_DIMENSION", os.getenv("VIDEO_MAX_FRAME_DIM", "384"))))
 
 
 @dataclass
