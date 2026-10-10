@@ -167,6 +167,8 @@ function _ensureHandlers() {
         cameraEngagement: videoResult.cameraEngagement || null,
         observableMetrics: videoResult.metrics || videoResult.observableMetrics || null,
         videoQualityIndicator: videoResult.videoQualityIndicator || null,
+        // Preserve terminal failures returned by the AI service so the results
+        // page can distinguish "failed/unavailable" from a queued job.
         modelStatus: videoResult.modelStatus || 'processed',
         processingConfidence: videoResult.processingConfidence != null ? videoResult.processingConfidence : null,
         visibleMovement: videoResult.metrics && videoResult.metrics.movement_stability_index != null
@@ -241,6 +243,8 @@ function _ensureHandlers() {
         energyCharacteristics: audioResult.energyCharacteristics || null,
         pitchStatistics: audioResult.pitchStatistics || null,
         audioFeaturesAvailable: audioResult.audioFeaturesAvailable || false,
+        // Preserve terminal failures returned by the AI service so the results
+        // page can distinguish "failed/unavailable" from a queued job.
         modelStatus: audioResult.modelStatus || 'processed',
       };
 
