@@ -95,6 +95,7 @@ const responseSchema = new mongoose.Schema(
       pitchStatistics: { type: mongoose.Schema.Types.Mixed, default: null },
       audioFeaturesAvailable: { type: Boolean, default: false },
       modelStatus: { type: String, default: 'not_processed' },
+      analysisError: { type: String, default: null },
     },
     // Phase 6 — Video evaluation (observable signals)
     videoEvaluation: {
@@ -113,6 +114,7 @@ const responseSchema = new mongoose.Schema(
       feedback: { type: String, default: null },
       modelStatus: { type: String, default: 'not_processed' },
       processingConfidence: { type: Number, default: null },
+      analysisError: { type: String, default: null },
     },
     // Phase 7 — Multimodal evaluation
     multimodalEvaluation: {
