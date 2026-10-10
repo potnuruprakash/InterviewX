@@ -235,7 +235,7 @@ function _ensureHandlers() {
       try {
         await Response.updateOne(
           { _id: responseId },
-          { $set: { 'videoEvaluation.modelStatus': 'analysis_failed' } }
+          { $set: { 'videoEvaluation.modelStatus': 'analysis_failed', 'videoEvaluation.analysisError': String(err.message || 'Video analysis failed').slice(0, 300), 'videoEvaluation.feedback': 'Video analysis failed. Please retry this response.' } }
         );
         const interview = await Interview.findOne({ _id: interviewId, clerkUserId: clerkUserId }).lean();
         if (interview && interview.status === 'completed') {
@@ -310,7 +310,7 @@ function _ensureHandlers() {
       try {
         await Response.updateOne(
           { _id: responseId },
-          { $set: { 'audioEvaluation.modelStatus': 'analysis_failed' } }
+          { $set: { 'audioEvaluation.modelStatus': 'analysis_failed', 'audioEvaluation.analysisError': String(err.message || 'Audio analysis failed').slice(0, 300), 'audioEvaluation.feedback': 'Audio analysis failed. Please retry this response.' } }
         );
         const interview = await Interview.findOne({ _id: interviewId, clerkUserId: clerkUserId }).lean();
         if (interview && interview.status === 'completed') {
