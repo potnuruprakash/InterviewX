@@ -594,14 +594,17 @@ export default function ResultsPage() {
       }
     }
 
-    // Poll while the final evaluation OR media analysis is pending.
-    // Media jobs can outlive final-score calculation, so use a bounded time window
-    // rather than stopping after only a few polls. Each response carries no-store
-    // headers while pending; keep that fresh result out of the immutable cache.
+    // Poll while either the final evaluation or media analysis is pending.
+    // Stop after a safe ceiling so we do not poll forever if a job is lost on restart.
     const pollUntilReady = (pollAttempt = 0) => {
       if (!isMounted || activeFetchIdRef.current !== id) return
+      if (pollAttempt >= 30) {
+        setIsFinalizing(false)
+        console.warn('[ResultsLifecycle] media_poll_timeout', { interviewId: id, attempts: pollAttempt })
+        return
+      }
 
-      const pollDelay = Math.min(1500 * Math.pow(1.5, pollAttempt), 8000)
+      const pollDelay = Math.min(1500 * Math.pow(1.35, pollAttempt), 8000)
       pollTimer = setTimeout(async () => {
         if (!isMounted || activeFetchIdRef.current !== id) return
         try {
@@ -627,7 +630,6 @@ export default function ResultsPage() {
               overallScore: data.finalEvaluation?.overallScore,
             })
           } else {
-            // Keep refreshing media status even when the overall text score is ready.
             pollUntilReady(pollAttempt + 1)
           }
         } catch (err) {
@@ -635,8 +637,6 @@ export default function ResultsPage() {
             interviewId: id,
             error: err?.message || String(err),
           })
-          // Retry while page remains active; transient AI/database/network issues
-          // should not silently leave stale "Processing..." labels forever.
           pollUntilReady(pollAttempt + 1)
         }
       }, pollDelay)
