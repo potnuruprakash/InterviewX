@@ -21,6 +21,7 @@ import os
 import logging
 import tempfile
 import threading
+import time
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -35,8 +36,6 @@ _yolo_model_status = "not_loaded"
 _pipeline_lock = threading.Lock()
 _pipeline_loading = False  # True while pipeline/__init is executing
 
-from app.video import get_video_pipeline as _get_video_pipeline_raw
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MODEL LOADING
@@ -49,7 +48,6 @@ def get_video_pipeline():
     """
     global _pipeline_loading
 
-    # Fast-path (pipeline already exists inside _get_video_pipeline_raw)
     import app.video.inference.pipeline as _pl_mod
     if _pl_mod._pipeline_instance is not None:
         return _pl_mod._pipeline_instance
@@ -60,6 +58,7 @@ def get_video_pipeline():
             return _pl_mod._pipeline_instance
         _pipeline_loading = True
         try:
+            from app.video import get_video_pipeline as _get_video_pipeline_raw
             return _get_video_pipeline_raw()
         finally:
             _pipeline_loading = False
@@ -67,9 +66,11 @@ def get_video_pipeline():
 
 def load_yolo_model():
     """Trigger pipeline initialization. Called from background startup task."""
+    init_start = time.monotonic()
     logger.info("[VideoService] Initializing video pipeline (YOLO + face analyzer) ...")
     pipeline = get_video_pipeline()
-    logger.info(f"[VideoService] Pipeline ready. YOLO status: {pipeline.yolo_detector.status}")
+    init_seconds = time.monotonic() - init_start
+    logger.info(f"[VideoService] Pipeline ready in {init_seconds:.2f}s. YOLO status: {pipeline.yolo_detector.status}")
 
 
 def is_loading() -> bool:
@@ -167,6 +168,10 @@ def analyze_video(video_path: str) -> dict:
     Returns measurable presence, framing, and facial expression statistics.
     No psychological inferences or candidate confidence assertions are made.
     """
+    start_time = time.monotonic()
     pipeline = get_video_pipeline()
-    return pipeline.process_video(video_path, fps=FRAME_SAMPLE_FPS)
+    result = pipeline.process_video(video_path, fps=FRAME_SAMPLE_FPS)
+    duration = time.monotonic() - start_time
+    logger.info(f"[VideoService] Video analysis finished in {duration:.2f}s for {video_path}")
+    return result
 

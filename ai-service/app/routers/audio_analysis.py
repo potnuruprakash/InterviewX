@@ -1,9 +1,13 @@
 """Audio analysis router — Phase 5 (MFCC + feature extraction)"""
 import os
+import time
+import logging
 import tempfile
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.services import audio_service
 from app.services.inference_scheduler import run_media_inference
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai", tags=["Audio Analysis"])
 
@@ -39,6 +43,7 @@ async def audio_analyze(audio: UploadFile = File(...)):
     MAX_AUDIO_SIZE = 50 * 1024 * 1024  # 50 MB limit
     CHUNK_SIZE = 1024 * 1024  # 1 MB chunk
 
+    req_start = time.monotonic()
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp_path = tmp.name
@@ -58,7 +63,10 @@ async def audio_analyze(audio: UploadFile = File(...)):
                     detail={"success": False, "error": "EMPTY_AUDIO", "message": "Audio file is empty."},
                 )
 
+        logger.info("[AudioRequest] Saved upload to %s (%d bytes)", tmp_path, total_bytes)
         result = await run_media_inference("audio", audio_service.extract_features, tmp_path)
+        total_seconds = time.monotonic() - req_start
+        logger.info("[AudioRequest] COMPLETED in %.2fs featuresAvailable=%s", total_seconds, result.get("audioFeaturesAvailable"))
         if not result.get("audioFeaturesAvailable", True):
             raise HTTPException(
                 status_code=400,
@@ -68,11 +76,13 @@ async def audio_analyze(audio: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
+        total_seconds = time.monotonic() - req_start
+        logger.error("[AudioRequest] FAILED after %.2fs: %s", total_seconds, e)
         raise HTTPException(status_code=500, detail={"success": False, "error": "AUDIO_ERROR", "message": str(e)})
     finally:
         if tmp_path and os.path.exists(tmp_path):
             try:
                 os.unlink(tmp_path)
-            except Exception:
-                pass
+            except Exception as unlink_err:
+                logger.warning("[AudioRequest] Failed to remove temp file %s: %s", tmp_path, unlink_err)
 

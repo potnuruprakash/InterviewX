@@ -1,73 +1,150 @@
 """Health and readiness router
 
-Phase 15 optimization:
+Mode-aware health & readiness probes:
   GET /health  - Extremely fast liveness probe (<10ms). Render uses this.
-               Does NOT run any ML inference.
-  GET /ready   - Readiness check: shows which models are available.
-               Used by backend/frontend to check AI capability.
+                 Does NOT run any ML inference.
+  GET /ready   - Readiness check: verifies active mode's models are loaded/available.
+                 Used by backend/deployment checks.
 """
+import os
+import logging
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from app.services import sbert_service, video_service
-import os
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Health"])
+
+
+def _get_service_mode() -> str:
+    return os.getenv("AI_SERVICE_MODE", "core").lower().strip()
 
 
 @router.get("/health")
 async def health():
     """Ultra-fast liveness probe. Never runs inference. Used by Render health checks."""
-    # Compute model statuses without any blocking calls
-    sbert_status = sbert_service.get_model_status()
-    yolo_status = video_service.get_yolo_status()
+    mode = _get_service_mode()
 
-    # Service is 'ok' as long as HTTP is reachable, regardless of model state
-    return {
+    data = {
         "status": "ok",
         "service": "interviewx-ai",
-        "phases": {
-            "phase_4_sbert": sbert_service.get_model_status(),
+        "mode": mode,
+        "phases": {},
+        "models": {},
+    }
+
+    if mode in ("core", "full", "all"):
+        try:
+            from app.services import sbert_service
+            sbert_status = sbert_service.get_model_status()
+        except Exception as e:
+            sbert_status = f"error: {str(e)}"
+
+        data["phases"].update({
+            "phase_4_sbert": sbert_status,
             "phase_5_audio": "librosa_feature_extraction",
-            "phase_6_video": video_service.get_yolo_status(),
             "phase_7_fusion": "active",
             "cnn_lstm": "not_trained",
-        },
-        "video_models": video_service.get_video_model_status() if hasattr(video_service, "get_video_model_status") else {},
-        "models": {
+        })
+        data["models"].update({
             "sbert": sbert_status,
+            "audio": "librosa_ready",
+        })
+
+    if mode in ("video", "full", "all"):
+        try:
+            from app.services import video_service
+            yolo_status = video_service.get_yolo_status()
+            video_models = video_service.get_video_model_status()
+        except Exception as e:
+            yolo_status = f"error: {str(e)}"
+            video_models = {"error": str(e)}
+
+        data["phases"]["phase_6_video"] = yolo_status
+        data["video_models"] = video_models
+        data["models"].update({
             "yolo": yolo_status,
             "mediaPipe": "lazy",
-            "audio": "librosa_ready",
-        },
-    }
+        })
+
+    return data
 
 
 @router.get("/ready")
 async def ready():
     """
-    Readiness probe: indicates whether AI models are loaded and ready to serve.
-    Returns 200 when all core models are ready, 503 when still loading.
+    Readiness probe: indicates whether AI models for the current runtime mode
+    are loaded and ready to serve. Returns 200 when ready, 503 when still loading/degraded.
     """
-    sbert_ready = sbert_service.get_model_status() == "loaded"
-    yolo_ready = video_service.get_yolo_status() == "loaded"
-    sbert_loading = sbert_service.is_loading()
-    video_loading = video_service.is_loading()
+    mode = _get_service_mode()
 
-    all_ready = sbert_ready and yolo_ready
-    any_loading = sbert_loading or video_loading
+    if mode == "video":
+        from app.services import video_service
+        yolo_status = video_service.get_yolo_status()
+        video_loading = video_service.is_loading()
+        is_ready = (yolo_status == "loaded") and not video_loading
 
-    response_body = {
-        "status": "ready" if all_ready else ("loading" if any_loading else "degraded"),
-        "service": "interviewx-ai",
-        "models": {
-            "sbert": sbert_service.get_model_status(),
-            "yolo": video_service.get_yolo_status(),
-            "mediaPipe": "lazy",
-            "audio": "librosa_ready",
-        },
-        "ready": all_ready,
-    }
+        response_body = {
+            "status": "ready" if is_ready else ("loading" if video_loading else "degraded"),
+            "service": "interviewx-ai",
+            "mode": mode,
+            "models": {
+                "yolo": yolo_status,
+                "video_models": video_service.get_video_model_status(),
+            },
+            "ready": is_ready,
+        }
+        if not is_ready:
+            return JSONResponse(status_code=503, content=response_body)
+        return response_body
 
-    if not all_ready:
-        return JSONResponse(status_code=503, content=response_body)
-    return response_body
+    elif mode == "core":
+        from app.services import sbert_service
+        sbert_status = sbert_service.get_model_status()
+        sbert_loading = sbert_service.is_loading()
+        # SBERT is lazy-loaded on demand; not_loaded or loaded are operational states.
+        # Degraded only when an error occurs during loading.
+        is_ready = not sbert_loading and not sbert_status.startswith("load_error")
+
+        response_body = {
+            "status": "ready" if is_ready else ("loading" if sbert_loading else "degraded"),
+            "service": "interviewx-ai",
+            "mode": mode,
+            "models": {
+                "sbert": sbert_status,
+                "audio": "librosa_ready",
+            },
+            "ready": is_ready,
+        }
+        if not is_ready:
+            return JSONResponse(status_code=503, content=response_body)
+        return response_body
+
+    else:  # full or all
+        from app.services import sbert_service, video_service
+        sbert_status = sbert_service.get_model_status()
+        yolo_status = video_service.get_yolo_status()
+        sbert_loading = sbert_service.is_loading()
+        video_loading = video_service.is_loading()
+
+        sbert_ready = not sbert_loading and not sbert_status.startswith("load_error")
+        video_ready = (yolo_status == "loaded") and not video_loading
+        all_ready = sbert_ready and video_ready
+        any_loading = sbert_loading or video_loading
+
+        response_body = {
+            "status": "ready" if all_ready else ("loading" if any_loading else "degraded"),
+            "service": "interviewx-ai",
+            "mode": mode,
+            "models": {
+                "sbert": sbert_status,
+                "yolo": yolo_status,
+                "audio": "librosa_ready",
+                "video_models": video_service.get_video_model_status(),
+            },
+            "ready": all_ready,
+        }
+        if not all_ready:
+            return JSONResponse(status_code=503, content=response_body)
+        return response_body
+

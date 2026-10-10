@@ -1,0 +1,30 @@
+{
+  "core_service": {
+    "mode": "core",
+    "initial_rss_mb": 17.91,
+    "imported_rss_mb": 62.3,
+    "peak_rss_mb": 487.39,
+    "memory_delta_mb": 425.09,
+    "import_duration_s": 1.293,
+    "model_load_duration_s": 25.415
+  },
+  "video_service": {
+    "mode": "video",
+    "initial_rss_mb": 18.04,
+    "imported_rss_mb": 53.94,
+    "peak_rss_mb": 403.28,
+    "memory_delta_mb": 349.34,
+    "import_duration_s": 1.107,
+    "model_load_duration_s": 5.388
+  },
+  "unified_service": {
+    "mode": "full",
+    "initial_rss_mb": 18.0,
+    "imported_rss_mb": 62.27,
+    "peak_rss_mb": 649.1,
+    "memory_delta_mb": 586.83,
+    "import_duration_s": 1.194,
+    "model_load_duration_s": 25.523
+  },
+  "timestamp": 1791624182.995603
+}

@@ -143,15 +143,15 @@ let aiServiceStatus = 'checking';
     const health = await checkAiServiceHealth();
     aiServiceStatus = health?.status === 'ok' || health?.status === 'healthy' ? 'available' : (health?.status || 'degraded');
     if (aiServiceStatus === 'available') {
-      console.log('[AI Service] SBERT/AI service is reachable and healthy — production scoring active.');
+      console.log('[AI Service] Core AI and Video AI services are reachable and healthy — production scoring active.');
     } else {
-      console.warn('[AI Service] SBERT/AI service probe returned:', health);
-      console.warn('[AI Service] Fallback keyword scoring will be used until AI service is available.');
+      console.warn('[AI Service] AI service probe returned status:', aiServiceStatus, health?.services || health);
+      console.warn('[AI Service] Fallback keyword scoring will be used for any unavailable modalities until services are healthy.');
     }
   } catch (err) {
     aiServiceStatus = 'unavailable';
-    console.warn('[AI Service] Could not reach AI service at startup:', err.message);
-    console.warn('[AI Service] Fallback keyword scoring active. Set AI_SERVICE_URL correctly if SBERT scoring is required in production.');
+    console.warn('[AI Service] Could not reach AI services at startup:', err.message);
+    console.warn('[AI Service] Set AI_SERVICE_URL and VIDEO_AI_SERVICE_URL correctly if AI scoring is required.');
   }
 })();
 

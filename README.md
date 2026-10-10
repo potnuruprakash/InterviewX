@@ -31,18 +31,21 @@
                                   │  - Adaptive Questioning Engine          │
                                   │  - Multimodal Fusion Engine             │
                                   │  - Improvement Roadmap Generator        │
-                                  └────────────────────┬────────────────────┘
-                                                       │  Internal HTTP
-                                                       │  JSON & Multipart Form
-                                                       ▼
-                                  ┌─────────────────────────────────────────┐
-                                  │      FastAPI Python AI Microservice     │
-                                  │  - SBERT Semantic Text & Concept Eval   │
-                                  │  - Librosa MFCC & Paralinguistic Audio  │
-                                  │  - YOLOv8 Person/Frame Detection Video  │
-                                  │  - CNN-LSTM Model Architecture          │
-                                  └─────────────────────────────────────────┘
+                                  └──────────┬──────────────────┬───────────┘
+                                             │                  │
+                Text & Audio Evaluation      │                  │ Video Analysis
+                (AI_SERVICE_URL)             │                  │ (VIDEO_AI_SERVICE_URL)
+                                             ▼                  ▼
+              ┌────────────────────────────────────┐      ┌────────────────────────────────────┐
+              │  Core AI Service (Render Docker)   │      │  Video AI Service (Render Docker)  │
+              │  - AI_SERVICE_MODE=core            │      │  - AI_SERVICE_MODE=video           │
+              │  - SBERT Semantic Text Similarity  │      │  - YOLOv8 Person/Frame Detection   │
+              │  - Librosa MFCC & Audio Delivery   │      │  - MediaPipe Gaze, Head & Pose     │
+              │  - Multimodal Score Fusion         │      │  - Temporal Tracking & Safeguards  │
+              └────────────────────────────────────┘      └────────────────────────────────────┘
 ```
+
+> See [docs/RENDER_DEPLOYMENT.md](docs/RENDER_DEPLOYMENT.md) for Render deployment configuration and architecture details.
 
 ---
 

@@ -1,18 +1,24 @@
 /**
- * AI Service HTTP Client - Phase 2/6 Optimization
+ * AI Service HTTP Client — Split Workloads Architecture
  *
- * Typed interface for the Python FastAPI AI service with:
- *   - Per-operation timeouts (text=15s, audio=60s, video=120s)
- *   - Smart retry logic: only 502/503/504, never 400/413/422
- *   - Jitter in retry delays to avoid thundering herd
- *   - Graceful degradation with structured fallback objects
+ * Routes requests across two independent Render AI services:
+ *   1. Core AI Service (AI_SERVICE_URL):
+ *      - POST /api/ai/text-evaluate     (SBERT semantic evaluation)
+ *      - POST /api/ai/audio-analyze     (Librosa MFCC feature extraction)
+ *      - POST /api/ai/multimodal-evaluate (Multimodal score fusion)
+ *      - GET  /health, GET /ready       (Core service liveness and readiness)
  *
- * Endpoints:
- *   GET  /health                   - Fast liveness probe
- *   GET  /ready                    - Model readiness probe
- *   POST /api/ai/text-evaluate     - SBERT semantic evaluation (Phase 4)
- *   POST /api/ai/audio-analyze     - MFCC + audio analysis (Phase 5)
- *   POST /api/ai/video-analyze     - YOLOv8 video analysis (Phase 6)
+ *   2. Video AI Service (VIDEO_AI_SERVICE_URL):
+ *      - POST /api/ai/video-analyze     (YOLOv8 + MediaPipe video analysis)
+ *      - GET  /api/ai/video-model-info  (Video model capabilities and audit)
+ *      - GET  /health, GET /ready       (Video service liveness and readiness)
+ *
+ * Security & Reliability:
+ *   - Shared internal secret: AI_SERVICE_SECRET_KEY sent via x-internal-service-key header
+ *   - Configurable per-operation timeouts
+ *   - No automatic retries for expensive media jobs (avoids duplicate processing)
+ *   - Structured, actionable errors with sanitization (never leaks internal URLs or secrets)
+ *   - Genuine scoring only — never fabricates fallback scores
  */
 
 'use strict';
@@ -23,7 +29,7 @@ const fs = require('fs');
 const path = require('path');
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-const AI_SERVICE_TIMEOUT = parseInt(process.env.AI_SERVICE_TIMEOUT || '120000', 10);
+const VIDEO_AI_SERVICE_URL = process.env.VIDEO_AI_SERVICE_URL || process.env.AI_SERVICE_URL || 'http://localhost:8000';
 const AI_SERVICE_SECRET_KEY = process.env.AI_SERVICE_SECRET_KEY;
 
 if (!AI_SERVICE_SECRET_KEY && process.env.NODE_ENV === 'production') {
@@ -35,16 +41,34 @@ const getAuthHeaders = () => (
   AI_SERVICE_SECRET_KEY ? { 'x-internal-service-key': AI_SERVICE_SECRET_KEY } : {}
 );
 
-// Per-operation timeout constants
+// Configurable per-operation timeouts (in milliseconds)
 const TIMEOUTS = {
-  TEXT: 15000,   // SBERT is fast once loaded: 3-8s typical
-  AUDIO: 60000,  // Librosa can be slow on cold start
-  VIDEO: 120000, // YOLOv8 + MediaPipe over many frames
-  HEALTH: 5000,
+  TEXT: parseInt(process.env.AI_SERVICE_TEXT_TIMEOUT || process.env.AI_SERVICE_TIMEOUT || '15000', 10),
+  AUDIO: parseInt(process.env.AI_SERVICE_AUDIO_TIMEOUT || process.env.AI_SERVICE_TIMEOUT || '60000', 10),
+  VIDEO: parseInt(process.env.VIDEO_AI_SERVICE_TIMEOUT || process.env.AI_SERVICE_TIMEOUT || '120000', 10),
+  HEALTH: parseInt(process.env.AI_SERVICE_HEALTH_TIMEOUT || '5000', 10),
 };
 
 // Non-retryable HTTP status codes (client errors - no point retrying)
 const NON_RETRYABLE_STATUSES = new Set([400, 401, 403, 404, 413, 422]);
+
+/**
+ * Sanitize error message to prevent leaking internal network addresses, ports, or secrets.
+ */
+const sanitizeErrorMessage = (message) => {
+  if (!message || typeof message !== 'string') return 'AI service request failed';
+  let sanitized = message;
+  if (AI_SERVICE_URL) {
+    sanitized = sanitized.split(AI_SERVICE_URL).join('[CORE_AI_SERVICE]');
+  }
+  if (VIDEO_AI_SERVICE_URL) {
+    sanitized = sanitized.split(VIDEO_AI_SERVICE_URL).join('[VIDEO_AI_SERVICE]');
+  }
+  if (AI_SERVICE_SECRET_KEY) {
+    sanitized = sanitized.split(AI_SERVICE_SECRET_KEY).join('[REDACTED_SECRET]');
+  }
+  return sanitized;
+};
 
 /**
  * Sleep with optional jitter.
@@ -78,40 +102,123 @@ const withRetry = async (requestFn, opts = {}) => {
       }
 
       const delay = retryDelayMs * attempt;
-      console.warn(`[AI Service] ${opName} failed (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms: ${err.message}`);
+      console.warn(`[AI Service] ${opName} failed (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms: ${sanitizeErrorMessage(err.message)}`);
       await sleep(delay, jitter);
     }
   }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HEALTH
+// HEALTH & READINESS PROBES
 // ─────────────────────────────────────────────────────────────────────────────
 
-const checkHealth = async () => {
+/**
+ * Check health of the Core AI service (SBERT, Audio, Fusion).
+ */
+const checkCoreHealth = async () => {
   try {
     const res = await axios.get(`${AI_SERVICE_URL}/health`, {
       headers: getAuthHeaders(),
       timeout: TIMEOUTS.HEALTH,
     });
-    return res.data;
+    return { ...res.data, service: 'core' };
   } catch (err) {
-    console.warn('[AI Service] Health check failed:', err.message);
-    return { status: 'unavailable', message: err.message };
+    console.warn('[AI Service] Core health check failed:', sanitizeErrorMessage(err.message));
+    return {
+      status: 'unavailable',
+      service: 'core',
+      error: sanitizeErrorMessage(err.message),
+    };
   }
 };
 
+/**
+ * Check health of the Video AI service (YOLO, MediaPipe).
+ */
+const checkVideoHealth = async () => {
+  try {
+    const res = await axios.get(`${VIDEO_AI_SERVICE_URL}/health`, {
+      headers: getAuthHeaders(),
+      timeout: TIMEOUTS.HEALTH,
+    });
+    return { ...res.data, service: 'video' };
+  } catch (err) {
+    console.warn('[AI Service] Video health check failed:', sanitizeErrorMessage(err.message));
+    return {
+      status: 'unavailable',
+      service: 'video',
+      error: sanitizeErrorMessage(err.message),
+    };
+  }
+};
+
+/**
+ * Overall health check — probes both Core and Video services concurrently.
+ * Maintains complete backward compatibility for backend app.js and tests.
+ */
+const checkHealth = async () => {
+  const [coreResult, videoResult] = await Promise.all([
+    checkCoreHealth(),
+    checkVideoHealth(),
+  ]);
+
+  const coreOk = coreResult?.status === 'ok' || coreResult?.status === 'healthy';
+  const videoOk = videoResult?.status === 'ok' || videoResult?.status === 'healthy';
+
+  let status = 'unavailable';
+  if (coreOk && videoOk) {
+    status = 'ok';
+  } else if (coreOk || videoOk) {
+    status = 'degraded';
+  }
+
+  return {
+    status,
+    core: coreResult,
+    video: videoResult,
+    services: {
+      core: coreResult.status || 'unavailable',
+      video: videoResult.status || 'unavailable',
+    },
+    // Expose root model dictionaries for backward compatibility
+    models: {
+      ...(coreResult.models || {}),
+      ...(videoResult.models || {}),
+    },
+  };
+};
+
+/**
+ * Check readiness of Core and Video models.
+ */
+const checkReady = async () => {
+  const [coreRes, videoRes] = await Promise.allSettled([
+    axios.get(`${AI_SERVICE_URL}/ready`, { headers: getAuthHeaders(), timeout: TIMEOUTS.HEALTH }),
+    axios.get(`${VIDEO_AI_SERVICE_URL}/ready`, { headers: getAuthHeaders(), timeout: TIMEOUTS.HEALTH }),
+  ]);
+
+  const coreReady = coreRes.status === 'fulfilled' && coreRes.value.data?.ready;
+  const videoReady = videoRes.status === 'fulfilled' && videoRes.value.data?.ready;
+
+  return {
+    status: (coreReady && videoReady) ? 'ready' : (coreReady || videoReady ? 'partial' : 'loading'),
+    ready: coreReady && videoReady,
+    core: coreRes.status === 'fulfilled' ? coreRes.value.data : { ready: false, error: sanitizeErrorMessage(coreRes.reason?.message) },
+    video: videoRes.status === 'fulfilled' ? videoRes.value.data : { ready: false, error: sanitizeErrorMessage(videoRes.reason?.message) },
+  };
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE 4 - SBERT TEXT EVALUATION
+// CORE AI SERVICE — SBERT TEXT EVALUATION
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Evaluate a text answer using SBERT semantic similarity.
+ * Evaluate a text answer using SBERT semantic similarity on the Core AI service.
  *
  * @param {string} question          - The interview question
  * @param {string} answer            - The candidate's answer
  * @param {string[]} expectedConcepts - Concepts expected in a good answer
- * @returns {Object} { semanticScore, conceptCoverage, textScore, feedback, ... }
+ * @returns {Object} Evaluation metrics object
  */
 const evaluateText = async (question, answer, expectedConcepts = []) => {
   try {
@@ -128,7 +235,7 @@ const evaluateText = async (question, answer, expectedConcepts = []) => {
     );
     return res.data?.data || res.data;
   } catch (err) {
-    console.warn('[AI Service] Text evaluation failed:', err.message);
+    console.warn('[AI Service] Text evaluation failed on Core service:', sanitizeErrorMessage(err.message));
     return {
       semanticScore: null,
       conceptCoverage: null,
@@ -139,16 +246,17 @@ const evaluateText = async (question, answer, expectedConcepts = []) => {
       improvementSuggestion: null,
       confidence: null,
       modelStatus: 'ai_service_unavailable',
+      error: sanitizeErrorMessage(err.message),
     };
   }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE 5 - AUDIO ANALYSIS
+// CORE AI SERVICE — AUDIO ANALYSIS (Librosa MFCC)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Analyze an audio file for MFCC and speech features.
+ * Analyze an audio file for speech delivery and MFCC features on the Core AI service.
  *
  * @param {string} audioFilePath - Absolute path to the audio file
  * @returns {Object} Audio analysis result
@@ -170,30 +278,26 @@ const analyzeAudio = async (audioFilePath) => {
         headers: { ...form.getHeaders(), ...getAuthHeaders() },
         timeout: TIMEOUTS.AUDIO,
       }),
-      // Do not replay CPU-heavy media jobs after a timeout/network reset: the
-      // original inference may still be running on the AI service.
+      // Do not auto-retry heavy media jobs: avoids duplicating CPU load if service is busy
       { maxAttempts: 1, retryDelayMs: 3000, jitter: 1000, operationName: 'AUDIO_ANALYZE' }
     );
     return res.data?.data || res.data;
   } catch (err) {
-    console.warn('[AI Service] Audio analysis failed:', err.message);
+    console.warn('[AI Service] Audio analysis failed on Core service:', sanitizeErrorMessage(err.message));
     return {
       audioFeaturesAvailable: false,
       modelStatus: 'ai_service_unavailable',
-      error: err.message,
+      error: sanitizeErrorMessage(err.message),
     };
   }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE 6 - VIDEO ANALYSIS
+// VIDEO AI SERVICE — VIDEO ANALYSIS (YOLOv8 + MediaPipe)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Analyze a video file using YOLOv8 + MediaPipe frame extraction.
- *
- * Retries up to 3 times for MODEL_WARMING_UP (503) responses.
- * Does not retry for client errors (400, 413, 422).
+ * Analyze a video file using YOLOv8 + MediaPipe on the dedicated Video AI service.
  *
  * @param {string} videoFilePath - Absolute path to the video file
  * @returns {Object} Video analysis result
@@ -211,29 +315,44 @@ const analyzeVideo = async (videoFilePath) => {
     });
 
     const res = await withRetry(
-      () => axios.post(`${AI_SERVICE_URL}/api/ai/video-analyze`, form, {
+      () => axios.post(`${VIDEO_AI_SERVICE_URL}/api/ai/video-analyze`, form, {
         headers: { ...form.getHeaders(), ...getAuthHeaders() },
         timeout: TIMEOUTS.VIDEO,
       }),
-      // Avoid duplicate inference on timeout/socket reset. MODEL_WARMING_UP can
-      // be retried by the queue later rather than immediately repeating the upload.
+      // Avoid duplicate inference on timeout or transient drop: never replay heavy video processing automatically
       { maxAttempts: 1, retryDelayMs: 4000, jitter: 2000, operationName: 'VIDEO_ANALYZE' }
     );
 
     return res.data?.data || res.data;
   } catch (err) {
-    console.warn('[AI Service] Video analysis failed:', err.message);
+    console.warn('[AI Service] Video analysis failed on Video service:', sanitizeErrorMessage(err.message));
     return {
       framesProcessed: 0,
       personDetectionRatio: null,
       modelStatus: 'ai_service_unavailable',
-      error: err.message,
+      error: sanitizeErrorMessage(err.message),
     };
   }
 };
 
+/**
+ * Fetch video model capabilities and audit specifications from Video AI service.
+ */
+const getVideoModelInfo = async () => {
+  try {
+    const res = await axios.get(`${VIDEO_AI_SERVICE_URL}/api/ai/video-model-info`, {
+      headers: getAuthHeaders(),
+      timeout: TIMEOUTS.HEALTH,
+    });
+    return res.data?.data || res.data;
+  } catch (err) {
+    console.warn('[AI Service] Video model info fetch failed:', sanitizeErrorMessage(err.message));
+    return { error: sanitizeErrorMessage(err.message), modelStatus: 'unavailable' };
+  }
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE 7 - MULTIMODAL EVALUATION (optional AI-side fusion)
+// CORE AI SERVICE — MULTIMODAL EVALUATION (Optional fusion)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const evaluateMultimodal = async (textScore, audioResult, videoResult) => {
@@ -248,8 +367,8 @@ const evaluateMultimodal = async (textScore, audioResult, videoResult) => {
     );
     return res.data?.data || res.data;
   } catch (err) {
-    console.warn('[AI Service] Multimodal evaluation failed:', err.message);
-    return { modelStatus: 'ai_service_unavailable', error: err.message };
+    console.warn('[AI Service] Multimodal evaluation failed on Core service:', sanitizeErrorMessage(err.message));
+    return { modelStatus: 'ai_service_unavailable', error: sanitizeErrorMessage(err.message) };
   }
 };
 
@@ -258,9 +377,19 @@ const analyzeText = evaluateText;
 
 module.exports = {
   checkHealth,
+  checkCoreHealth,
+  checkVideoHealth,
+  checkReady,
   evaluateText,
   analyzeAudio,
   analyzeVideo,
+  getVideoModelInfo,
   evaluateMultimodal,
   analyzeText, // legacy
+  // Export URLs and timeouts for testing verification
+  _config: {
+    AI_SERVICE_URL,
+    VIDEO_AI_SERVICE_URL,
+    TIMEOUTS,
+  },
 };
