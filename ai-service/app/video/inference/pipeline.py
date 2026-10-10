@@ -9,6 +9,7 @@ Expression classification is optional and only reported when a verified model ex
 
 import os
 import logging
+import time
 from typing import Dict, Any, Optional
 
 from app.video.preprocessing.frame_sampler import extract_sampled_frames, DEFAULT_SAMPLE_FPS
@@ -67,28 +68,54 @@ class VideoAnalysisPipeline:
         if not os.path.exists(video_path):
             return {"success": False, "modelStatus": "file_not_found", "note": f"Video not found: {video_path}", "metrics": None}
 
+        extraction_started = time.monotonic()
         frames = extract_sampled_frames(video_path, fps=fps)
+        extraction_seconds = time.monotonic() - extraction_started
         if not frames:
-            return {"success": False, "modelStatus": "frame_extraction_failed", "note": "Could not extract frames.", "metrics": None}
+            logger.error(
+                "[VideoPipeline] No frames extracted from %s after %.2fs; verify codec/container and OpenCV decoding.",
+                video_path,
+                extraction_seconds,
+            )
+            return {
+                "success": False,
+                "modelStatus": "frame_extraction_failed",
+                "note": "Could not decode video frames. The uploaded video codec may be unsupported.",
+                "framesProcessed": 0,
+                "metrics": None,
+            }
 
         tracker = TemporalTracker()
+        yolo_seconds = 0.0
+        face_seconds = 0.0
+        pose_seconds = 0.0
+        expression_seconds = 0.0
+        inference_started = time.monotonic()
 
         for frame_sample in frames:
+            stage_started = time.monotonic()
             detection = self.yolo_detector.detect_frame(frame_sample.image)
+            yolo_seconds += time.monotonic() - stage_started
 
+            stage_started = time.monotonic()
             face_result = self.face_analyzer.analyze_head_region(
                 frame_sample.image,
                 head_bbox=detection.head_bbox,
                 person_bbox=detection.pixel_bbox,
             )
+            face_seconds += time.monotonic() - stage_started
 
+            stage_started = time.monotonic()
             pose_result = self.pose_analyzer.analyze(frame_sample.image)
+            pose_seconds += time.monotonic() - stage_started
 
+            stage_started = time.monotonic()
             expr_result = self.expression_classifier.classify_face(
                 frame_sample.image,
                 face_bbox=face_result.face_bbox,
                 smile_detected=face_result.smile_expressive_detected,
             )
+            expression_seconds += time.monotonic() - stage_started
 
             is_person = detection.person_detected or face_result.face_detected or pose_result.pose_detected
             person_cnt = max(detection.person_count, 1 if (face_result.face_detected or pose_result.pose_detected) else 0)
@@ -119,6 +146,18 @@ class VideoAnalysisPipeline:
             tracker=tracker,
             audit_note=self.expression_classifier.audit_note,
             is_custom_model=self.expression_classifier.is_verified,
+        )
+
+        logger.info(
+            "[VideoPipeline] Completed frames=%d extraction_seconds=%.2f inference_seconds=%.2f "
+            "yolo_seconds=%.2f face_seconds=%.2f pose_seconds=%.2f expression_seconds=%.2f",
+            len(frames),
+            extraction_seconds,
+            time.monotonic() - inference_started,
+            yolo_seconds,
+            face_seconds,
+            pose_seconds,
+            expression_seconds,
         )
 
         quality = (
