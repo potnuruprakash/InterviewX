@@ -4,6 +4,7 @@ import tempfile
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from app.services import video_service
+from app.services.inference_scheduler import run_media_inference
 
 router = APIRouter(prefix="/api/ai", tags=["Video Analysis"])
 
@@ -60,7 +61,7 @@ async def video_analyze(video: UploadFile = File(...)):
                     detail={"success": False, "error": "EMPTY_VIDEO", "message": "Video file is empty."},
                 )
 
-        result = video_service.analyze_video(tmp_path)
+        result = await run_media_inference("video", video_service.analyze_video, tmp_path)
         return {"success": True, "data": result}
     except HTTPException:
         raise
