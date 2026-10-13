@@ -502,10 +502,10 @@ export default function ResultsChatbot({
 
   // Default suggestions for Results AI
   const defaultSuggestions = [
-    'What was the correct answer for question 1?',
-    'Show my answer vs the ideal answer',
-    'What did I miss?',
-    'Give me an interview-ready answer',
+    'Show my original answer and the correct answer for Question 1',
+    'Rewrite my answer to earn a stronger score',
+    'Explain what was technically wrong or missing',
+    'Give me a complete interview-ready answer',
     'Why did I get this score?',
     'Explain my weak areas',
   ]
@@ -601,7 +601,7 @@ export default function ResultsChatbot({
                     key={q.questionId || qIdx}
                     type="button"
                     className="question-pill-btn"
-                    onClick={() => handleSendMessage(`What was the correct answer for question ${qNum}?`)}
+                    onClick={() => handleSendMessage(`Show my original answer and give me the correct, improved answer for question ${qNum}.`)}
                     disabled={isGenerating}
                     title={q.question ? `Q${qNum}: ${q.question.slice(0, 50)}...` : `Question ${qNum}`}
                     id={`results-q-pill-${qNum}`}
