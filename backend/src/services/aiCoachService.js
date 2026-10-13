@@ -3405,13 +3405,13 @@ BEHAVIORAL DIRECTIVES:
 Question ${idx + 1} (${q.category || 'General'} - ${q.difficulty || 'Intermediate'}):
 "${q.text}"
 Candidate's Answer: "${q.userAnswer || 'No answer recorded'}"
-Score: ${q.score != null ? q.score + '/100' : 'N/A'}
-Strengths: ${(q.strengths || []).join(', ') || 'None noted'}
-Expected Concepts / Reference Points: ${(q.expectedConcepts || []).join(', ') || 'Not recorded'}
-Missing Concepts / Improvement Areas: ${(q.missingConcepts || []).join(', ') || 'None noted'}
-Weaknesses: ${(q.weaknesses || []).join(', ') || 'None noted'}
-Improvement Suggestion: "${q.improvementSuggestion || 'N/A'}"
-Feedback: "${q.feedback || 'N/A'}"
+Recorded Score: ${q.score != null ? q.score + '/100' : 'N/A'}
+Recorded Strengths: ${(q.strengths || []).join(', ') || 'None noted'}
+Recorded Expected Concepts: ${(q.expectedConcepts || []).join(', ') || 'Not recorded'}
+Recorded Missing Concepts: ${(q.missingConcepts || []).join(', ') || 'None noted'}
+Recorded Weaknesses: ${(q.weaknesses || []).join(', ') || 'None noted'}
+Recorded Improvement Suggestion: "${q.improvementSuggestion || 'N/A'}"
+Recorded Feedback: "${q.feedback || 'N/A'}"
 Observable Audio Signals: ${q.audioEvaluation ? JSON.stringify(q.audioEvaluation) : 'Not recorded'}
 Observable Video Signals: ${q.videoEvaluation ? JSON.stringify(q.videoEvaluation) : 'Not recorded'}`
       )
