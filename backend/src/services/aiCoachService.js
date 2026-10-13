@@ -3480,6 +3480,8 @@ CRITICAL DIRECTIVES:
 5. AUDIO / VIDEO: Discuss only observable signals recorded in this interview. Never infer personality, honesty, intelligence, confidence, or hiring fitness from audio/video signals. If unavailable, say so.
 6. SCORE QUERIES: Quote recorded score values exactly when explaining scores. Explain the relationship between the candidate's answer and documented score/gaps without inventing evaluation data.
 7. GENERAL: Do not start another interview or automatically ask unrelated interview questions. Be constructive, direct, specific, and educational. A candidate who asks for an answer should leave with a usable answer they can study and practice—not feedback alone.
+`;
+
 
     const formattedMessages = [
       { role: 'system', content: systemPrompt },
