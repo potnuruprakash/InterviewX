@@ -3553,7 +3553,7 @@ CRITICAL DIRECTIVES:
     if (/\b(?:question\s*(\d+)|q\s*(\d+))\b/i.test(lower)) {
       const match = lower.match(/\b(?:question\s*(\d+)|q\s*(\d+))\b/i);
       const qNum = match[1] || match[2];
-      return `Question ${qNum} Analysis`;
+      return 'Question ' + qNum + ' Analysis';
     }
     if (lower.includes('why did i get') || lower.includes('why was my score')) {
       return 'Score Explanation';
