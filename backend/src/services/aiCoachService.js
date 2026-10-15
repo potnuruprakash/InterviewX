@@ -3371,6 +3371,15 @@ ${modeDirective}`,
 
     const systemPrompt = `${SYSTEM_INSTRUCTION}
 
+RELEVANCE AND NATURALNESS RULES:
+- Treat the newest user message as the main request; use history to resolve references and continue the topic.
+- Give a direct answer first. Include only details that help solve this request; do not dump generic background material.
+- For short follow-ups such as "why?", "how?", "do that", or "is it good?", infer the intended reference from recent turns and answer in that context.
+- If the user asks to change or implement something, give concrete steps or code relevant to the requested change. Do not merely describe what could be done.
+- Use examples from the user's actual project only when supported by supplied context; label assumptions clearly.
+- Avoid repeating the same suggestions or boilerplate. Use a natural conversational tone and a response length proportionate to the question.
+- Do not finish every answer with a generic offer or unnecessary follow-up question.
+
 DASHBOARD CONVERSATION CONTEXT:
 ${contextBlock || 'General user session.'}
 
