@@ -4,7 +4,6 @@ import { AlertCircle } from 'lucide-react'
 
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { BrainCircuit } from 'lucide-react'
 import Navbar from './components/Navbar'
 import ResultsErrorBoundary from './components/ResultsErrorBoundary'
 
@@ -36,13 +35,9 @@ function PageTransitionLoader() {
 
   return (
     <div className="page-transition-loader" role="status" aria-live="polite" aria-label="Loading page">
-      <div className="page-loader-orbit page-loader-orbit-outer" />
-      <div className="page-loader-orbit page-loader-orbit-inner" />
-      <div className="page-loader-brand-icon"><BrainCircuit size={30} strokeWidth={1.8} /></div>
+      <div className="page-loader-bars" aria-hidden="true"><span /><span /><span /></div>
       <div className="page-loader-brand">Interview<span>X</span></div>
-      <p className="page-loader-title">Loading your page<span className="page-loader-ellipsis">...</span></p>
-      <p className="page-loader-subtitle">Preparing your InterviewX experience</p>
-      <div className="page-loader-progress" aria-hidden="true"><span /></div>
+      <p className="page-loader-title">Loading<span className="page-loader-ellipsis">...</span></p>
     </div>
   )
 }
