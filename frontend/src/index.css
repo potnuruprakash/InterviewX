@@ -752,3 +752,123 @@ a:focus:not(:focus-visible) {
 .stat-icon-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
 .quick-action-icon.green { color: #10b981; }
 
+
+
+/* ============================================================
+   GLOBAL PAGE TRANSITION — InterviewX
+   ============================================================ */
+.page-transition-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(91, 33, 182, .18), transparent 36%),
+    radial-gradient(ellipse at 15% 90%, rgba(6, 182, 212, .07), transparent 36%),
+    rgba(7, 9, 18, .97);
+  backdrop-filter: blur(16px);
+  animation: page-loader-fade-in .18s ease-out both;
+}
+.page-loader-orbit {
+  position: absolute;
+  top: calc(50% - 112px);
+  left: 50%;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.page-loader-orbit-outer {
+  width: 104px;
+  height: 104px;
+  border: 2px solid rgba(139, 92, 246, .18);
+  border-top-color: #8b5cf6;
+  border-right-color: #06b6d4;
+  box-shadow: 0 0 26px rgba(124, 58, 237, .12);
+  animation: page-loader-spin 1.6s linear infinite;
+}
+.page-loader-orbit-inner {
+  width: 84px;
+  height: 84px;
+  border: 1px solid rgba(6, 182, 212, .2);
+  border-bottom-color: rgba(6, 182, 212, .85);
+  animation: page-loader-spin 2.2s linear infinite reverse;
+}
+.page-loader-brand-icon {
+  position: absolute;
+  top: calc(50% - 112px);
+  left: 50%;
+  display: grid;
+  width: 62px;
+  height: 62px;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(139, 92, 246, .28);
+  border-radius: 20px;
+  color: #a5b4fc;
+  background: linear-gradient(145deg, rgba(124, 58, 237, .22), rgba(6, 182, 212, .1));
+  box-shadow: 0 0 32px rgba(124, 58, 237, .2);
+  animation: page-loader-breathe 1.8s ease-in-out infinite;
+}
+.page-loader-brand {
+  margin-top: 16px;
+  color: #f8fafc;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -.8px;
+}
+.page-loader-brand span {
+  color: #22d3ee;
+}
+.page-loader-title {
+  margin: 12px 0 0;
+  color: #f1f5f9;
+  font-size: 16px;
+  font-weight: 650;
+}
+.page-loader-ellipsis {
+  display: inline-block;
+  width: 18px;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: page-loader-dots 1.2s steps(4, end) infinite;
+}
+.page-loader-subtitle {
+  margin: 7px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: center;
+}
+.page-loader-progress {
+  width: min(220px, 62vw);
+  height: 4px;
+  margin-top: 24px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .16);
+}
+.page-loader-progress span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8b5cf6, #6366f1, #22d3ee);
+  box-shadow: 0 0 14px rgba(34, 211, 238, .38);
+  animation: page-loader-progress 1.25s ease-in-out infinite;
+}
+.page-transition-suspense { min-height: 100vh; }
+@keyframes page-loader-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes page-loader-breathe { 0%, 100% { opacity: .88; box-shadow: 0 0 22px rgba(124, 58, 237, .16); } 50% { opacity: 1; box-shadow: 0 0 36px rgba(6, 182, 212, .25); } }
+@keyframes page-loader-progress { 0% { transform: translateX(-115%); } 100% { transform: translateX(255%); } }
+@keyframes page-loader-dots { 0% { width: 0; } 100% { width: 18px; } }
+@keyframes page-loader-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .page-transition-loader, .page-loader-orbit, .page-loader-brand-icon, .page-loader-ellipsis, .page-loader-progress span {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
