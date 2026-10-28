@@ -87,7 +87,8 @@ const AuthRoute = ({ children }) => {
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="page-wrapper">\n        <PageTransitionLoader />
+      <div className="page-wrapper">
+        <PageTransitionLoader />
         {!hasClerkKey && (
           <div style={{
             background: '#7c3aed',
