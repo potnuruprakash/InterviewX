@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { useAuthApi } from '../services/api'
 import {
@@ -29,6 +29,7 @@ const ChartTooltip = ({ active, payload }) => {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const { user } = useUser()
   const { authApi, isLoaded, isSignedIn } = useAuthApi()
   const { isLight } = useTheme()
@@ -40,6 +41,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [coachOpen, setCoachOpen] = useState(false)
+  const [reattemptingId, setReattemptingId] = useState(null)
 
   const fetchedRef = useRef(false)
 
@@ -93,6 +95,21 @@ export default function Dashboard() {
       setLoading(false)
     }
   }, [authApi])
+
+  const handleRetakeInterview = useCallback(async (interviewId) => {
+    if (!interviewId || reattemptingId) return
+
+    setReattemptingId(interviewId)
+    try {
+      const response = await authApi.post(`/api/interviews/${interviewId}/re-interview`)
+      const newInterviewId = response.data?.interviewId || response.data?.interview?.id || response.data?.interview?._id
+      if (!newInterviewId) throw new Error('The new interview could not be started. Please try again.')
+      navigate(`/interview/${newInterviewId}`)
+    } catch (err) {
+      window.alert(err.message || 'Could not create a new interview. Please try again.')
+      setReattemptingId(null)
+    }
+  }, [authApi, navigate, reattemptingId])
 
   const retryFetch = useCallback(() => {
     // Reset the guard so fetch can run again
@@ -510,12 +527,15 @@ export default function Dashboard() {
                             <Link to={`/interview/${invId}/results`} className="dash-action-btn">
                               View
                             </Link>
-                            <Link
-                              to={`/create-interview?practiceFrom=${invId}`}
+                            <button
+                              type="button"
                               className="dash-action-btn action-practice"
+                              onClick={() => handleRetakeInterview(invId)}
+                              disabled={Boolean(reattemptingId)}
+                              aria-label={`Retake ${interview.targetRole || 'interview'} with new questions`}
                             >
-                              Reattempt with New Questions
-                            </Link>
+                              {reattemptingId === invId ? 'Preparing...' : 'Retake Interview'}
+                            </button>
                           </div>
                         ) : isInProgress ? (
                           <Link to={`/interview/${invId}`} className="dash-action-btn action-primary">
