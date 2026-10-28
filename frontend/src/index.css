@@ -872,3 +872,36 @@ a:focus:not(:focus-visible) {
     animation-iteration-count: 1 !important;
   }
 }
+
+
+/* Minimal transition loader matching the selected concept */
+.page-transition-loader {
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(91, 33, 182, .12), transparent 38%),
+    #080b15;
+  backdrop-filter: none;
+}
+.page-loader-orbit,.page-loader-brand-icon,.page-loader-subtitle,.page-loader-progress { display:none; }
+.page-loader-bars {
+  height: 42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  margin-bottom:22px;
+}
+.page-loader-bars span {
+  display:block;
+  width:8px;
+  height:24px;
+  border-radius:8px;
+  background:linear-gradient(180deg,#a855f7,#7c3aed);
+  box-shadow:0 0 18px rgba(139,92,246,.32);
+  animation:page-loader-bar-bounce .8s ease-in-out infinite;
+}
+.page-loader-bars span:nth-child(2){height:34px;animation-delay:.12s}
+.page-loader-bars span:nth-child(3){height:24px;background:linear-gradient(180deg,#22d3ee,#3b82f6);animation-delay:.24s}
+.page-loader-brand{margin-top:0;font-size:26px;letter-spacing:-.7px}
+.page-loader-title{margin-top:14px;color:#b9c5dc;font-size:14px;font-weight:500}
+@keyframes page-loader-bar-bounce{0%,100%{transform:scaleY(.65);opacity:.72}50%{transform:scaleY(1);opacity:1}}
+@media(prefers-reduced-motion:reduce){.page-loader-bars span{animation:none}}
