@@ -905,3 +905,27 @@ a:focus:not(:focus-visible) {
 .page-loader-title{margin-top:14px;color:#b9c5dc;font-size:14px;font-weight:500}
 @keyframes page-loader-bar-bounce{0%,100%{transform:scaleY(.65);opacity:.72}50%{transform:scaleY(1);opacity:1}}
 @media(prefers-reduced-motion:reduce){.page-loader-bars span{animation:none}}
+
+
+/* Brain loader is intentionally limited to landing, dashboard and progress routes */
+.page-transition-loader-brain .page-loader-bars { display:none; }
+.page-transition-loader-brain .page-loader-orbit { display:block; }
+.page-transition-loader-brain .page-loader-brand-icon {
+  display:grid;
+  top:calc(50% - 92px);
+}
+.page-transition-loader-brain .page-loader-orbit {
+  top:calc(50% - 92px);
+}
+.page-transition-loader-brain .page-loader-orbit-outer {
+  width:100px;height:100px;
+}
+.page-transition-loader-brain .page-loader-orbit-inner {
+  width:80px;height:80px;
+}
+.page-transition-loader-brain .page-loader-brand {
+  margin-top:34px;
+}
+.page-transition-loader-brain .page-loader-title {
+  margin-top:10px;
+}
