@@ -1673,17 +1673,59 @@ export default function ResultsPage() {
           ) : (
             <div className="reattempt-performance-grid">
               <div className="reattempt-trend-panel">
-                <h3>Score Improvement Trend</h3>
+                <div className="reattempt-chart-heading">
+                  <div>
+                    <h3>Score Improvement Trend</h3>
+                    <p>See how your performance changes over time.</p>
+                  </div>
+                  {attemptHistory.length > 0 && (
+                    <div className="reattempt-latest-score">
+                      <strong>{attemptHistory[attemptHistory.length - 1].score}</strong>
+                      <span>/100</span>
+                      <small>Latest score</small>
+                    </div>
+                  )}
+                </div>
                 <div className="reattempt-chart" role="img" aria-label={`Interview scores: ${attemptHistory.map((a, i) => `attempt ${i + 1}, ${a.score} out of 100`).join('; ')}`}>
                   <div className="reattempt-chart-axis"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div>
                   <div className="reattempt-chart-plot">
                     <div className="reattempt-chart-gridlines"><i /><i /><i /><i /><i /></div>
-                    {attemptHistory.length > 1 && <svg className="reattempt-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points={attemptHistory.map((a, i) => `${4 + (i * 92) / (attemptHistory.length - 1)},${96 - Math.max(0, Math.min(100, a.score)) * 0.88}`).join(' ')} fill="none" stroke="currentColor" strokeWidth="1.8" vectorEffect="non-scaling-stroke" /></svg>}
-                    {attemptHistory.map((a, i) => <div key={a.id} className={`reattempt-chart-point ${a.isCurrent ? 'is-current' : ''}`} style={{ left: `${attemptHistory.length === 1 ? 50 : 4 + (i * 92) / (attemptHistory.length - 1)}%`, bottom: `${Math.max(2, Math.min(98, a.score))}%` }} title={`Attempt ${i + 1}: ${a.score}/100`}><span>{a.score}</span></div>)}
+                    <svg className="reattempt-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                      <defs>
+                        <linearGradient id="reattemptLineGradient" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#a855f7" />
+                          <stop offset="58%" stopColor="#6366f1" />
+                          <stop offset="100%" stopColor="#06b6d4" />
+                        </linearGradient>
+                        <linearGradient id="reattemptAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#8b5cf6" stopOpacity=".28" />
+                          <stop offset="100%" stopColor="#06b6d4" stopOpacity=".015" />
+                        </linearGradient>
+                      </defs>
+                      {attemptHistory.length > 1 && <polygon points={`4,96 ${attemptHistory.map((a, i) => `${4 + (i * 92) / (attemptHistory.length - 1)},${96 - Math.max(0, Math.min(100, a.score)) * .88}`).join(' ')} 96,96`} fill="url(#reattemptAreaGradient)" />}
+                      {attemptHistory.length > 1 && <polyline points={attemptHistory.map((a, i) => `${4 + (i * 92) / (attemptHistory.length - 1)},${96 - Math.max(0, Math.min(100, a.score)) * .88}`).join(' ')} fill="none" stroke="url(#reattemptLineGradient)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+                    </svg>
+                    {attemptHistory.map((a, i) => <div key={a.id} className={`reattempt-chart-point ${a.isCurrent ? 'is-current' : ''}`} style={{ left: `${attemptHistory.length === 1 ? 50 : 4 + (i * 92) / (attemptHistory.length - 1)}%`, bottom: `${22 + Math.max(0, Math.min(100, a.score)) * .88}%` }} title={`Attempt ${i + 1}: ${a.score}/100`}><span>{a.score}</span></div>)}
                     <div className="reattempt-chart-labels">{attemptHistory.map((a) => <span key={a.id} className={a.isCurrent ? 'is-current' : ''}>{a.date ? new Date(a.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}</span>)}</div>
                   </div>
                 </div>
-                {attemptHistory.length > 1 && <p className="reattempt-score-delta">{attemptHistory[attemptHistory.length - 1].score - attemptHistory[0].score >= 0 ? '+' : ''}{attemptHistory[attemptHistory.length - 1].score - attemptHistory[0].score} points from first to latest attempt</p>}
+                {attemptHistory.length > 1 && (() => {
+                  const delta = attemptHistory[attemptHistory.length - 1].score - attemptHistory[0].score
+                  const firstScore = attemptHistory[0].score
+                  const percent = firstScore > 0 ? Math.round((delta / firstScore) * 100) : null
+                  return <div className={`reattempt-growth-summary ${delta > 0 ? 'is-positive' : delta < 0 ? 'is-negative' : ''}`}>
+                    <span className="reattempt-growth-icon"><TrendingUp size={20} /></span>
+                    <div className="reattempt-growth-copy">
+                      <strong>{delta > 0 ? '+' : ''}{delta} points</strong>
+                      <span>from first to latest attempt</span>
+                    </div>
+                    <div className="reattempt-growth-divider" />
+                    <div className="reattempt-growth-message">
+                      <strong>{delta > 0 ? 'Progress detected' : delta < 0 ? 'A chance to improve' : 'Keeping steady'}</strong>
+                      <span>{percent !== null && delta > 0 ? `Your score is up ${percent}% since your first attempt.` : delta < 0 ? 'Review your feedback and focus on one skill at a time.' : 'Keep practicing to build consistency.'}</span>
+                    </div>
+                  </div>
+                })()}
               </div>
             </div>
           )}
