@@ -488,9 +488,13 @@ const submitResponse = async (req, res) => {
     await question.save();
 
     // ── Adaptive engine ─────────────────────────────────────────────
-    const responseScore = Number.isFinite(Number(textEvaluation?.textScore))
+    const hasTextScore = textEvaluation?.textScore !== null && textEvaluation?.textScore !== undefined
+      && Number.isFinite(Number(textEvaluation.textScore));
+    const hasLegacyScore = evaluation?.score !== null && evaluation?.score !== undefined
+      && Number.isFinite(Number(evaluation.score));
+    const responseScore = hasTextScore
       ? Number(textEvaluation.textScore)
-      : (Number.isFinite(Number(evaluation?.score)) ? Number(evaluation.score) : 0);
+      : (hasLegacyScore ? Number(evaluation.score) : 0);
     const skill = question.targetSkill || question.skill || 'general';
 
     let updatedState = interview.interviewState || {};
