@@ -4294,6 +4294,7 @@
 .reattempt-latest-score small{grid-column:1/3;margin-top:5px;color:var(--text-secondary,#94a3b8);font-size:10px}
 .reattempt-chart{grid-template-columns:32px minmax(0,1fr);column-gap:10px}
 .reattempt-chart-axis{padding-bottom:30px;font-size:11px}
+.reattempt-chart-plot{--chart-label-space:30px}
 .reattempt-chart-plot{height:260px}
 .reattempt-chart-gridlines{inset:0 0 30px}
 .reattempt-chart-gridlines i{border-top:1px dashed rgba(148,163,184,.2)}
@@ -4319,4 +4320,4 @@
 .reattempt-growth-summary.is-negative .reattempt-growth-icon{color:#fda4af;background:rgba(244,63,94,.12)}
 .reattempt-growth-summary.is-negative .reattempt-growth-copy strong,.reattempt-growth-summary.is-negative .reattempt-growth-message strong{color:#fda4af}
 .reattempt-history-note{margin-top:14px;font-size:11px}
-@media(max-width:600px){.reattempt-performance{padding:16px 12px}.reattempt-chart-heading{align-items:flex-start}.reattempt-latest-score{min-width:80px;padding:8px 10px}.reattempt-latest-score strong{font-size:24px}.reattempt-chart-plot{height:205px}.reattempt-chart-axis{padding-bottom:26px}.reattempt-chart-gridlines{inset-bottom:26px}.reattempt-chart-svg{inset:0 0 26px;height:calc(100% - 26px)}.reattempt-chart-labels span{font-size:9px}.reattempt-growth-summary{align-items:flex-start;gap:10px;padding:12px}.reattempt-growth-icon{width:36px;height:36px;flex-basis:36px}.reattempt-growth-copy strong{font-size:18px}.reattempt-growth-divider{display:none}.reattempt-growth-message{flex-basis:100%}}
+@media(max-width:600px){.reattempt-performance{padding:16px 12px}.reattempt-chart-heading{align-items:flex-start}.reattempt-latest-score{min-width:80px;padding:8px 10px}.reattempt-latest-score strong{font-size:24px}.reattempt-chart-plot{height:205px;--chart-label-space:26px}.reattempt-chart-axis{padding-bottom:26px}.reattempt-chart-gridlines{inset:0 0 26px}.reattempt-chart-svg{inset:0 0 26px;height:calc(100% - 26px)}.reattempt-chart-labels span{font-size:9px}.reattempt-growth-summary{align-items:flex-start;gap:10px;padding:12px}.reattempt-growth-icon{width:36px;height:36px;flex-basis:36px}.reattempt-growth-copy strong{font-size:18px}.reattempt-growth-divider{display:none}.reattempt-growth-message{flex-basis:100%}}
