@@ -1335,10 +1335,31 @@ const generateInterviewQuestions = ({
 
   // Fallback replenishment if needed to reach requested max
   if (deduped.length < max) {
+    const normalizeSkillName = (skill) => typeof skill === 'string'
+      ? skill.trim()
+      : (skill?.canonicalName || skill?.name || skill?.skill || '').toString().trim();
+    const relevantSkills = [...new Set([
+      ...candidateSkills,
+      ...requiredSkills,
+      ...matchedSkills,
+      ...missingSkills,
+    ].map(normalizeSkillName).filter(Boolean))];
+    const hasRelevantProfile = relevantSkills.length > 0 || candidateProjects.length > 0 || responsibilities.length > 0;
+    const relevantFallbacks = relevantSkills.flatMap((skill) =>
+      findTemplatesForSkill(skill).map((template) => ({
+        ...template,
+        targetSkill: skill,
+        skill,
+        type: 'technical',
+        category: 'technical',
+        source: 'resume_or_job_skill',
+      }))
+    );
     const fallbackPool = [
-      ...SYSTEM_DESIGN_TEMPLATES.map((t) => ({ ...t, type: 'technical', category: 'conceptual', source: 'job_description' })),
+      ...relevantFallbacks,
+      ...(!hasRelevantProfile ? SYSTEM_DESIGN_TEMPLATES.map((t) => ({ ...t, type: 'technical', category: 'conceptual', source: 'job_description' })) : []),
       ...BEHAVIORAL_TEMPLATES.map((t) => ({ ...t, type: 'behavioral', category: 'behavioral', source: 'behavioral' })),
-      ...(STATIC_BANK.technical || []).map((t) => ({ ...t, type: 'technical', category: 'technical', source: 'static_bank' })),
+      ...(!hasRelevantProfile ? (STATIC_BANK.technical || []).map((t) => ({ ...t, type: 'technical', category: 'technical', source: 'static_bank' })) : []),
     ];
 
     for (const fb of shuffle(fallbackPool)) {
