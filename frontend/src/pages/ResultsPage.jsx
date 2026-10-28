@@ -1680,23 +1680,14 @@ export default function ResultsPage() {
                     <div className="reattempt-chart-gridlines"><i /><i /><i /><i /><i /></div>
                     {attemptHistory.length > 1 && <svg className="reattempt-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points={attemptHistory.map((a, i) => `${4 + (i * 92) / (attemptHistory.length - 1)},${96 - Math.max(0, Math.min(100, a.score)) * 0.88}`).join(' ')} fill="none" stroke="currentColor" strokeWidth="1.8" vectorEffect="non-scaling-stroke" /></svg>}
                     {attemptHistory.map((a, i) => <div key={a.id} className={`reattempt-chart-point ${a.isCurrent ? 'is-current' : ''}`} style={{ left: `${attemptHistory.length === 1 ? 50 : 4 + (i * 92) / (attemptHistory.length - 1)}%`, bottom: `${Math.max(2, Math.min(98, a.score))}%` }} title={`Attempt ${i + 1}: ${a.score}/100`}><span>{a.score}</span></div>)}
-                    <div className="reattempt-chart-labels">{attemptHistory.map((a, i) => <span key={a.id} className={a.isCurrent ? 'is-current' : ''}>Attempt {i + 1}<small>{a.date ? new Date(a.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Date unavailable'}</small></span>)}</div>
+                    <div className="reattempt-chart-labels">{attemptHistory.map((a) => <span key={a.id} className={a.isCurrent ? 'is-current' : ''}>{a.date ? new Date(a.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}</span>)}</div>
                   </div>
                 </div>
                 {attemptHistory.length > 1 && <p className="reattempt-score-delta">{attemptHistory[attemptHistory.length - 1].score - attemptHistory[0].score >= 0 ? '+' : ''}{attemptHistory[attemptHistory.length - 1].score - attemptHistory[0].score} points from first to latest attempt</p>}
               </div>
-              <div className="reattempt-attempt-list">
-                {attemptHistory.slice(-2).reverse().map((a) => <div className={`reattempt-attempt-row ${a.isCurrent ? 'is-current' : ''}`} key={a.id}>
-                  <span className="reattempt-attempt-number">{attemptHistory.findIndex((item) => item.id === a.id) + 1}</span>
-                  <div className="reattempt-attempt-date"><strong>{a.date ? new Date(a.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date unavailable'}</strong><small>{a.isCurrent ? 'Current result' : 'Completed attempt'}</small></div>
-                  <div className="reattempt-attempt-score"><strong>{a.score}</strong><span>/100</span></div>
-                  <div className="reattempt-attempt-bar" aria-label={`Score ${a.score} out of 100`}><span style={{ width: `${Math.max(0, Math.min(100, a.score))}%` }} /></div>
-                  {a.isCurrent && <span className="reattempt-latest-pill">Latest</span>}
-                </div>)}
-              </div>
             </div>
           )}
-          <p className="reattempt-history-note">{attemptHistory.length > 2 ? `Showing the 2 most recent attempts. The trend chart includes all ${attemptHistory.length} attempts.` : `Only completed interviews matching this role, interview type, and difficulty are included.`}</p>
+          <p className="reattempt-history-note">Each point represents a completed interview. Only interviews matching this role, interview type, and difficulty are included.</p>
         </section>
 
         {/* ==================================================================
