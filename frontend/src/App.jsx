@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SignedIn, SignedOut, ClerkLoaded, ClerkLoading } from '@clerk/clerk-react'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, BrainCircuit } from 'lucide-react'
 
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -23,19 +23,26 @@ const hasClerkKey = PUBLISHABLE_KEY && PUBLISHABLE_KEY.startsWith('pk_')
 
 function PageTransitionLoader() {
   const location = useLocation()
-  const [visible, setVisible] = useState(true)
+  const showBrainLoader = ['/', '/dashboard', '/progress'].includes(location.pathname)
+  const [visible, setVisible] = useState(showBrainLoader)
 
   useEffect(() => {
+    if (!showBrainLoader) {
+      setVisible(false)
+      return
+    }
     setVisible(true)
     const timeoutId = window.setTimeout(() => setVisible(false), 420)
     return () => window.clearTimeout(timeoutId)
-  }, [location.pathname])
+  }, [location.pathname, showBrainLoader])
 
-  if (!visible) return null
+  if (!showBrainLoader || !visible) return null
 
   return (
-    <div className="page-transition-loader" role="status" aria-live="polite" aria-label="Loading page">
-      <div className="page-loader-bars" aria-hidden="true"><span /><span /><span /></div>
+    <div className="page-transition-loader page-transition-loader-brain" role="status" aria-live="polite" aria-label="Loading page">
+      <div className="page-loader-orbit page-loader-orbit-outer" />
+      <div className="page-loader-orbit page-loader-orbit-inner" />
+      <div className="page-loader-brand-icon"><BrainCircuit size={30} strokeWidth={1.8} /></div>
       <div className="page-loader-brand">Interview<span>X</span></div>
       <p className="page-loader-title">Loading<span className="page-loader-ellipsis">...</span></p>
     </div>
