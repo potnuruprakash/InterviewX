@@ -41,10 +41,11 @@ function QuestionCard({
   const rawTopic = question.category || question.targetSkill || 'General Technical'
   const topic = rawTopic.replace(/_/g, ' ')
   const isSkillGap = question.source === 'skill_gap'
+  const isTopicRedundantSkillGap = topic.toLowerCase().trim() === 'skill gap' || topic.toLowerCase().trim() === 'skill_gap'
 
   return (
     <article className="enterprise-question-card glass-card animate-fade-in" key={question.id}>
-      {/* ── Question Text Content Flow (has protected right-side spacing) ─ */}
+      {/* ── Question Text Content Flow (Full natural width) ─ */}
       <div className="question-content-flow">
         {/* Badges Row */}
         <div className="question-badges-row">
@@ -57,9 +58,11 @@ function QuestionCard({
           {isSkillGap && (
             <span className="q-badge q-skill-gap">Skill Gap</span>
           )}
-          <span className="q-badge q-topic" title={`Topic: ${topic}`}>
-            {topic}
-          </span>
+          {!isTopicRedundantSkillGap && (
+            <span className="q-badge q-topic" title={`Topic: ${topic}`}>
+              {topic}
+            </span>
+          )}
         </div>
 
         {/* Primary Dominant Question Title */}

@@ -1,5 +1,6 @@
 /* ============================================================
    ENTERPRISE INTERVIEW TOPBAR STYLES
+   Fully responsive header from 1920px down to 320px
    ============================================================ */
 
 .interview-topbar {
@@ -9,7 +10,7 @@
   height: 60px;
   min-height: 60px;
   max-height: 60px;
-  background: rgba(10, 15, 29, 0.95);
+  background: rgba(10, 15, 29, 0.96);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -17,10 +18,11 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 [data-theme='light'] .interview-topbar {
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.98);
   border-bottom-color: #e2e8f0;
 }
 
@@ -28,19 +30,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 20px;
   width: 100%;
   max-width: 1600px;
   margin: 0 auto;
-  gap: 16px;
+  gap: 12px;
   height: 100%;
+  box-sizing: border-box;
 }
 
 /* ── Left Section ─────────────────────────────────────────────── */
 .topbar-section-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
   flex-shrink: 1;
 }
@@ -52,21 +55,36 @@
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
+  border-radius: 6px;
+  transition: opacity 0.15s ease;
+}
+
+.topbar-brand:hover {
+  opacity: 0.9;
+}
+
+.topbar-brand:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 3px;
 }
 
 .topbar-logo-wrap {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: rgba(124, 58, 237, 0.16);
+  border: 1px solid rgba(124, 58, 237, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .brand-logo-icon {
-  color: #818cf8;
+  color: #a78bfa;
+}
+
+[data-theme='light'] .brand-logo-icon {
+  color: #7c3aed;
 }
 
 .brand-title {
@@ -74,21 +92,21 @@
   font-weight: 800;
   font-size: 17px;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #ffffff 40%, #818cf8 100%);
+  background: linear-gradient(135deg, #ffffff 40%, #c4b5fd 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 [data-theme='light'] .brand-title {
-  background: linear-gradient(135deg, #0f172a 40%, #6366f1 100%);
+  background: linear-gradient(135deg, #0f172a 40%, #7c3aed 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .topbar-divider {
   width: 1px;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.1);
+  height: 22px;
+  background: rgba(255, 255, 255, 0.12);
   flex-shrink: 0;
 }
 
@@ -100,6 +118,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  justify-content: center;
 }
 
 .topbar-target-role {
@@ -109,7 +128,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 220px;
+  max-width: 200px;
 }
 
 [data-theme='light'] .topbar-target-role {
@@ -121,6 +140,13 @@
   font-weight: 500;
   color: #94a3b8;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+[data-theme='light'] .topbar-interview-type {
+  color: #64748b;
 }
 
 /* ── Center Section ───────────────────────────────────────────── */
@@ -136,11 +162,12 @@
   align-items: center;
   padding: 4px 12px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 12.5px;
   color: #cbd5e1;
   user-select: none;
+  white-space: nowrap;
 }
 
 [data-theme='light'] .topbar-question-indicator {
@@ -149,13 +176,21 @@
   color: #334155;
 }
 
-.question-step-text strong {
+.topbar-question-indicator strong {
   color: #ffffff;
   font-weight: 700;
 }
 
-[data-theme='light'] .question-step-text strong {
+[data-theme='light'] .topbar-question-indicator strong {
   color: #0f172a;
+}
+
+.question-step-text-desktop {
+  display: inline;
+}
+
+.question-step-text-mobile {
+  display: none;
 }
 
 /* ── Right Section ────────────────────────────────────────────── */
@@ -163,21 +198,22 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
   flex-shrink: 0;
 }
-
 
 /* Destructive End Session Button */
 .btn-topbar-end {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 6px 12px;
-  height: 32px;
+  padding: 6px 14px;
+  height: 34px;
+  min-height: 34px;
   border-radius: 6px;
   background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.28);
   color: #f87171;
   font-size: 12px;
   font-weight: 600;
@@ -189,8 +225,13 @@
 
 .btn-topbar-end:hover {
   background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.4);
+  border-color: rgba(239, 68, 68, 0.45);
   color: #fca5a5;
+}
+
+.btn-topbar-end:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
 }
 
 [data-theme='light'] .btn-topbar-end {
@@ -206,8 +247,17 @@
 
 /* ── Responsive Topbar ────────────────────────────────────────── */
 @media (max-width: 1024px) {
+  .topbar-inner-container {
+    padding: 0 16px;
+    gap: 10px;
+  }
+
   .topbar-target-role {
-    max-width: 160px;
+    max-width: 150px;
+  }
+
+  .topbar-interview-type {
+    max-width: 150px;
   }
 }
 
@@ -223,18 +273,33 @@
     gap: 8px;
   }
 
-  .topbar-role-context {
-    display: none;
-  }
-
   .topbar-divider {
     display: none;
   }
 
+  .topbar-interview-type {
+    display: none;
+  }
+
+  .topbar-target-role {
+    font-size: 11.5px;
+    max-width: 110px;
+    color: var(--text-muted, #94a3b8);
+  }
+
+  .question-step-text-desktop {
+    display: none;
+  }
+
+  .question-step-text-mobile {
+    display: inline;
+    font-size: 11px;
+    font-weight: 600;
+  }
 
   .topbar-question-indicator {
-    font-size: 11.5px;
     padding: 3px 8px;
+    font-size: 11px;
   }
 
   .end-session-label {
@@ -243,31 +308,22 @@
 
   .btn-topbar-end {
     padding: 6px;
-    width: 32px;
-    justify-content: center;
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
   }
 }
 
-
-/* ============================================================
-   MOBILE INTERVIEW HEADER REFINEMENT
-   ============================================================ */
-@media (max-width: 767px) {
+@media (max-width: 480px) {
   .interview-topbar {
-    height: 54px;
-    min-height: 54px;
-    max-height: 54px;
+    height: 52px;
+    min-height: 52px;
+    max-height: 52px;
   }
 
   .topbar-inner-container {
     padding: 0 8px;
     gap: 6px;
-  }
-
-  .topbar-section-left {
-    flex: 0 1 auto;
-    gap: 7px;
-    min-width: 0;
   }
 
   .topbar-brand .brand-title {
@@ -279,62 +335,19 @@
     height: 28px;
   }
 
-  .topbar-section-center {
-    flex: 1 1 auto;
-    min-width: 0;
+  .topbar-target-role {
+    font-size: 11px;
+    max-width: 90px;
   }
 
   .topbar-question-indicator {
-    max-width: 100%;
-    padding: 4px 8px;
-    font-size: 11px;
-    overflow: hidden;
-    white-space: nowrap;
-  }
-
-  .topbar-section-right {
-    gap: 5px;
-  }
-
-  .interview-timer-badge {
-    gap: 4px;
-    padding: 5px 7px;
-  }
-
-  .timer-badge-icon {
-    display: none;
-  }
-
-  .timer-badge-digits {
-    font-size: 13px;
-  }
-
-  .timer-badge-remaining {
-    display: none;
-  }
-
-  .btn-topbar-end {
-    width: 30px;
-    height: 30px;
-    padding: 5px;
+    padding: 2px 6px;
+    font-size: 10.5px;
   }
 }
 
-@media (max-width: 360px) {
-  .topbar-inner-container {
-    padding: 0 6px;
-  }
-
-  .topbar-question-indicator {
-    font-size: 10.5px;
-    padding-inline: 6px;
-  }
-
-  .interview-timer-badge {
-    padding-inline: 6px;
-  }
-
-  .timer-badge-digits {
-    font-size: 12px;
+@media (max-width: 340px) {
+  .topbar-target-role {
+    display: none;
   }
 }

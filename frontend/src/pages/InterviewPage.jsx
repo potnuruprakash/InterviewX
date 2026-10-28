@@ -680,19 +680,6 @@ export default function InterviewPage() {
         </div>
       )}
 
-      {/* ── Draggable Floating Video Window (Global Viewport Clamped) ─────── */}
-      <FloatingVideoWindow
-        userName={user?.fullName || user?.firstName || 'Candidate'}
-        videoEnabled={videoEnabled}
-        onToggleVideo={handleToggleVideo}
-        isMicActive={isMicActive}
-        onToggleMic={handleToggleMic}
-        isRecording={isMediaRecording && videoEnabled}
-        onVideoBlob={(blob) => setVideoBlob(blob)}
-        videoRecorderRef={videoRecorderRef}
-        disabled={submitting || skipping || completing}
-      />
-
       {/* ── Main Focused Interview Workspace (Two-Column Responsive Layout) ── */}
       <main className="interview-workspace-main">
         <div className="interview-workspace-container">
@@ -820,14 +807,27 @@ export default function InterviewPage() {
               )}
             </div>
 
-            {/* ── RIGHT COLUMN (~25–30% width): Live Evaluation, Session Status, Guidelines ── */}
+            {/* ── RIGHT COLUMN (~28–32% width): Candidate Camera, Live Evaluation, Session Status, Guidelines ── */}
             <div className="workspace-right-column">
+              <FloatingVideoWindow
+                userName={user?.fullName || user?.firstName || 'Candidate'}
+                videoEnabled={videoEnabled}
+                onToggleVideo={handleToggleVideo}
+                isMicActive={isMicActive}
+                onToggleMic={handleToggleMic}
+                isRecording={isMediaRecording && videoEnabled}
+                onVideoBlob={(blob) => setVideoBlob(blob)}
+                videoRecorderRef={videoRecorderRef}
+                disabled={submitting || skipping || completing}
+              />
               <InterviewSidebar
                 lastEval={lastEval}
                 submitting={submitting}
                 videoEnabled={videoEnabled}
                 isMicActive={isMicActive}
                 isListening={isListening}
+                speechStatus={speechStatus}
+                isSpeechSupported={isSpeechSupported}
                 targetSkill={currentQuestion?.targetSkill || currentQuestion?.skill}
               />
             </div>

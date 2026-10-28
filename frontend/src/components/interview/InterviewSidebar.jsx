@@ -8,9 +8,9 @@ import './InterviewSidebar.css'
 /**
  * Enterprise Right Sidebar
  *
- * Card 1: Live Evaluation (Uses actual real evaluation state from lastEval or submitting)
- * Card 2: Session Status (Camera analysis, Voice transcription, Adaptive sequence)
- * Card 3: Guidelines (Professional candidate tips)
+ * 1. Live Evaluation: Real-time assessment score, feedback snippet, key strengths
+ * 2. Session Status: Camera analysis, Voice transcription, Adaptive sequencing
+ * 3. Guidelines: Practical interview best practices and shortcuts
  */
 function InterviewSidebar({
   lastEval = null,
@@ -18,6 +18,8 @@ function InterviewSidebar({
   videoEnabled = true,
   isMicActive = true,
   isListening = false,
+  speechStatus = null,
+  isSpeechSupported = true,
   targetSkill = null,
 }) {
   const currentScore = lastEval?.textEvaluation?.textScore ?? lastEval?.evaluation?.score
@@ -26,8 +28,31 @@ function InterviewSidebar({
     lastEval?.evaluation?.feedback ||
     lastEval?.textEvaluation?.improvementSuggestion
 
+  // Derive voice transcription status text and dot style
+  let voiceStatusText = 'Ready'
+  let voiceDotClass = 'dot-green'
+  let voiceValClass = 'val-active'
+
+  if (!isSpeechSupported) {
+    voiceStatusText = 'Unavailable'
+    voiceDotClass = 'dot-muted'
+    voiceValClass = 'val-muted'
+  } else if (speechStatus === 'error') {
+    voiceStatusText = 'Error'
+    voiceDotClass = 'dot-amber'
+    voiceValClass = 'val-warn'
+  } else if (!isMicActive) {
+    voiceStatusText = 'Muted'
+    voiceDotClass = 'dot-amber'
+    voiceValClass = 'val-muted'
+  } else if (isListening) {
+    voiceStatusText = 'Listening'
+    voiceDotClass = 'dot-green dot-pulse'
+    voiceValClass = 'val-active'
+  }
+
   return (
-    <aside className="enterprise-right-sidebar" aria-label="Live Evaluation & Session Status">
+    <aside className="enterprise-right-sidebar" aria-label="Live Evaluation and Session Monitoring">
       {/* ── CARD 1: LIVE EVALUATION ─────────────────────────────────── */}
       <div className="sidebar-card glass-card">
         <div className="sidebar-card-header">
@@ -44,7 +69,7 @@ function InterviewSidebar({
               <Loader2 size={18} className="spin-icon" />
               <div className="submitting-text-block">
                 <span className="submitting-title">Analyzing Response…</span>
-                <span className="submitting-desc">Evaluating technical depth and structure</span>
+                <span className="submitting-desc">Evaluating technical accuracy and depth</span>
               </div>
             </div>
           ) : lastEval ? (
@@ -70,7 +95,7 @@ function InterviewSidebar({
                 <div className="eval-quick-tags">
                   <span className="quick-tags-label">Key Strengths:</span>
                   <div className="tags-flex">
-                    {lastEval.textEvaluation.strengths.slice(0, 2).map((s, i) => (
+                    {lastEval.textEvaluation.strengths.slice(0, 3).map((s, i) => (
                       <span key={i} className="eval-tag strength-tag">{s}</span>
                     ))}
                   </div>
@@ -82,7 +107,7 @@ function InterviewSidebar({
               <div className="eval-empty-score">—<span className="eval-score-total">/100</span></div>
               <span className="eval-awaiting-title">Awaiting Response</span>
               <p className="eval-awaiting-desc">
-                Your AI assessment metrics will update here in real-time as you submit answers.
+                Your AI assessment metrics will update here in real time as you submit answers.
               </p>
             </div>
           )}
@@ -113,9 +138,9 @@ function InterviewSidebar({
               <Mic size={13} className="status-row-icon" />
               <span className="status-name">Voice transcription</span>
             </div>
-            <span className={`status-val ${isMicActive ? 'val-active' : 'val-muted'}`}>
-              <span className={`status-dot ${isMicActive ? 'dot-green' : 'dot-amber'}`} />
-              {isMicActive ? (isListening ? 'Listening' : 'Ready') : 'Muted'}
+            <span className={`status-val ${voiceValClass}`}>
+              <span className={`status-dot ${voiceDotClass}`} />
+              {voiceStatusText}
             </span>
           </div>
 
@@ -139,10 +164,10 @@ function InterviewSidebar({
         </div>
 
         <ul className="sidebar-guidelines-list">
-          <li>Keep camera eye-level for best visual analysis</li>
-          <li>Speak naturally or type your answer</li>
-          <li>Provide examples where possible</li>
-          <li>Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to submit</li>
+          <li>Keep camera eye-level for best visual posture analysis</li>
+          <li>Speak naturally or type directly into the answer area</li>
+          <li>Provide real-world architectural examples where possible</li>
+          <li>Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to submit immediately</li>
         </ul>
       </div>
     </aside>

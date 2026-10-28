@@ -1,5 +1,6 @@
 /* ============================================================
-   INTERVIEWX — TWO-COLUMN WORKSPACE WITH FLOATING VIDEO
+   INTERVIEWX — RESPONSIVE WORKSPACE & SIDEBAR SYSTEM
+   Desktop (1280px+) · Laptop (769-1279px) · Tablet (481-768px) · Mobile (320-480px)
    ============================================================ */
 
 /* ── 1. Page Shell (Viewport-Aware 100dvh) ─────────────────── */
@@ -9,15 +10,16 @@
   max-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--bg-primary, #0a0f1d);
-  color: var(--text-primary, #f8fafc);
+  background: var(--bg-primary, #0a0a0f);
+  color: var(--text-primary, #f1f5f9);
   overflow: hidden;
   position: relative;
+  box-sizing: border-box;
 }
 
 [data-theme='light'] .interview-page.interview-cockpit {
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--bg-primary, #F5F6F8);
+  color: var(--text-primary, #1F2430);
 }
 
 /* ── 2. Topbar Global Progress Track ───────────────────────── */
@@ -36,9 +38,9 @@
 
 .topbar-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6366f1, #a855f7, #38bdf8);
+  background: linear-gradient(90deg, #7c3aed, #a855f7, #06b6d4);
   transition: width 0.4s ease;
-  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 8px rgba(124, 58, 237, 0.4);
 }
 
 /* ── 3. Timeout Warning Banner ─────────────────────────────── */
@@ -63,31 +65,34 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .interview-workspace-container {
   width: 100%;
   max-width: 1600px;
   margin: 0 auto;
-  padding: 16px 24px;
+  padding: 18px 24px 20px 24px;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* ── 5. Responsive Two-Column Layout (Desktop) ─────────────── */
 .interview-workspace-columns {
   display: flex;
-  gap: 20px;
+  gap: 24px;
   width: 100%;
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
-/* Left Column (~70–75%): Question Card, Answer Card, Action Bar, Previous Feedback */
+/* Left Column (~68–72% width): Question Card, Answer Card, Action Bar, Previous Feedback */
 .workspace-left-column {
   flex: 1;
   min-width: 0;
@@ -97,17 +102,21 @@
   gap: 16px;
   overflow-y: auto;
   padding-right: 6px;
+  box-sizing: border-box;
 }
 
-/* Right Column (~25–30%): Live Evaluation, Session Status, Guidelines */
+/* Right Column (~28–32% width): Candidate Camera, Live Evaluation, Session Status, Guidelines */
 .workspace-right-column {
-  width: clamp(280px, 26vw, 360px);
+  width: clamp(300px, 28vw, 380px);
   flex-shrink: 0;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  gap: 14px;
   overflow-y: auto;
-  padding-right: 2px;
+  padding-right: 4px;
+  box-sizing: border-box;
 }
 
 /* Custom Sleek Scrollbars */
@@ -138,10 +147,11 @@
   flex-direction: column;
   gap: 10px;
   padding: 16px 20px;
-  border-radius: var(--radius-lg, 12px);
+  border-radius: var(--radius-lg, 14px);
   border: 1px solid rgba(16, 185, 129, 0.25);
   background: rgba(16, 185, 129, 0.04);
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 [data-theme='light'] .previous-eval-card {
@@ -154,6 +164,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .eval-status-left {
@@ -200,8 +211,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -304,12 +315,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-radius: 6px;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 8px;
   color: #fca5a5;
-  font-size: 12.5px;
+  font-size: 13px;
   flex-shrink: 0;
 }
 
@@ -323,9 +334,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 12.5px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
   flex-shrink: 0;
 }
 
@@ -337,18 +348,18 @@
   min-height: 100dvh;
   width: 100%;
   padding: 24px;
-  background: var(--bg-primary, #0a0f1d);
+  background: var(--bg-primary, #0a0a0f);
 }
 
 [data-theme='light'] .interview-complete {
-  background: #f8fafc;
+  background: var(--bg-primary, #F5F6F8);
 }
 
 .complete-card {
   max-width: 520px;
   width: 100%;
   padding: 36px 32px;
-  border-radius: var(--radius-xl, 16px);
+  border-radius: var(--radius-xl, 20px);
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -438,7 +449,7 @@
   text-align: center;
   background: #0f172a;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--radius-lg, 12px);
+  border-radius: var(--radius-lg, 14px);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
   margin: 0 auto;
 }
@@ -494,27 +505,32 @@
 }
 
 /* ============================================================
-   9. RESPONSIVE BREAKPOINTS (Desktop -> Tablet -> Mobile)
+   9. RESPONSIVE BREAKPOINTS (Desktop -> Laptop -> Tablet -> Mobile)
    ============================================================ */
 
-/* ── Large Desktop (>= 1440px) ────────────────────────────── */
-@media (min-width: 1440px) {
+/* ── Desktop: 1280px and above ────────────────────────────── */
+@media (min-width: 1280px) {
   .interview-workspace-container {
     max-width: 1600px;
-    padding: 20px 32px;
+    padding: 18px 28px;
   }
 
   .interview-workspace-columns {
     gap: 24px;
   }
 
+  .workspace-left-column {
+    flex: 1;
+    min-width: 0;
+  }
+
   .workspace-right-column {
-    width: 350px;
+    width: clamp(310px, 28vw, 370px);
   }
 }
 
-/* ── Standard Laptop (1024px to 1439px) ───────────────────── */
-@media (min-width: 1024px) and (max-width: 1439px) {
+/* ── Laptop & Compact Desktop: 1024px to 1279px ────────────── */
+@media (min-width: 1024px) and (max-width: 1279px) {
   .interview-workspace-container {
     padding: 14px 20px;
   }
@@ -524,28 +540,18 @@
   }
 
   .workspace-right-column {
-    width: 320px;
+    width: clamp(270px, 26vw, 300px);
+  }
+
+  .workspace-left-column {
+    flex: 1;
+    min-width: 0;
   }
 }
 
-/* ── Tablet (768px to 1023px) ─────────────────────────────── */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .interview-workspace-container {
-    padding: 12px 16px;
-  }
-
-  .interview-workspace-columns {
-    gap: 14px;
-  }
-
-  .workspace-right-column {
-    width: 270px;
-  }
-}
-
-/* ── Mobile Layout (< 768px) ──────────────────────────────── */
-/* Single-column: Header -> Question -> Video -> Answer -> Action Bar -> Previous Feedback -> Live Eval -> Session -> Guidelines */
-@media (max-width: 767px) {
+/* ── Compact Laptop / Large Tablet: 769px to 1023px ───────── */
+/* Prevents sidebar from crushing the main column down to 1-word lines */
+@media (min-width: 769px) and (max-width: 1023px) {
   .interview-page.interview-cockpit {
     height: auto;
     min-height: 100dvh;
@@ -564,7 +570,55 @@
     height: auto;
     min-height: auto;
     overflow: visible;
-    padding: 10px 12px 48px 12px;
+    padding: 14px 18px 40px 18px;
+  }
+
+  .interview-workspace-columns {
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
+    gap: 20px;
+  }
+
+  .workspace-left-column {
+    width: 100%;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .workspace-right-column {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+    padding-right: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+  }
+}
+
+/* ── Tablet: 481px to 768px ────────────────────────────────── */
+/* Single-column: Question & Answer FIRST, secondary content below */
+@media (min-width: 481px) and (max-width: 768px) {
+  .interview-page.interview-cockpit {
+    height: auto;
+    min-height: 100dvh;
+    max-height: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .interview-workspace-main {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .interview-workspace-container {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+    padding: 12px 14px calc(32px + env(safe-area-inset-bottom, 0px));
   }
 
   .interview-workspace-columns {
@@ -576,84 +630,66 @@
 
   .workspace-left-column {
     width: 100%;
+    min-width: 0;
     overflow: visible;
     padding-right: 0;
+    gap: 14px;
   }
 
   .workspace-right-column {
     width: 100%;
+    min-width: 0;
     overflow: visible;
     padding-right: 0;
+    gap: 14px;
   }
 }
 
-/* ── Small Mobile (<= 390px) ──────────────────────────────── */
-@media (max-width: 390px) {
-  .interview-workspace-container {
-    padding: 8px 8px 40px 8px;
+/* ── Mobile: 320px to 480px ────────────────────────────────── */
+/* Single-column, touch-optimized, zero horizontal scrolling */
+@media (max-width: 480px) {
+  .interview-page.interview-cockpit {
+    height: auto;
+    min-height: 100dvh;
+    max-height: none;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
-}
 
+  .interview-workspace-main {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+  }
 
-/* ============================================================
-   MOBILE UX REFINEMENT — Interview Workspace
-   Keeps desktop layout unchanged. Optimized for touch devices.
-   ============================================================ */
-@media (max-width: 767px) {
   .interview-workspace-container {
-    padding: 8px 10px calc(28px + env(safe-area-inset-bottom, 0px));
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+    padding: 10px 10px calc(28px + env(safe-area-inset-bottom, 0px));
   }
 
   .interview-workspace-columns {
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
     gap: 12px;
   }
 
   .workspace-left-column,
   .workspace-right-column {
-    min-width: 0;
     width: 100%;
+    min-width: 0;
+    overflow: visible;
+    padding-right: 0;
     gap: 12px;
-  }
-
-  .workspace-left-column {
-    padding-bottom: 4px;
-  }
-
-  .workspace-right-column {
-    order: 2;
   }
 
   .interview-error-banner,
   .interview-notice-banner,
   .timeout-notice-banner {
     font-size: 12px;
-    line-height: 1.45;
     padding: 8px 10px;
-  }
-
-  .previous-eval-card {
-    padding: 13px 14px;
-  }
-
-  .previous-eval-header {
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .eval-tag-group {
-    margin-left: auto;
-  }
-}
-
-@media (max-width: 480px) {
-  .interview-workspace-container {
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-
-  .workspace-left-column,
-  .workspace-right-column {
-    gap: 10px;
   }
 
   .previous-eval-card {
@@ -665,7 +701,7 @@
   }
 
   .complete-card {
-    padding: 28px 18px;
+    padding: 24px 16px;
   }
 
   .complete-actions {
@@ -676,5 +712,24 @@
   .complete-actions > * {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* ── Small Mobile (<= 340px) ──────────────────────────────── */
+@media (max-width: 340px) {
+  .interview-workspace-container {
+    padding: 8px 6px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ── Accessibility: Reduced Motion Support ─────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

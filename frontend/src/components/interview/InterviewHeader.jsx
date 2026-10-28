@@ -53,7 +53,7 @@ function InterviewHeader({
           <div className="topbar-divider" />
 
           <div className="topbar-role-context">
-            <span className="topbar-target-role" title={targetRole}>
+            <span className="topbar-target-role" title={`${targetRole} · ${formattedType}`}>
               {targetRole}
             </span>
             <span className="topbar-interview-type">
@@ -69,8 +69,11 @@ function InterviewHeader({
               className="topbar-question-indicator"
               aria-label={`Question ${questionNumber} of ${totalQuestions}`}
             >
-              <span className="question-step-text">
+              <span className="question-step-text-desktop">
                 Question <strong>{questionNumber}</strong> of {totalQuestions}
+              </span>
+              <span className="question-step-text-mobile" aria-hidden="true">
+                Q<strong>{questionNumber}</strong>/{totalQuestions}
               </span>
             </div>
           )}
