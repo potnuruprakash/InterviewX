@@ -32,7 +32,7 @@ function PageTransitionLoader() {
       return
     }
     setVisible(true)
-    const timeoutId = window.setTimeout(() => setVisible(false), 420)
+    const timeoutId = window.setTimeout(() => setVisible(false), location.pathname === '/' ? 3000 : 420)
     return () => window.clearTimeout(timeoutId)
   }, [location.pathname, showBrainLoader])
 
