@@ -773,6 +773,40 @@ export default function ResultsPage() {
   const questionBreakdown = Array.isArray(rawData?.questionBreakdown) ? rawData.questionBreakdown : []
   const resumeSkillAlignment = rawData?.resumeSkillAlignment
 
+  // Date formatting
+  const formattedDate = useMemo(() => {
+    const raw = interview?.completedAt || interview?.startedAt
+    if (!raw) return 'Recent Session'
+    try {
+      return new Date(raw).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      })
+    } catch {
+      return 'Recent Session'
+    }
+  }, [interview?.completedAt, interview?.startedAt])
+
+  // Duration in minutes
+  const durationText = useMemo(() => {
+    if (interview?.durationMinutes) return `${interview.durationMinutes} min`
+    if (interview?.startedAt && interview?.completedAt) {
+      const mins = Math.max(1, Math.round((new Date(interview.completedAt) - new Date(interview.startedAt)) / 60000))
+      return `${mins} min`
+    }
+    return '30 min'
+  }, [interview?.durationMinutes, interview?.startedAt, interview?.completedAt])
+
+  // Overall Score & Tier — stable useMemo so downstream memos (metrics) don't invalidate on every render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const overallScore = useMemo(
+    () => (fe?.overallScore !== null && fe?.overallScore !== undefined ? Math.round(fe.overallScore) : null),
+    [fe?.overallScore]
+  )
+  const scoreTier = useMemo(() => getScoreTier(overallScore), [overallScore])
+
+  // Re-attempt history effect is declared after overallScore is initialized.
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !interview?.targetRole) return
     let cancelled = false
@@ -809,39 +843,6 @@ export default function ResultsPage() {
     return () => { cancelled = true }
   }, [authApi, id, isLoaded, isSignedIn, interview?.targetRole, interview?.interviewType, interview?.difficulty, interview?.completedAt, interview?.startedAt, overallScore])
 
-
-  // Date formatting
-  const formattedDate = useMemo(() => {
-    const raw = interview?.completedAt || interview?.startedAt
-    if (!raw) return 'Recent Session'
-    try {
-      return new Date(raw).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      })
-    } catch {
-      return 'Recent Session'
-    }
-  }, [interview?.completedAt, interview?.startedAt])
-
-  // Duration in minutes
-  const durationText = useMemo(() => {
-    if (interview?.durationMinutes) return `${interview.durationMinutes} min`
-    if (interview?.startedAt && interview?.completedAt) {
-      const mins = Math.max(1, Math.round((new Date(interview.completedAt) - new Date(interview.startedAt)) / 60000))
-      return `${mins} min`
-    }
-    return '30 min'
-  }, [interview?.durationMinutes, interview?.startedAt, interview?.completedAt])
-
-  // Overall Score & Tier — stable useMemo so downstream memos (metrics) don't invalidate on every render
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const overallScore = useMemo(
-    () => (fe?.overallScore !== null && fe?.overallScore !== undefined ? Math.round(fe.overallScore) : null),
-    [fe?.overallScore]
-  )
-  const scoreTier = useMemo(() => getScoreTier(overallScore), [overallScore])
 
   // Instrumentation: Log results_rendered when report is successfully rendered to DOM
   useEffect(() => {
