@@ -488,7 +488,13 @@ const submitResponse = async (req, res) => {
     await question.save();
 
     // ── Adaptive engine ─────────────────────────────────────────────
-    const responseScore = textEvaluation.textScore || evaluation.score || 0;
+    const hasTextScore = textEvaluation?.textScore !== null && textEvaluation?.textScore !== undefined
+      && Number.isFinite(Number(textEvaluation.textScore));
+    const hasLegacyScore = evaluation?.score !== null && evaluation?.score !== undefined
+      && Number.isFinite(Number(evaluation.score));
+    const responseScore = hasTextScore
+      ? Number(textEvaluation.textScore)
+      : (hasLegacyScore ? Number(evaluation.score) : 0);
     const skill = question.targetSkill || question.skill || 'general';
 
     let updatedState = interview.interviewState || {};
@@ -538,6 +544,28 @@ const submitResponse = async (req, res) => {
       });
 
       if (existingNext) {
+        // Pre-generated questions otherwise keep their original difficulty and can
+        // ignore the adaptive engine. Rebuild this pending question at the newly
+        // selected difficulty while preserving its order and document identity.
+        const nextTopic = existingNext.targetSkill || existingNext.skill || skill || interview.targetRole;
+        const pastQuestions = await Question.find({ interviewId: interview._id })
+          .select('text').lean();
+        const generatedQ = generateNextPersonalizedQuestion({
+          targetRole: interview.targetRole,
+          interviewType: interview.interviewType,
+          topic: nextTopic,
+          difficulty: adaptiveDifficulty,
+          order: existingNext.order,
+          pastQuestionTexts: pastQuestions.filter((q) => q.text !== existingNext.text).map((q) => q.text),
+          recentPerformance: newRecentPerf,
+        });
+        existingNext.text = generatedQ.text;
+        existingNext.difficulty = adaptiveDifficulty;
+        existingNext.targetSkill = generatedQ.targetSkill || nextTopic;
+        existingNext.skill = generatedQ.skill || nextTopic;
+        existingNext.expectedConcepts = generatedQ.expectedConcepts || existingNext.expectedConcepts || [];
+        existingNext.expectedKeyPoints = generatedQ.expectedKeyPoints || existingNext.expectedKeyPoints || [];
+        await existingNext.save();
         nextQuestion = formatQuestion(existingNext);
       } else {
         // Dynamically generate the next personalized question
@@ -558,13 +586,14 @@ const submitResponse = async (req, res) => {
           ...(interview.skillAnalysis?.partialSkills || []),
         ];
         const nextTopic = selectNextAdaptiveTopic({
-          skillGapProfile: {
+          skillGap: {
             strongSkills: interview.skillAnalysis?.strongSkills || interview.skillAnalysis?.matchedSkills || [],
             partialSkills: interview.skillAnalysis?.partialSkills || [],
             missingSkills: interview.skillAnalysis?.missingSkills || [],
           },
           topicCoverage: coverageMap,
-          allTargetSkills: allSkills.length > 0 ? allSkills : [interview.targetRole],
+          skillPerformance: updatedState.skillPerformance || {},
+          targetRole: interview.targetRole || 'Software Engineer',
           currentTopic: skill,
         });
 
@@ -799,6 +828,16 @@ const skipQuestion = async (req, res) => {
     // Advance question index
     interview.currentQuestionIndex += 1;
     interview.skippedQuestionsCount = (interview.skippedQuestionsCount || 0) + 1;
+    // A skip is not scored as a zero, but it is a signal to reduce the next
+    // question's difficulty by one level so the candidate can regain momentum.
+    const currentDifficulty = interview.difficulty || 'medium';
+    const skipDifficulty = currentDifficulty === 'hard' ? 'medium' : 'easy';
+    interview.difficulty = skipDifficulty;
+    interview.interviewState = {
+      ...(interview.interviewState || {}),
+      currentDifficulty: skipDifficulty,
+      lastAdaptationReason: 'question_skipped',
+    };
 
     // Check if more questions exist
     let nextQuestionDoc = await Question.findOne({
@@ -831,13 +870,14 @@ const skipQuestion = async (req, res) => {
         ];
         const coverageMap = interview.topicCoverage ? Object.fromEntries(interview.topicCoverage) : {};
         const nextTopic = selectNextAdaptiveTopic({
-          skillGapProfile: {
+          skillGap: {
             strongSkills: interview.skillAnalysis?.strongSkills || interview.skillAnalysis?.matchedSkills || [],
             partialSkills: interview.skillAnalysis?.partialSkills || [],
             missingSkills: interview.skillAnalysis?.missingSkills || [],
           },
           topicCoverage: coverageMap,
-          allTargetSkills: allSkills.length > 0 ? allSkills : [interview.targetRole],
+          skillPerformance: interview.interviewState?.skillPerformance || {},
+          targetRole: interview.targetRole || 'Software Engineer',
           currentTopic: question.targetSkill || question.skill,
         });
 
@@ -845,7 +885,7 @@ const skipQuestion = async (req, res) => {
           targetRole: interview.targetRole,
           interviewType: interview.interviewType,
           topic: nextTopic,
-          difficulty: interview.difficulty || 'medium',
+          difficulty: skipDifficulty,
           order: interview.currentQuestionIndex,
           pastQuestionTexts,
           recentPerformance: interview.recentPerformance || [],
@@ -860,6 +900,26 @@ const skipQuestion = async (req, res) => {
           status: 'pending',
         });
       }
+    }
+
+    if (nextQuestionDoc) {
+      // Existing pre-generated questions must also respect the skip adaptation.
+      const priorQuestions = await Question.find({ interviewId: interview._id })
+        .select('text').lean();
+      const generatedQ = generateNextPersonalizedQuestion({
+        targetRole: interview.targetRole,
+        interviewType: interview.interviewType,
+        topic: nextQuestionDoc.targetSkill || nextQuestionDoc.skill || interview.targetRole,
+        difficulty: skipDifficulty,
+        order: nextQuestionDoc.order,
+        pastQuestionTexts: priorQuestions.filter((q) => q.text !== nextQuestionDoc.text).map((q) => q.text),
+        recentPerformance: interview.recentPerformance || [],
+      });
+      nextQuestionDoc.text = generatedQ.text;
+      nextQuestionDoc.difficulty = skipDifficulty;
+      nextQuestionDoc.expectedConcepts = generatedQ.expectedConcepts || nextQuestionDoc.expectedConcepts || [];
+      nextQuestionDoc.expectedKeyPoints = generatedQ.expectedKeyPoints || nextQuestionDoc.expectedKeyPoints || [];
+      await nextQuestionDoc.save();
     }
 
     const isComplete = !nextQuestionDoc || interview.currentQuestionIndex >= interview.totalQuestions;

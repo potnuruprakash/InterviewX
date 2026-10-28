@@ -208,6 +208,20 @@ async function runTestSuite() {
     assert.strictEqual(result.nextDifficulty, 'hard', 'Single outlier should maintain difficulty');
   });
 
+  test('Adaptive topic selection uses the supplied skill-gap profile and target role', () => {
+    const topic = selectNextAdaptiveTopic({
+      skillGap: {
+        strongSkills: ['Python'],
+        partialSkills: ['FastAPI'],
+        missingSkills: ['SQL'],
+      },
+      topicCoverage: {},
+      targetRole: 'Python Backend Developer',
+      currentTopic: null,
+    });
+    assert.strictEqual(topic, 'fastapi', 'Unassessed partial skills should be selected before generic role fallbacks');
+  });
+
   // ── TEST 9: Question Deduplication & Semantic Check ──────────────────────────
   test('Test 9: Question Deduplication Prevents Identical or Closely Worded Questions', () => {
     const q1 = 'How does Python handle memory management and garbage collection?';
