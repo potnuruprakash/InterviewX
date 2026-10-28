@@ -929,3 +929,20 @@ a:focus:not(:focus-visible) {
 .page-transition-loader-brain .page-loader-title {
   margin-top:10px;
 }
+
+
+/* Match the supplied InterviewX brain badge: circular violet-blue icon with white brain */
+.page-transition-loader-brain .page-loader-brand-icon {
+  width:44px;
+  height:44px;
+  border:1px solid rgba(191,219,254,.35);
+  border-radius:50%;
+  color:#fff;
+  background:linear-gradient(135deg,#8b5cf6 0%,#4f46e5 52%,#0284c7 100%);
+  box-shadow:0 0 24px rgba(99,102,241,.34),inset 0 1px 0 rgba(255,255,255,.22);
+}
+.page-transition-loader-brain .page-loader-brand-icon svg {
+  width:25px;
+  height:25px;
+  stroke-width:2;
+}
