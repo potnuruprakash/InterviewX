@@ -824,6 +824,16 @@ const skipQuestion = async (req, res) => {
     // Advance question index
     interview.currentQuestionIndex += 1;
     interview.skippedQuestionsCount = (interview.skippedQuestionsCount || 0) + 1;
+    // A skip is not scored as a zero, but it is a signal to reduce the next
+    // question's difficulty by one level so the candidate can regain momentum.
+    const currentDifficulty = interview.difficulty || 'medium';
+    const skipDifficulty = currentDifficulty === 'hard' ? 'medium' : 'easy';
+    interview.difficulty = skipDifficulty;
+    interview.interviewState = {
+      ...(interview.interviewState || {}),
+      currentDifficulty: skipDifficulty,
+      lastAdaptationReason: 'question_skipped',
+    };
 
     // Check if more questions exist
     let nextQuestionDoc = await Question.findOne({
@@ -871,7 +881,7 @@ const skipQuestion = async (req, res) => {
           targetRole: interview.targetRole,
           interviewType: interview.interviewType,
           topic: nextTopic,
-          difficulty: interview.difficulty || 'medium',
+          difficulty: skipDifficulty,
           order: interview.currentQuestionIndex,
           pastQuestionTexts,
           recentPerformance: interview.recentPerformance || [],
@@ -886,6 +896,26 @@ const skipQuestion = async (req, res) => {
           status: 'pending',
         });
       }
+    }
+
+    if (nextQuestionDoc) {
+      // Existing pre-generated questions must also respect the skip adaptation.
+      const priorQuestions = await Question.find({ interviewId: interview._id })
+        .select('text').lean();
+      const generatedQ = generateNextPersonalizedQuestion({
+        targetRole: interview.targetRole,
+        interviewType: interview.interviewType,
+        topic: nextQuestionDoc.targetSkill || nextQuestionDoc.skill || interview.targetRole,
+        difficulty: skipDifficulty,
+        order: nextQuestionDoc.order,
+        pastQuestionTexts: priorQuestions.filter((q) => q.text !== nextQuestionDoc.text).map((q) => q.text),
+        recentPerformance: interview.recentPerformance || [],
+      });
+      nextQuestionDoc.text = generatedQ.text;
+      nextQuestionDoc.difficulty = skipDifficulty;
+      nextQuestionDoc.expectedConcepts = generatedQ.expectedConcepts || nextQuestionDoc.expectedConcepts || [];
+      nextQuestionDoc.expectedKeyPoints = generatedQ.expectedKeyPoints || nextQuestionDoc.expectedKeyPoints || [];
+      await nextQuestionDoc.save();
     }
 
     const isComplete = !nextQuestionDoc || interview.currentQuestionIndex >= interview.totalQuestions;
