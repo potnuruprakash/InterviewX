@@ -1686,8 +1686,8 @@ export default function ResultsPage() {
                 {attemptHistory.length > 1 && <p className="reattempt-score-delta">{attemptHistory[attemptHistory.length - 1].score - attemptHistory[0].score >= 0 ? '+' : ''}{attemptHistory[attemptHistory.length - 1].score - attemptHistory[0].score} points from first to latest attempt</p>}
               </div>
               <div className="reattempt-attempt-list">
-                {attemptHistory.slice().reverse().map((a, i) => <div className={`reattempt-attempt-row ${a.isCurrent ? 'is-current' : ''}`} key={a.id}>
-                  <span className="reattempt-attempt-number">{attemptHistory.length - i}</span>
+                {attemptHistory.slice(-2).reverse().map((a) => <div className={`reattempt-attempt-row ${a.isCurrent ? 'is-current' : ''}`} key={a.id}>
+                  <span className="reattempt-attempt-number">{attemptHistory.findIndex((item) => item.id === a.id) + 1}</span>
                   <div className="reattempt-attempt-date"><strong>{a.date ? new Date(a.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date unavailable'}</strong><small>{a.isCurrent ? 'Current result' : 'Completed attempt'}</small></div>
                   <div className="reattempt-attempt-score"><strong>{a.score}</strong><span>/100</span></div>
                   <div className="reattempt-attempt-bar" aria-label={`Score ${a.score} out of 100`}><span style={{ width: `${Math.max(0, Math.min(100, a.score))}%` }} /></div>
@@ -1696,7 +1696,7 @@ export default function ResultsPage() {
               </div>
             </div>
           )}
-          <p className="reattempt-history-note">Only completed interviews matching this role, interview type, and difficulty are included.</p>
+          <p className="reattempt-history-note">{attemptHistory.length > 2 ? `Showing the 2 most recent attempts. The trend chart includes all ${attemptHistory.length} attempts.` : `Only completed interviews matching this role, interview type, and difficulty are included.`}</p>
         </section>
 
         {/* ==================================================================
